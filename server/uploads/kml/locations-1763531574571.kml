@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Locations</name>
+    <Placemark>
+      <name>&lt;![CDATA[3W1575]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr&gt;&lt;td colspan='2' style='vertical-align: top; padding-left: 10px; padding-right: 10px; white-space: nowrap;'&gt;&lt;b&gt;3W1575&lt;/b&gt;&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td colspan='2' style='vertical-align: top; padding-left: 10px; padding-right: 10px; max-width: 400px; white-space: nowrap;'&gt;&amp;nbsp;&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>&lt;![CDATA[3W1579]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr&gt;&lt;td colspan='2' style='vertical-align: top; padding-left: 10px; padding-right: 10px; white-space: nowrap;'&gt;&lt;b&gt;3W1579&lt;/b&gt;&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td colspan='2' style='vertical-align: top; padding-left: 10px; padding-right: 10px; max-width: 400px; white-space: nowrap;'&gt;&amp;nbsp;&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+  </Document>
+</kml>

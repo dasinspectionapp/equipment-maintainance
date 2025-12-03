@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Locations</name>
+    <Placemark>
+      <name>3W1575</name>
+      <description></description>
+      <Point>
+        <coordinates>77.60844101,12.97516846,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>3W1579</name>
+      <description></description>
+      <Point>
+        <coordinates>77.60640386,12.96598437,0</coordinates>
+      </Point>
+    </Placemark>
+  </Document>
+</kml>

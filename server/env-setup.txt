@@ -1,0 +1,43 @@
+IMPORTANT: Create a .env file in the server directory with the following content:
+
+# Copy this entire content into server/.env file
+# IMPORTANT: Use 'das' database (not 'admin') for Equipment offline sites collection
+MONGODB_URI=mongodb://admin:password@vcaan.in:27017/das?authSource=admin&authMechanism=SCRAM-SHA-256
+
+PORT=5000
+NODE_ENV=development
+
+JWT_SECRET=bescom_distribution_automation_system_secret_key_2024
+JWT_EXPIRE=7d
+
+FRONTEND_URL=http://localhost:5173
+
+Note: The .env file is gitignored for security reasons. You need to create it manually.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

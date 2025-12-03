@@ -1,0 +1,237 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Locations</name>
+    <Placemark>
+      <name>&lt;![CDATA[ROW: 2]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Site Code&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;3W1575&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;HRN&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;Near Summanahalli muss&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>&lt;![CDATA[ROW: 3]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Site Code&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;3W1579&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;HRN&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;Near Summanahalli muss&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>&lt;![CDATA[ROW: 4]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Site Code&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;LB0744&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;HRN&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;Near Summanahalli muss&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>&lt;![CDATA[ROW: 5]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Site Code&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;LB0746&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;HRN&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;Backside of Summanahalli Muss&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>&lt;![CDATA[ROW: 6]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Site Code&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;LB0747&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;HRN&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;Eleem Resort,Bannerghatta Road&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>&lt;![CDATA[ROW: 7]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Site Code&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;LB0748&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;HRN&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;Rao Gudauluu GOS Nitikere road&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>&lt;![CDATA[ROW: 8]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Site Code&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;LB0749&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;HRN&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;Intech IBM college,&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>&lt;![CDATA[ROW: 9]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Site Code&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;LB0750&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;HRN&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;Gadigappa&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>&lt;![CDATA[ROW: 10]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Site Code&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;LB0751&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;HRN&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;Giri gowdana dodde&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>&lt;![CDATA[ROW: 11]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Site Code&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;LR0752&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;HRN&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;Lalithamma farm GOS&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>&lt;![CDATA[ROW: 12]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Site Code&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;LB0753&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;HRN&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;St'Frances School&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>&lt;![CDATA[ROW: 13]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Site Code&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;LB0754&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;HRN&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;Engineer Farm&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>&lt;![CDATA[ROW: 14]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Site Code&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;3W0755&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;HRN&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;Taralu lake&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>&lt;![CDATA[ROW: 15]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Site Code&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;5W0756&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;HRN&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;University Layout&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>&lt;![CDATA[ROW: 16]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Site Code&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;5W0757&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;HRN&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;MLA Krishappa thota Hosaplaya&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>&lt;![CDATA[ROW: 17]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Site Code&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;LB0759&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;HRN&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;Agar O&amp;M main road V K Granet factory&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>&lt;![CDATA[ROW: 18]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Site Code&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;LB0760&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;HRN&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;Nillagiri thopu agar main road&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>&lt;![CDATA[ROW: 19]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Site Code&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;LB0761&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;HRN&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;Lakshmipura Entence&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>&lt;![CDATA[ROW: 20]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Site Code&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;LB0762&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;HRN&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;Anajanapura kedda resrot&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>&lt;![CDATA[ROW: 21]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Site Code&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;LB0763&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;HRN&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;Mukaddi&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>&lt;![CDATA[ROW: 22]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Site Code&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;LB0764&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;HRN&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;Nellagulli Entrance gate&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>&lt;![CDATA[ROW: 23]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Site Code&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;5W0765&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;HRN&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;Sahana playa&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>&lt;![CDATA[ROW: 24]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Site Code&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;LB0766&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;HRN&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;Bolre jattiplaya Kanakapura Road&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>&lt;![CDATA[ROW: 25]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Site Code&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;5W0767&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;HRN&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;Udipalaya&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>&lt;![CDATA[ROW: 26]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Site Code&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;LB0768&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;HRN&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;Uttaripura GOS&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>&lt;![CDATA[ROW: 27]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Site Code&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;5W0769&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;HRN&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;VASUDENAJAPURA KADU MUTTAYA&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>&lt;![CDATA[ROW: 28]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Site Code&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;5W0770&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;HRN&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;GANTAKANA DHODDI&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>&lt;![CDATA[ROW: 29]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Site Code&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;5W0771&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;HRN&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;MLA KRIHNAPP THOTTA&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>&lt;![CDATA[ROW: 30]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Site Code&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;5W0772&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;HRN&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;NAVILU MANC&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>&lt;![CDATA[ROW: 31]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Site Code&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;5W0773&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;HRN&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;SHANTHI DHAMA,KKP MAIN ROAD&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>&lt;![CDATA[ROW: 32]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Site Code&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;5W0774&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;HRN&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;RAMESH NGR MAIN RD, PIPE LINE RD&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>&lt;![CDATA[ROW: 33]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Site Code&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;5W0775&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;HRN&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;INDIA AGRO EXPORT&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>&lt;![CDATA[ROW: 34]]&gt;</name>
+      <description>&lt;![CDATA[&lt;style type='text/css'&gt;*{font-family:Verdana,Arial,Helvetica,Sans-Serif;box-sizing:border-box;padding:0px;margin:0px}table{border-collapse:collapse;border-spacing:0px;margin:2px}.trb{background-color:#ddffdd}.ch{vertical-align:top;padding-left:10px;white-space:nowrap}.cv{vertical-align:top;padding-left:6px;padding-right:10px;white-space:nowrap}.cw{vertical-align:top;padding-left:6px;padding-right:10px;width:600px}&lt;/style&gt;&lt;table&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Latitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;12.9204224&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;Longitude&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;77.6208384&lt;/td&gt;&lt;/tr&gt;&lt;tr class='trb'&gt;&lt;td class='ch'&gt;&lt;b&gt;Site Code&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;5W0776&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class='ch'&gt;&lt;b&gt;HRN&lt;/b&gt;&lt;/td&gt;&lt;td class='cv'&gt;GUDI PALYA , KERECHUNAHALLI&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;]]&gt;</description>
+      <Point>
+        <coordinates>77.6208384,12.9204224,0</coordinates>
+      </Point>
+    </Placemark>
+  </Document>
+</kml>
