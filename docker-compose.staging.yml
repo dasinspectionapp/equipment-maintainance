@@ -1,18 +1,16 @@
-version: "3.9"
-
 services:
-
   backend-staging:
-    build: ./server
+    build:
+      context: ./server
     container_name: backend-staging
     restart: always
     environment:
-      - MONGODB_URI=mongodb://admin:password@192.168.29.14:27017/das?authSource=admin&authMechanism=SCRAM-SHA-256
-      - PORT=4000
-      - NODE_ENV=staging
-      - JWT_SECRET=bescom_distribution_automation_system_secret_key_2024
-      - JWT_EXPIRE=7d
-      - FRONTEND_URL=http://192.168.29.14:4001
+      MONGODB_URI: mongodb://admin:password@192.168.29.14:27017/das?authSource=admin&authMechanism=SCRAM-SHA-256
+      PORT: 4000
+      NODE_ENV: staging
+      JWT_SECRET: bescom_distribution_automation_system_secret_key_2024
+      JWT_EXPIRE: 7d
+      FRONTEND_URL: http://192.168.29.14:4001
     ports:
       - "4000:4000"
 
