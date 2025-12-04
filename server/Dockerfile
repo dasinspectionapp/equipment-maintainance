@@ -1,20 +1,20 @@
 # Use Node LTS
 FROM node:20
 
-# Set working directory
+# Create app directory
 WORKDIR /app
 
-# Copy only backend package.json
-COPY server/package*.json ./
+# Copy package files
+COPY package*.json ./
 
-# Install backend dependencies
+# Install only production dependencies
 RUN npm install --production
 
-# Copy backend source code
-COPY server/. .
+# Copy all backend source code (correct)
+COPY . .
 
-# Expose backend port
+# Expose the backend port
 EXPOSE 5000
 
-# Start backend server
-CMD ["node", "server.js"]
+# Start the backend
+CMD ["npm", "start"]
