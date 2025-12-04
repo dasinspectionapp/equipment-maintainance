@@ -21,6 +21,6 @@ services:
     container_name: frontend-prod
     restart: always
     ports:
-      - "80:80"
+      - "4003:80"
     volumes:
       - ./dist:/usr/share/nginx/html
