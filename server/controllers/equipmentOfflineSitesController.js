@@ -158,13 +158,18 @@ export const saveEquipmentOfflineSite = async (req, res) => {
     }
     
     // If not found by fileId/rowKey, check for any Pending record with the same siteCode
-    // This handles cases where status is changed from different sources (Dashboard vs MY OFFLINE SITES)
+    // This handles cases where status is changed from different sources (Dashboard vs MY OFFLINE SITES vs MY SITES)
+    // Also check by originalUserId to handle ownership transfer cases
     if (!existingRecord && finalSiteObservations === '') {
       // New status is Resolved, so check if there's any Pending record for this siteCode
       // Search for records that are NOT Resolved (i.e., Pending)
+      // Check both userId and originalUserId to handle ownership transfer cases
       const allSiteRecords = await EquipmentOfflineSites.find({ 
-        siteCode: siteCode.trim().toUpperCase(), 
-        userId 
+        siteCode: siteCode.trim().toUpperCase(),
+        $or: [
+          { userId: userId },
+          { originalUserId: userId }
+        ]
       })
       .sort({ createdAt: -1 }) // Get the most recent ones first
       .lean();
@@ -268,12 +273,16 @@ export const saveEquipmentOfflineSite = async (req, res) => {
       console.log('[saveEquipmentOfflineSite] Original rowKey:', rowKey);
       console.log('[saveEquipmentOfflineSite] New unique rowKey:', uniqueRowKey);
       
+      // Preserve originalUserId from existing record if it exists, otherwise use current userId
+      const originalUserIdValue = existingRecord?.originalUserId || existingRecord?.userId || userId;
+      
       // Create new document - MongoDB will assign a new _id automatically
       offlineSite = new EquipmentOfflineSites({
         fileId,
         rowKey: uniqueRowKey, // Use unique rowKey to avoid duplicate key error
         siteCode: siteCode.trim().toUpperCase(),
         userId,
+        originalUserId: originalUserIdValue, // Preserve original owner for Reports visibility
         originalRowData,
         headers: headers || [],
         siteObservations: finalSiteObservations, // Empty string for Resolved
@@ -313,11 +322,17 @@ export const saveEquipmentOfflineSite = async (req, res) => {
       // Use the existing record's userId if ownership was transferred (don't override with old userId)
       const updateUserId = existingRecord && existingRecord.userId ? existingRecord.userId : userId;
       
+      // Set originalUserId: preserve from existing record, or set to current userId if not set
+      // This ensures Pending Site Observations show in Reports for original owner even after ownership transfer
+      // If existing record has originalUserId, preserve it; otherwise use current userId (for new records or first-time setting)
+      const originalUserIdValue = existingRecord?.originalUserId || userId;
+      
       const updateData = {
         fileId,
         rowKey,
         siteCode: siteCode.trim().toUpperCase(),
         userId: updateUserId, // Use existing record's userId if ownership was transferred
+        originalUserId: originalUserIdValue, // Track original owner for Reports visibility
         originalRowData,
         headers: headers || [],
         siteObservations: finalSiteObservations,
@@ -1789,26 +1804,61 @@ export const getReports = async (req, res) => {
     console.log('Reports API - Database:', EquipmentOfflineSites.db?.databaseName || 'unknown');
 
     // Build query
-    const query = { userId };
+    // For Pending reports: Include records where userId OR originalUserId matches
+    // This ensures original owner sees Pending reports even after ownership transfer
+    const baseQuery = {};
+    
+    if (reportType === 'Pending') {
+      // For Pending: Include records owned by user OR originally owned by user
+      baseQuery.$or = [
+        { userId: userId },
+        { originalUserId: userId }
+      ];
+    } else {
+      // For Resolved: Show records currently owned by user (the transfer owner who resolved it)
+      // This ensures routed users see resolved records in their Resolved reports
+      baseQuery.userId = userId;
+    }
 
     // Filter by report type using taskStatus (case-insensitive)
     // Resolved = taskStatus is empty string ("") or "Resolved" (string, any case: resolved, RESOLVED, Resolved, etc.)
     // Pending = taskStatus has any non-empty value except "Resolved" (case-insensitive) (e.g., "Pending", "Pending at O&M Team", etc.)
+    const statusConditions = [];
+    
     if (reportType === 'Resolved') {
-      query.$or = [
-        { taskStatus: '' },
-        { taskStatus: { $regex: /^resolved$/i } }, // Case-insensitive match for "Resolved"
-        { taskStatus: null },
-        { taskStatus: { $exists: false } }
-      ];
+      statusConditions.push({
+        $or: [
+          { taskStatus: '' },
+          { taskStatus: { $regex: /^resolved$/i } }, // Case-insensitive match for "Resolved"
+          { taskStatus: null },
+          { taskStatus: { $exists: false } }
+        ]
+      });
     } else if (reportType === 'Pending') {
       // Explicitly exclude empty string, null, and "Resolved" (case-insensitive)
+      statusConditions.push({ taskStatus: { $exists: true } });
+      statusConditions.push({ taskStatus: { $ne: '' } });
+      statusConditions.push({ taskStatus: { $ne: null } });
+      statusConditions.push({ taskStatus: { $not: { $regex: /^resolved$/i } } }); // Exclude "Resolved" in any case
+      // Note: CCR-approved resolved records are excluded in post-processing filter below
+    }
+    
+    // Combine base query with status conditions
+    const query = {};
+    if (baseQuery.$or) {
       query.$and = [
-        { taskStatus: { $exists: true } },
-        { taskStatus: { $ne: '' } },
-        { taskStatus: { $ne: null } },
-        { taskStatus: { $not: { $regex: /^resolved$/i } } } // Exclude "Resolved" in any case
-      ]; // Any non-empty value except "Resolved" (any case) = Pending (e.g., "Pending", "Pending at O&M Team", etc.)
+        { $or: baseQuery.$or },
+        ...statusConditions
+      ];
+    } else {
+      Object.assign(query, baseQuery);
+      if (statusConditions.length > 0) {
+        if (statusConditions.length === 1) {
+          Object.assign(query, statusConditions[0]);
+        } else {
+          query.$and = statusConditions;
+        }
+      }
     }
     
     console.log('Reports API - Filter by taskStatus:', { reportType, queryCondition: query.$or || query.$and });
@@ -1869,7 +1919,7 @@ export const getReports = async (req, res) => {
     let reports;
     try {
       reports = await EquipmentOfflineSites.find(query)
-        .populate('user', 'fullName userId')
+        .populate('user', 'fullName userId role')
         .sort({ createdAt: -1 })
         .lean();
       
@@ -1889,29 +1939,40 @@ export const getReports = async (req, res) => {
         reports = Array.from(siteCodeMap.values());
         console.log('Reports API - After deduplication (Resolved):', reports.length, 'unique site codes');
       } else if (reportType === 'Pending') {
-        // For Pending reports: Exclude site codes that have a Resolved record
-        // First, find all site codes that have Resolved records
-        const resolvedSiteCodes = await EquipmentOfflineSites.distinct('siteCode', {
-          userId,
+        // For Pending reports: Exclude site codes that have a Resolved record with CCR approval
+        // First, find all site codes that have Resolved records with CCR approval (check both userId and originalUserId)
+        // This ensures that when a routed user resolves and CCR approves, it disappears from original owner's Pending reports
+        const resolvedAndApprovedSiteCodes = await EquipmentOfflineSites.distinct('siteCode', {
           $or: [
-            { taskStatus: '' },
-            { taskStatus: { $regex: /^resolved$/i } },
-            { taskStatus: null },
-            { taskStatus: { $exists: false } }
+            { userId: userId },
+            { originalUserId: userId }
+          ],
+          $and: [
+            {
+              $or: [
+                { taskStatus: '' },
+                { taskStatus: { $regex: /^resolved$/i } },
+                { taskStatus: null },
+                { taskStatus: { $exists: false } }
+              ]
+            },
+            {
+              ccrStatus: 'Approved' // Only exclude if CCR has approved
+            }
           ]
         });
         
-        const resolvedSiteCodesSet = new Set(
-          resolvedSiteCodes.map(code => code?.trim().toUpperCase()).filter(Boolean)
+        const resolvedAndApprovedSiteCodesSet = new Set(
+          resolvedAndApprovedSiteCodes.map(code => code?.trim().toUpperCase()).filter(Boolean)
         );
         
-        // Filter out site codes that have Resolved records
+        // Filter out site codes that have Resolved records with CCR approval
         reports = reports.filter(report => {
           const siteCode = report.siteCode?.trim().toUpperCase();
-          return !resolvedSiteCodesSet.has(siteCode);
+          return !resolvedAndApprovedSiteCodesSet.has(siteCode);
         });
         
-        console.log('Reports API - After excluding Resolved site codes (Pending):', reports.length, 'remaining reports');
+        console.log('Reports API - After excluding Resolved and CCR Approved site codes (Pending):', reports.length, 'remaining reports');
       }
     } catch (dbError) {
       console.error('Reports API - Database query error:', dbError);
@@ -2036,6 +2097,24 @@ export const getReports = async (req, res) => {
           ? (ccrStatusMap[normalizedSiteCode] || 'Pending')
           : '';
 
+      // Format resolvedBy/pendingAt based on report type
+      // For Pending: show "fullName@role Team" format
+      // For Resolved: show just fullName
+      let resolvedBy = 'N/A';
+      if (reportType === 'Pending') {
+        if (report.user) {
+          const fullName = report.user.fullName || '';
+          const role = report.user.role || '';
+          // Format role to add "Team" suffix (e.g., "AMC" -> "AMC Team")
+          const roleDisplay = role ? `${role} Team` : '';
+          resolvedBy = fullName && roleDisplay ? `${fullName}@${roleDisplay}` : (fullName || report.userId || 'N/A');
+        } else if (report.userId) {
+          resolvedBy = report.userId;
+        }
+      } else {
+        resolvedBy = report.user?.fullName || report.userId || 'N/A';
+      }
+
       return {
         slNo: index + 1,
         siteCode: report.siteCode || '',
@@ -2043,7 +2122,7 @@ export const getReports = async (req, res) => {
         typeOfIssue: report.typeOfIssue || '',
         remarks: report.remarks || '',
         updatedTimeAndDate: formattedDate,
-        resolvedBy: report.user?.fullName || report.userId || 'N/A',
+        resolvedBy: resolvedBy,
         ccrStatus
       };
     });
@@ -2112,7 +2191,7 @@ export const getReportDetails = async (req, res) => {
     // Fetch the record - for Resolved, get the most recent one (since we create new documents)
     // Sort by createdAt descending to get the latest record first
     const record = await EquipmentOfflineSites.findOne(query)
-      .populate('user', 'fullName userId')
+      .populate('user', 'fullName userId role')
       .sort({ createdAt: -1 })
       .lean();
 

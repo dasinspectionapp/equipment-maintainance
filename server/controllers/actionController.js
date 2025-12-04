@@ -1317,9 +1317,14 @@ export async function submitRouting(req, res, next) {
           const previousTaskStatus = originalDoc.taskStatus || '';
           const previousSavedFrom = originalDoc.savedFrom || '';
 
+          // Preserve originalUserId when transferring ownership
+          // This ensures Pending Site Observations show in Reports for original owner
+          const originalUserIdValue = originalDoc.originalUserId || originalDoc.userId;
+          
           // Update original document to transfer ownership
           const ownershipUpdateData = {
             userId: assignedUser.userId, // Transfer ownership to assigned user
+            originalUserId: originalUserIdValue, // Preserve original owner for Reports visibility
             user: assignedUserDoc ? assignedUserDoc._id : null,
             taskStatus: taskStatus || `Pending at ${targetRole} Team`,
             savedFrom: `Ownership transferred from ${currentUser.role} to ${targetRole}`,

@@ -503,7 +503,6 @@ export default function DeviceStatus() {
 
               // Build columns to merge: DEVICE STATUS, NO OF DAYS OFFLINE, and ATTRIBUTE
               const onlineOfflineColumns: string[] = [];
-              let mergedAttributeColumn: string | undefined = undefined;
               if (deviceStatusHeader) {
                 onlineOfflineColumns.push(deviceStatusHeader);
                 mergedDeviceStatusColumn = deviceStatusHeader;
@@ -875,7 +874,6 @@ export default function DeviceStatus() {
 
           // Get Task Status from database if available
           let taskStatus = offlineSite?.taskStatus || '';
-          const siteObservations = offlineSite?.siteObservations || '';
           
           // If Task Status is blank in database, default to "Pending at Equipment Team"
           if (!taskStatus || taskStatus.trim() === '' || taskStatus === '-') {
@@ -1025,7 +1023,7 @@ export default function DeviceStatus() {
                 const mostRecentOfflineDate = mostRecentOfflineDateMap[siteCode];
                 if (mostRecentOfflineDate) {
                   dateValue = mostRecentOfflineDate;
-                  dateLabel = 'Date';
+                  dateLabel = 'Pending from Date';
                   console.log(`[DeviceStatus] Using offline date for ${siteCode} (taskStatus): ${formatDate(mostRecentOfflineDate)}`);
                 } else {
                   console.log(`[DeviceStatus] No offline date found for ${siteCode} (taskStatus), using fallback`);
@@ -1035,7 +1033,7 @@ export default function DeviceStatus() {
                     return actionSiteCode === siteCode;
                   });
                   dateValue = routingAction?.assignedDate || routingAction?.createdAt || offlineSite?.createdAt;
-                  dateLabel = 'Date of Routing';
+                  dateLabel = 'Pending from Date';
                 }
               } else {
                 // Get Date of Routing (first action assignedDate)
@@ -1063,7 +1061,7 @@ export default function DeviceStatus() {
               const mostRecentOfflineDate = mostRecentOfflineDateMap[siteCode];
               if (mostRecentOfflineDate) {
                 dateValue = mostRecentOfflineDate;
-                dateLabel = 'Date';
+                dateLabel = 'Pending from Date';
                 console.log(`[DeviceStatus] Using offline date for ${siteCode}: ${formatDate(mostRecentOfflineDate)}`);
               } else {
                 console.log(`[DeviceStatus] No offline date found for ${siteCode}, using fallback`);
@@ -1074,11 +1072,11 @@ export default function DeviceStatus() {
                 });
                 if (routingAction) {
                   dateValue = routingAction?.assignedDate || routingAction?.createdAt;
-                  dateLabel = 'Date of Routing';
+                  dateLabel = 'Pending from Date';
                 } else {
                   // Fallback to created date from offline site
                   dateValue = offlineSite?.createdAt;
-                  dateLabel = 'Date';
+                  dateLabel = 'Pending from Date';
                 }
               }
             } else {
@@ -1114,7 +1112,7 @@ export default function DeviceStatus() {
             noOfDaysOffline: noOfDaysOffline,
             attribute: attribute || '-'
           };
-        }).filter((row): row is SiteStatusRow => row !== null);
+        }).filter((row: SiteStatusRow | null): row is SiteStatusRow => row !== null);
 
         // Sort by site code
         statusRows.sort((a, b) => a.siteCode.localeCompare(b.siteCode));
@@ -1480,7 +1478,7 @@ export default function DeviceStatus() {
                     HRN
                   </th>
                   <th className="px-6 py-3 text-center text-xs font-bold text-gray-700 uppercase tracking-wider border border-gray-300">
-                    Date
+                    {siteStatuses.some(site => site.presentStatus === 'Pending at Equipment Team') ? 'Pending from Date' : 'Date'}
                   </th>
                   <th className="px-6 py-3 text-center text-xs font-bold text-gray-700 uppercase tracking-wider border border-gray-300">
                     Present Status
@@ -1492,7 +1490,6 @@ export default function DeviceStatus() {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {siteStatuses.map((site, index) => {
-                  const isResolved = site.presentStatus.includes('Resolved');
                   const isWaitingForApproval = site.presentStatus.includes('Waiting for CCR') || site.presentStatus.includes('Waiting for CCR approval');
                   const isApproved = site.presentStatus.includes('Resolved and Approved');
                   

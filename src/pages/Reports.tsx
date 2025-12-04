@@ -28,7 +28,7 @@ interface ReportDetails {
   taskStatus?: string;
   typeOfIssue?: string;
   updatedAt?: string;
-  viewPhotos?: string[];
+  viewPhotos?: (string | { data: string })[];
 }
 
 interface MultiSelectDropdownProps {
@@ -66,7 +66,7 @@ export default function Reports() {
   const [fromDate, setFromDate] = useState<string>('');
   const [toDate, setToDate] = useState<string>('');
   const [localRemoteDate, setLocalRemoteDate] = useState<string>(''); // Single date for LOCAL REMOTE
-  const [latestDate, setLatestDate] = useState<string>(''); // Latest date from backend for LOCAL REMOTE
+  // const [latestDate, setLatestDate] = useState<string>(''); // Latest date from backend for LOCAL REMOTE
   
   const [circleOptions, setCircleOptions] = useState<string[]>([]);
   const [divisionOptions, setDivisionOptions] = useState<string[]>([]);
@@ -408,7 +408,7 @@ export default function Reports() {
     // Include Task Status and Type of Issue columns only for Pending reports
     // LOCAL REMOTE has separate columns for ONLINE, OFFLINE, LOCAL, REMOTE
     const headers = reportType === 'Pending' 
-      ? ['SlNo', 'Site Code', 'Task Status', 'Type of Issue', 'Remarks', 'Updated Time and Date', 'Resolved By']
+      ? ['SlNo', 'Site Code', 'Task Status', 'Type of Issue', 'Remarks', 'Updated Time and Date', 'Pending At']
       : reportType === 'LOCAL REMOTE'
       ? ['SlNo', 'Division', 'ONLINE', 'OFFLINE', 'LOCAL', 'REMOTE']
       : ['SlNo', 'Site Code', 'Remarks', 'Updated Time and Date', 'Resolved By', 'CCR Status'];
@@ -477,7 +477,7 @@ export default function Reports() {
     // Include Task Status and Type of Issue columns only for Pending reports
     // LOCAL REMOTE has separate columns for ONLINE, OFFLINE, LOCAL, REMOTE
     const headers = reportType === 'Pending' 
-      ? ['SlNo', 'Site Code', 'Task Status', 'Type of Issue', 'Remarks', 'Updated Time and Date', 'Resolved By']
+      ? ['SlNo', 'Site Code', 'Task Status', 'Type of Issue', 'Remarks', 'Updated Time and Date', 'Pending At']
       : reportType === 'LOCAL REMOTE'
       ? ['SlNo', 'Division', 'ONLINE', 'OFFLINE', 'LOCAL', 'REMOTE']
       : ['SlNo', 'Site Code', 'Remarks', 'Updated Time and Date', 'Resolved By', 'CCR Status'];
@@ -627,7 +627,7 @@ export default function Reports() {
           <th style="width: 18%;">Type of Issue</th>
           <th style="width: 20%;">Remarks</th>
           <th style="width: 15%;">Updated Time and Date</th>
-          <th style="width: 15%;">Resolved By</th>
+          <th style="width: 15%;">Pending At</th>
         </tr>`
       : reportType === 'LOCAL REMOTE'
       ? `<tr>
@@ -1201,7 +1201,7 @@ export default function Reports() {
                       )}
                       {reportType !== 'LOCAL REMOTE' && (
                         <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                          Resolved By
+                          {reportType === 'Pending' ? 'Pending At' : 'Resolved By'}
                         </th>
                       )}
                     </tr>
@@ -1423,7 +1423,7 @@ export default function Reports() {
                             fill="#8884d8"
                             dataKey="value"
                           >
-                            {pieData.map((entry, index) => (
+                            {pieData.map((_entry, index) => (
                               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                             ))}
                           </Pie>
@@ -1473,7 +1473,7 @@ export default function Reports() {
                             fill="#8884d8"
                             dataKey="value"
                           >
-                            {pieData.map((entry, index) => (
+                            {pieData.map((_entry, index) => (
                               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                             ))}
                           </Pie>
@@ -1649,9 +1649,10 @@ export default function Reports() {
                               // Assume it's base64
                               photoSrc = `data:image/jpeg;base64,${photo}`;
                             }
-                          } else if (photo && typeof photo === 'object' && photo.data) {
+                          } else if (photo && typeof photo === 'object' && 'data' in photo && typeof (photo as { data: string }).data === 'string') {
                             // Handle photo object with data property
-                            photoSrc = photo.data.startsWith('data:') ? photo.data : `data:image/jpeg;base64,${photo.data}`;
+                            const photoData = (photo as { data: string }).data;
+                            photoSrc = photoData.startsWith('data:') ? photoData : `data:image/jpeg;base64,${photoData}`;
                           }
                           
                           if (!photoSrc) return null;

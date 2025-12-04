@@ -25,6 +25,12 @@ const equipmentOfflineSitesSchema = new mongoose.Schema(
       required: [true, 'User ID is required'],
       index: true,
     },
+    // Original user ID - tracks the original owner even after ownership transfer
+    // This ensures Pending Site Observations show in Reports tab for original owner
+    originalUserId: {
+      type: String,
+      index: true,
+    },
     // Reference to User model
     user: {
       type: mongoose.Schema.Types.ObjectId,
@@ -137,6 +143,7 @@ equipmentOfflineSitesSchema.index({ fileId: 1, rowKey: 1 }, { unique: true });
 // Indexes for efficient queries
 equipmentOfflineSitesSchema.index({ siteCode: 1, userId: 1 });
 equipmentOfflineSitesSchema.index({ userId: 1, updatedAt: -1 });
+equipmentOfflineSitesSchema.index({ originalUserId: 1, updatedAt: -1 }); // For Reports query by original owner
 equipmentOfflineSitesSchema.index({ status: 1 });
 equipmentOfflineSitesSchema.index({ siteCode: 1, status: 1 });
 equipmentOfflineSitesSchema.index({ fileId: 1 });

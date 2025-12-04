@@ -14,7 +14,7 @@ export interface DataState {
 }
 
 // Debounce function for sync operations
-let syncTimeouts: Record<string, NodeJS.Timeout> = {};
+let syncTimeouts: Record<string, ReturnType<typeof setTimeout>> = {};
 
 export const debounceSync = (fileId: string, data: DataState, delay: number = 2000) => {
   // Clear existing timeout for this file

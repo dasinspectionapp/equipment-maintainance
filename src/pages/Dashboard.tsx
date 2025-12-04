@@ -47,13 +47,13 @@ export default function Dashboard() {
   
   // My Sites Dialog states
   const [showMySitesDialog, setShowMySitesDialog] = useState(false);
-  const [subDivision, setSubDivision] = useState('');
   const [application, setApplication] = useState<'offline' | 'rtu' | ''>('');
-  const [subDivisionSuggestions, setSubDivisionSuggestions] = useState<string[]>([]);
-  const [showSubDivisionSuggestions, setShowSubDivisionSuggestions] = useState(false);
-  const [selectedSubDivisionIndex, setSelectedSubDivisionIndex] = useState(-1);
   const [division, setDivision] = useState<string>('');
-  const [isLoadingDivision, setIsLoadingDivision] = useState(false);
+  const [subDivision, setSubDivision] = useState('');
+  const [subDivisionSuggestions, setSubDivisionSuggestions] = useState<string[]>([]);
+  // const [showSubDivisionSuggestions, setShowSubDivisionSuggestions] = useState(false);
+  // const [selectedSubDivisionIndex, setSelectedSubDivisionIndex] = useState(-1);
+  const [isLoadingSubDivisions, setIsLoadingSubDivisions] = useState(false);
   
   // Table rows state
   const [tableRows, setTableRows] = useState<Array<{
@@ -434,17 +434,30 @@ export default function Dashboard() {
   }, []);
 
   // Fetch Sub Division suggestions from View Data
-  const fetchSubDivisionSuggestions = useCallback(async () => {
+  // Fetch Sub Division suggestions filtered by selected Division
+  const fetchSubDivisionSuggestions = useCallback(async (selectedDivision: string) => {
+    if (!selectedDivision.trim()) {
+      setSubDivisionSuggestions([]);
+      return;
+    }
+
+    setIsLoadingSubDivisions(true);
     try {
       const token = localStorage.getItem('token');
-      if (!token) return;
+      if (!token) {
+        setSubDivisionSuggestions([]);
+        return;
+      }
 
       const uploadsRes = await fetch('http://localhost:5000/api/uploads', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const uploadsJson = await uploadsRes.json();
       
-      if (!uploadsJson?.success) return;
+      if (!uploadsJson?.success) {
+        setSubDivisionSuggestions([]);
+        return;
+      }
 
       // Find Device Status Upload file (same as View Data)
       const deviceStatusFile = (uploadsJson.files || [])
@@ -472,7 +485,10 @@ export default function Dashboard() {
           return dateB - dateA;
         })[0];
 
-      if (!deviceStatusFile) return;
+      if (!deviceStatusFile) {
+        setSubDivisionSuggestions([]);
+        return;
+      }
 
       // Fetch file data
       const fileRes = await fetch(`http://localhost:5000/api/uploads/${deviceStatusFile.fileId}`, {
@@ -480,32 +496,49 @@ export default function Dashboard() {
       });
       const fileJson = await fileRes.json();
 
-      if (!fileJson?.success || !fileJson.file) return;
+      if (!fileJson?.success || !fileJson.file) {
+        setSubDivisionSuggestions([]);
+        return;
+      }
 
       const file = fileJson.file;
       const rows = Array.isArray(file.rows) ? file.rows : [];
       const headers = file.headers && file.headers.length ? file.headers : (rows[0] ? Object.keys(rows[0]) : []);
 
-      // Find Sub Division header
+      // Find Division and Sub Division headers
+      const divisionHeader = headers.find((h: string) => {
+        const n = normalize(h);
+        return n === 'division';
+      });
+
       const subDivisionHeader = headers.find((h: string) => {
         const n = normalize(h);
         return n === 'sub division' || n === 'subdivision' || n === 'sub_division';
       });
 
-      if (!subDivisionHeader) return;
+      if (!divisionHeader || !subDivisionHeader) {
+        setSubDivisionSuggestions([]);
+        return;
+      }
 
-      // Extract all unique Sub Divisions
+      // Extract unique Sub Divisions filtered by selected Division
       const subDivisionsSet = new Set<string>();
       rows.forEach((row: any) => {
-        const sd = String(row[subDivisionHeader] || '').trim();
-        if (sd) {
-          subDivisionsSet.add(sd);
+        const rowDivision = String(row[divisionHeader] || '').trim();
+        const rowSubDivision = String(row[subDivisionHeader] || '').trim();
+        
+        // Match division (case-insensitive)
+        if (normalize(rowDivision) === normalize(selectedDivision) && rowSubDivision) {
+          subDivisionsSet.add(rowSubDivision);
         }
       });
 
       setSubDivisionSuggestions(Array.from(subDivisionsSet).sort());
     } catch (error) {
       console.error('Error fetching Sub Division suggestions:', error);
+      setSubDivisionSuggestions([]);
+    } finally {
+      setIsLoadingSubDivisions(false);
     }
   }, []);
 
@@ -1539,22 +1572,26 @@ export default function Dashboard() {
   // Close My Sites dialog
   const closeMySitesDialog = () => {
     setShowMySitesDialog(false);
-    setSubDivision('');
     setApplication('');
     setDivision('');
+    setSubDivision('');
     setTableRows([]);
     setSiteCodesForSubDivision([]);
     setShowSubDivisionSuggestions(false);
     setSelectedSubDivisionIndex(-1);
+    setSubDivisionSuggestions([]);
   };
 
   // Fetch site codes for Sub Division from MY OFFLINE SITES data (Equipment role)
   // This replicates the exact filtering logic from MY OFFLINE SITES tab
-  const fetchSiteCodesForSubDivision = useCallback(async (subDivisionValue: string) => {
+  const fetchSiteCodesForSubDivision = useCallback(async (subDivisionValue: string, divisionValue?: string) => {
     if (!subDivisionValue.trim()) {
       setSiteCodesForSubDivision([]);
       return;
     }
+
+    // If division is provided, use it; otherwise try to get from state
+    const selectedDivision = divisionValue || division;
 
     try {
       const token = localStorage.getItem('token');
@@ -1751,27 +1788,38 @@ export default function Dashboard() {
 
       if (!subDivisionHeader || !siteCodeHeader) return;
 
-      // Apply MY OFFLINE SITES filters: Filter by user's assigned DIVISION
-      if (divisionHeader && userDivisions.length > 0) {
-        rows = rows.filter((row: any) => {
-          const rowDivision = String(row[divisionHeader] || '').trim();
-          const matches = userDivisions.some((div: string) => {
-            const userDiv = normalize(String(div));
+      // Apply MY OFFLINE SITES filters: Filter by selected DIVISION (if provided) or user's assigned DIVISION
+      if (divisionHeader) {
+        if (selectedDivision && selectedDivision.trim()) {
+          // Filter by selected division from dropdown
+          rows = rows.filter((row: any) => {
+            const rowDivision = String(row[divisionHeader] || '').trim();
+            const selectedDiv = normalize(String(selectedDivision));
             const dataDiv = normalize(rowDivision);
-            
-            if (userDiv === dataDiv) {
-              return true;
-            }
-            
-            const lengthDiff = Math.abs(userDiv.length - dataDiv.length);
-            if (lengthDiff <= 1 && (userDiv.includes(dataDiv) || dataDiv.includes(userDiv))) {
-              return true;
-            }
-            
-            return false;
+            return selectedDiv === dataDiv;
           });
-          return matches;
-        });
+        } else if (userDivisions.length > 0) {
+          // Fallback to user's assigned divisions if no division selected
+          rows = rows.filter((row: any) => {
+            const rowDivision = String(row[divisionHeader] || '').trim();
+            const matches = userDivisions.some((div: string) => {
+              const userDiv = normalize(String(div));
+              const dataDiv = normalize(rowDivision);
+              
+              if (userDiv === dataDiv) {
+                return true;
+              }
+              
+              const lengthDiff = Math.abs(userDiv.length - dataDiv.length);
+              if (lengthDiff <= 1 && (userDiv.includes(dataDiv) || dataDiv.includes(userDiv))) {
+                return true;
+              }
+              
+              return false;
+            });
+            return matches;
+          });
+        }
       }
 
       // Apply MY OFFLINE SITES filters: DEVICE STATUS = "OFFLINE"
@@ -1834,7 +1882,7 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Error fetching site codes for Sub Division from MY OFFLINE SITES:', error);
     }
-  }, []);
+  }, [division]);
 
   // Fetch NO OF DAYS OFFLINE for a site code from MY OFFLINE SITES
   const fetchNoOfDaysOffline = useCallback(async (siteCodeValue: string): Promise<string> => {
@@ -2904,6 +2952,44 @@ export default function Dashboard() {
                             
                             const rowKey = generateRowKey(deviceStatusFile.fileId, matchingRow, headers);
                             
+                            // CRITICAL: Fetch existing Pending record to get the original typeOfIssue
+                            // This ensures Type of Report shows the original issue type when Resolved
+                            let existingTypeOfIssue = '';
+                            try {
+                              // Fetch all records for this file
+                              const existingRecordRes = await fetch(`http://localhost:5000/api/equipment-offline-sites/file/${deviceStatusFile.fileId}`, {
+                                headers: { 'Authorization': `Bearer ${token}` }
+                              });
+                              
+                              if (existingRecordRes.ok) {
+                                const existingRecordData = await existingRecordRes.json();
+                                if (existingRecordData?.success && existingRecordData?.data) {
+                                  // existingRecordData.data is a map/object keyed by rowKey
+                                  const siteCodeUpper = row.siteCode.trim().toUpperCase();
+                                  
+                                  // Find the Pending record for this site code
+                                  const records = Object.values(existingRecordData.data) as any[];
+                                  const pendingRecord = records.find((r: any) => {
+                                    const recordSiteCode = String(r.siteCode || '').trim().toUpperCase();
+                                    if (recordSiteCode !== siteCodeUpper) return false;
+                                    
+                                    const siteObs = String(r.siteObservations || '').trim();
+                                    const taskStat = String(r.taskStatus || '').trim();
+                                    const typeOfIssue = String(r.typeOfIssue || '').trim();
+                                    // Pending = non-empty siteObservations OR non-empty taskStatus (not Resolved) OR non-empty typeOfIssue
+                                    return siteObs !== '' || (taskStat !== '' && !/^resolved$/i.test(taskStat)) || typeOfIssue !== '';
+                                  });
+                                  
+                                  if (pendingRecord && pendingRecord.typeOfIssue) {
+                                    existingTypeOfIssue = String(pendingRecord.typeOfIssue).trim();
+                                    console.log('[Dashboard] Found existing typeOfIssue from Pending record:', existingTypeOfIssue);
+                                  }
+                                }
+                              }
+                            } catch (fetchError) {
+                              console.warn('[Dashboard] Could not fetch existing record for typeOfIssue:', fetchError);
+                            }
+                            
                             // Update Task Status and Remarks in localStorage for MY OFFLINE SITES
                             const storageKey = `myData_${deviceStatusFile.fileId}`;
                             const savedData = localStorage.getItem(storageKey);
@@ -2936,26 +3022,38 @@ export default function Dashboard() {
                             // CRITICAL: For Reports, Resolved = empty string, Pending = non-empty string
                             const finalSiteObservations = ''; // Resolved = empty string for Reports
                             
-                            // Prepare Type of Issue display value (same logic as MyData.tsx)
-                            let issueDisplay = '';
-                            if (siteObservationsDialogData.typeOfIssue === 'Others') {
-                              issueDisplay = siteObservationsDialogData.specifyOther || '';
-                            } else if (siteObservationsDialogData.typeOfIssue === 'Spare Required') {
-                              const spareTypes = siteObservationsDialogData.typeOfSpare || [];
-                              let spareDisplay = '';
-                              if (spareTypes.length > 0) {
-                                const spareTypesDisplay = spareTypes.map((spare: string) => {
-                                  if (spare === 'OTHERS' && siteObservationsDialogData.specifySpareOther) {
-                                    return siteObservationsDialogData.specifySpareOther;
-                                  }
-                                  return spare;
-                                });
-                                spareDisplay = spareTypesDisplay.join(', ');
+                            // CRITICAL: Use existing typeOfIssue from Pending record if available
+                            // This ensures Type of Report shows the original issue type when Resolved
+                            // If no existing typeOfIssue found, try to get it from dialog data (for cases where Resolved is set directly)
+                            let issueDisplay = existingTypeOfIssue;
+                            
+                            // Fallback: If no existing typeOfIssue, try to get from dialog (though Resolved dialog typically doesn't have typeOfIssue)
+                            if (!issueDisplay) {
+                              if (siteObservationsDialogData.typeOfIssue === 'Others') {
+                                issueDisplay = siteObservationsDialogData.specifyOther || '';
+                              } else if (siteObservationsDialogData.typeOfIssue === 'Spare Required') {
+                                const spareTypes = siteObservationsDialogData.typeOfSpare || [];
+                                let spareDisplay = '';
+                                if (spareTypes.length > 0) {
+                                  const spareTypesDisplay = spareTypes.map((spare: string) => {
+                                    if (spare === 'OTHERS' && siteObservationsDialogData.specifySpareOther) {
+                                      return siteObservationsDialogData.specifySpareOther;
+                                    }
+                                    return spare;
+                                  });
+                                  spareDisplay = spareTypesDisplay.join(', ');
+                                }
+                                issueDisplay = spareDisplay ? `Spare Required - ${spareDisplay}` : 'Spare Required';
+                              } else if (siteObservationsDialogData.typeOfIssue) {
+                                issueDisplay = siteObservationsDialogData.typeOfIssue || '';
                               }
-                              issueDisplay = spareDisplay ? `Spare Required - ${spareDisplay}` : 'Spare Required';
-                            } else {
-                              issueDisplay = siteObservationsDialogData.typeOfIssue || '';
                             }
+                            
+                            console.log('[Dashboard] Final typeOfIssue for Resolved status:', {
+                              existingTypeOfIssue,
+                              fromDialog: siteObservationsDialogData.typeOfIssue,
+                              final: issueDisplay
+                            });
                             
                             // Prepare photos array (combine captured and uploaded photos)
                             const allPhotos: string[] = [];
@@ -3036,6 +3134,61 @@ export default function Dashboard() {
                             if (saveResponse.ok) {
                               const saveResult = await saveResponse.json();
                               console.log('✓ [Dashboard] Successfully saved Resolved status to EquipmentOfflineSites database for Reports tab:', saveResult.data?.siteCode);
+                              
+                              // CRITICAL: Create CCR approval action for Resolved status
+                              // This ensures approvals go to CCR when Site Observation is updated from MY SITES card
+                              try {
+                                console.log('[Dashboard] Creating CCR approval action for Resolved observation from My Sites Dialog...');
+                                
+                                // Prepare photos for CCR approval
+                                const ccrPhotosData: string[] = [];
+                                if (allPhotos && allPhotos.length > 0) {
+                                  ccrPhotosData.push(...allPhotos);
+                                }
+                                const ccrPhotosToSend = ccrPhotosData.length > 0 ? ccrPhotosData : null;
+                                
+                                // Create CCR approval action
+                                const ccrResponse = await fetch('http://localhost:5000/api/actions/submit', {
+                                  method: 'POST',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${token}`
+                                  },
+                                  body: JSON.stringify({
+                                    rowData: matchingRow,
+                                    headers,
+                                    routing: 'CCR Team',
+                                    typeOfIssue: 'CCR Resolution Approval',
+                                    remarks: siteObservationsDialogData.remarks || '',
+                                    priority: 'Medium',
+                                    photo: ccrPhotosToSend,
+                                    sourceFileId: deviceStatusFile.fileId,
+                                    rowKey: rowKey
+                                  })
+                                });
+                                
+                                const ccrResult = await ccrResponse.json().catch(() => null);
+                                
+                                if (!ccrResponse.ok) {
+                                  const errorMsg = ccrResult?.error || 'Failed to send approval request to CCR team.';
+                                  console.error('CCR approval creation failed:', errorMsg);
+                                  // Don't block the UI, but log the error
+                                  if (!errorMsg.includes('division')) {
+                                    console.warn(`Warning: ${errorMsg}`);
+                                  }
+                                } else {
+                                  console.log('✓ [Dashboard] Created CCR approval action for resolved observation:', ccrResult?.action?._id || ccrResult?.action?.id);
+                                  if (ccrResult?.action?._id || ccrResult?.action?.id) {
+                                    console.log('✓ [Dashboard] CCR approval successfully created and assigned to:', ccrResult?.action?.assignedToUserId);
+                                  }
+                                }
+                              } catch (ccrError: any) {
+                                console.error('Error creating CCR approval request:', ccrError);
+                                // Don't block the UI, but log the error
+                                if (ccrError?.message && !ccrError.message.includes('Warning:')) {
+                                  console.warn('CCR approval creation failed, but continuing with site observation update');
+                                }
+                              }
                             } else {
                               const errorData = await saveResponse.json().catch(() => ({}));
                               console.error('✗ [Dashboard] Failed to save Resolved status to EquipmentOfflineSites database:', errorData);
@@ -3498,188 +3651,50 @@ export default function Dashboard() {
     };
   }, [siteObservationsCameraStream, showSiteObservationsCameraPreview]);
 
-  // Fetch Division from MY OFFLINE SITES data based on Sub Division
-  const fetchDivisionForSubDivision = useCallback(async (subDivisionValue: string) => {
-    if (!subDivisionValue.trim()) {
-      setDivision('');
-      return;
-    }
-
-    setIsLoadingDivision(true);
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        setDivision('');
-        return;
-      }
-
-      // Fetch all uploads to find Device Status Upload file (same as MY OFFLINE SITES uses)
-      const uploadsRes = await fetch('http://localhost:5000/api/uploads', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const uploadsJson = await uploadsRes.json();
-      
-      if (!uploadsJson?.success) {
-        setDivision('');
-        return;
-      }
-
-      // Find Device Status Upload file (same as MY OFFLINE SITES)
-      const deviceStatusFile = (uploadsJson.files || [])
-        .filter((f: any) => {
-          const uploadType = String(f.uploadType || '').toLowerCase().trim();
-          const fileName = String(f.name || '').toLowerCase();
-          const isDeviceStatusUpload = uploadType === 'device-status-upload';
-          const isOnlineOfflineFileName = fileName.includes('online-offline') || 
-                                         fileName.includes('online_offline') ||
-                                         fileName.includes('onlineoffline');
-          const normalizedFileName = fileName.replace(/[-_\s]/g, '');
-          const isRtuTrackerFileName = 
-            fileName.includes('rtu-tracker') || 
-            fileName.includes('rtu_tracker') ||
-            fileName.includes('rtu tracker') ||
-            fileName.includes('rtutracker') ||
-            normalizedFileName.includes('rtutracker') ||
-            /rtu.*tracker/i.test(f.name || '');
-          
-          return isDeviceStatusUpload && !isOnlineOfflineFileName && !isRtuTrackerFileName;
-        })
-        .sort((a: any, b: any) => {
-          const dateA = a.uploadedAt ? new Date(a.uploadedAt).getTime() : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
-          const dateB = b.uploadedAt ? new Date(b.uploadedAt).getTime() : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
-          return dateB - dateA;
-        })[0];
-
-      if (!deviceStatusFile) {
-        setDivision('');
-        return;
-      }
-
-      // Fetch file data
-      const fileRes = await fetch(`http://localhost:5000/api/uploads/${deviceStatusFile.fileId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const fileJson = await fileRes.json();
-
-      if (!fileJson?.success || !fileJson.file) {
-        setDivision('');
-        return;
-      }
-
-      const file = fileJson.file;
-      const rows = Array.isArray(file.rows) ? file.rows : [];
-      const headers = file.headers && file.headers.length ? file.headers : (rows[0] ? Object.keys(rows[0]) : []);
-
-      // Find Sub Division and Division headers
-      const subDivisionHeader = headers.find((h: string) => {
-        const n = normalize(h);
-        return n === 'sub division' || n === 'subdivision' || n === 'sub_division';
-      });
-
-      const divisionHeader = headers.find((h: string) => {
-        const n = normalize(h);
-        return n === 'division';
-      });
-
-      if (!subDivisionHeader || !divisionHeader) {
-        setDivision('');
-        return;
-      }
-
-      // Find first matching row with the Sub Division
-      const matchingRow = rows.find((row: any) => {
-        const rowSubDivision = String(row[subDivisionHeader] || '').trim();
-        return normalize(rowSubDivision) === normalize(subDivisionValue);
-      });
-
-      if (matchingRow && matchingRow[divisionHeader]) {
-        setDivision(String(matchingRow[divisionHeader] || '').trim());
-      } else {
-        setDivision('');
-      }
-    } catch (error) {
-      console.error('Error fetching division for Sub Division:', error);
-      setDivision('');
-    } finally {
-      setIsLoadingDivision(false);
-    }
-  }, []);
-
   // Handle Application change
   const handleApplicationChange = (value: 'offline' | 'rtu' | '') => {
     setApplication(value);
-    if (value === 'offline' && subDivision.trim()) {
-      // Fetch division when OFFLINE SITES is selected and sub division exists
-      fetchDivisionForSubDivision(subDivision);
-    } else {
+    // Reset division and sub division when application changes
+    if (!value) {
       setDivision('');
+      setSubDivision('');
+      setSubDivisionSuggestions([]);
     }
   };
 
-  // Handle Sub Division input change
-  const handleSubDivisionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSubDivision(e.target.value);
-    setShowSubDivisionSuggestions(true);
-    setSelectedSubDivisionIndex(-1);
-    if (application === 'offline' && !e.target.value.trim()) {
-      setDivision('');
+  // Handle Division change
+  const handleDivisionChange = (value: string) => {
+    setDivision(value);
+    // Reset sub division when division changes
+    setSubDivision('');
+    setSubDivisionSuggestions([]);
+    // Fetch sub divisions for the selected division
+    if (value && application === 'offline') {
+      fetchSubDivisionSuggestions(value);
     }
   };
 
-  // Fetch division when Sub Division changes and OFFLINE SITES is selected (with debounce)
+  // Handle Sub Division selection (now using dropdown)
+  const handleSubDivisionChange = (value: string) => {
+    setSubDivision(value);
+    // Fetch site codes when sub division is selected
+    if (application === 'offline' && division.trim() && value.trim()) {
+      fetchSiteCodesForSubDivision(value.trim(), division.trim());
+    }
+  };
+
+  // Fetch site codes when Sub Division changes and OFFLINE SITES is selected (with debounce)
   useEffect(() => {
-    if (application === 'offline' && subDivision.trim()) {
+    if (application === 'offline' && division.trim() && subDivision.trim()) {
       const timeoutId = setTimeout(() => {
-        fetchDivisionForSubDivision(subDivision.trim());
-        fetchSiteCodesForSubDivision(subDivision.trim());
+        fetchSiteCodesForSubDivision(subDivision.trim(), division.trim());
       }, 500);
       return () => clearTimeout(timeoutId);
     } else if (application === 'offline' && !subDivision.trim()) {
-      setDivision('');
       setSiteCodesForSubDivision([]);
     }
-  }, [subDivision, application, fetchDivisionForSubDivision, fetchSiteCodesForSubDivision]);
+  }, [subDivision, division, application, fetchSiteCodesForSubDivision]);
 
-  // Handle Sub Division selection
-  const handleSelectSubDivision = (suggestion: string) => {
-    setSubDivision(suggestion);
-    setShowSubDivisionSuggestions(false);
-    setSelectedSubDivisionIndex(-1);
-    // If OFFLINE SITES is selected, fetch division
-    if (application === 'offline') {
-      fetchDivisionForSubDivision(suggestion);
-    }
-  };
-
-  // Handle Sub Division key down
-  const handleSubDivisionKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (!showSubDivisionSuggestions || filteredSubDivisionSuggestions.length === 0) {
-      return;
-    }
-
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        setSelectedSubDivisionIndex(prev => 
-          prev < filteredSubDivisionSuggestions.length - 1 ? prev + 1 : prev
-        );
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        setSelectedSubDivisionIndex(prev => prev > 0 ? prev - 1 : -1);
-        break;
-      case 'Enter':
-        e.preventDefault();
-        if (selectedSubDivisionIndex >= 0 && selectedSubDivisionIndex < filteredSubDivisionSuggestions.length) {
-          handleSelectSubDivision(filteredSubDivisionSuggestions[selectedSubDivisionIndex]);
-        }
-        break;
-      case 'Escape':
-        setShowSubDivisionSuggestions(false);
-        setSelectedSubDivisionIndex(-1);
-        break;
-    }
-  };
 
   // Fetch suggestions when dialog opens
   useEffect(() => {
@@ -3694,14 +3709,6 @@ export default function Dashboard() {
       fetchDirectionsSiteCodeSuggestions();
     }
   }, [showMyDirectionsModal, fetchDirectionsSiteCodeSuggestions]);
-
-  // Fetch Sub Division suggestions when My Sites dialog opens
-  useEffect(() => {
-    if (showMySitesDialog) {
-      fetchSubDivisionSuggestions();
-      fetchLocations();
-    }
-  }, [showMySitesDialog, fetchSubDivisionSuggestions]);
 
   // Fetch locations with KML file paths
   const fetchLocations = useCallback(async () => {
@@ -3739,6 +3746,31 @@ export default function Dashboard() {
     }
   }, []);
 
+  // Fetch locations when My Sites dialog opens
+  useEffect(() => {
+    if (showMySitesDialog) {
+      fetchLocations();
+      // Auto-select division if user has only one division
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        const userData = JSON.parse(storedUser);
+        if (userData?.division && Array.isArray(userData.division) && userData.division.length === 1 && !division) {
+          setDivision(userData.division[0]);
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showMySitesDialog, fetchLocations]);
+
+  // Fetch sub divisions when division is selected and application is offline
+  useEffect(() => {
+    if (showMySitesDialog && application === 'offline' && division.trim()) {
+      fetchSubDivisionSuggestions(division);
+    } else if (!division.trim()) {
+      setSubDivisionSuggestions([]);
+    }
+  }, [showMySitesDialog, application, division, fetchSubDivisionSuggestions]);
+
   // Filter suggestions based on input
   const filteredSiteCodeSuggestions = siteCode.trim()
     ? siteCodeSuggestions.filter((sc: string) =>
@@ -3747,11 +3779,11 @@ export default function Dashboard() {
     : [];
 
   // Filter Sub Division suggestions based on input
-  const filteredSubDivisionSuggestions = subDivision.trim()
-    ? subDivisionSuggestions.filter((sd: string) =>
-        sd.toLowerCase().includes(subDivision.toLowerCase())
-      )
-    : [];
+  // const filteredSubDivisionSuggestions = subDivision.trim()
+  //   ? subDivisionSuggestions.filter((sd: string) =>
+  //       sd.toLowerCase().includes(subDivision.toLowerCase())
+  //     )
+  //   : [];
 
   // Handle site code input change
   const handleSiteCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -4585,57 +4617,7 @@ export default function Dashboard() {
                 </div>
 
                 <div className="p-6 space-y-6">
-                  {/* Sub Division Input */}
-                  <div className="relative">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Enter Sub Division
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={subDivision}
-                        onChange={handleSubDivisionChange}
-                        onKeyDown={handleSubDivisionKeyDown}
-                        onFocus={() => {
-                          if (filteredSubDivisionSuggestions.length > 0) {
-                            setShowSubDivisionSuggestions(true);
-                          }
-                        }}
-                        onBlur={() => {
-                          setTimeout(() => {
-                            setShowSubDivisionSuggestions(false);
-                            setSelectedSubDivisionIndex(-1);
-                          }, 200);
-                        }}
-                        placeholder="Enter Sub Division..."
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                        autoComplete="off"
-                      />
-                      
-                      {/* Suggestions dropdown */}
-                      {showSubDivisionSuggestions && filteredSubDivisionSuggestions.length > 0 && (
-                        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
-                          {filteredSubDivisionSuggestions.map((suggestion, index) => (
-                            <div
-                              key={suggestion}
-                              onClick={() => handleSelectSubDivision(suggestion)}
-                              onMouseDown={(e) => e.preventDefault()}
-                              className={`px-4 py-2 text-sm cursor-pointer hover:bg-green-50 ${
-                                index === selectedSubDivisionIndex ? 'bg-green-100' : ''
-                              } ${index === 0 ? 'rounded-t-md' : ''} ${
-                                index === filteredSubDivisionSuggestions.length - 1 ? 'rounded-b-md' : ''
-                              }`}
-                              onMouseEnter={() => setSelectedSubDivisionIndex(index)}
-                            >
-                              {suggestion}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Application Dropdown */}
+                  {/* Application Dropdown - First Field */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Application
@@ -4651,26 +4633,81 @@ export default function Dashboard() {
                     </select>
                   </div>
 
-                  {/* Division Display (when OFFLINE SITES is selected) */}
+                  {/* Division Dropdown - Second Field (when OFFLINE SITES is selected) */}
                   {application === 'offline' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Division
+                      </label>
+                      <select
+                        value={division}
+                        onChange={(e) => handleDivisionChange(e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white"
+                        disabled={!user?.division || (Array.isArray(user.division) && user.division.length === 0)}
+                      >
+                        <option value="">
+                          {!user?.division || (Array.isArray(user.division) && user.division.length === 0)
+                            ? 'No divisions assigned'
+                            : Array.isArray(user.division) && user.division.length > 1
+                            ? 'Select Division'
+                            : 'Select Division'}
+                        </option>
+                        {user?.division && Array.isArray(user.division) && user.division.length > 0
+                          ? user.division.map((div: string) => (
+                              <option key={div} value={div}>
+                                {div}
+                              </option>
+                            ))
+                          : user?.division && typeof user.division === 'string'
+                          ? (
+                              <option value={user.division}>{user.division}</option>
+                            )
+                          : null}
+                      </select>
+                      {user?.division && Array.isArray(user.division) && user.division.length === 1 && !division && (
+                        <p className="mt-1 text-sm text-gray-500">Your assigned division: {user.division[0]}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Sub Division Dropdown - Third Field (when OFFLINE SITES and Division are selected) */}
+                  {application === 'offline' && division && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Sub Division
+                      </label>
+                      {isLoadingSubDivisions ? (
+                        <div className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50">
+                          <p className="text-gray-500 text-sm">Loading sub divisions...</p>
+                        </div>
+                      ) : (
+                        <select
+                          value={subDivision}
+                          onChange={(e) => handleSubDivisionChange(e.target.value)}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white"
+                          disabled={subDivisionSuggestions.length === 0}
+                        >
+                          <option value="">
+                            {subDivisionSuggestions.length === 0 
+                              ? 'No sub divisions found for this division'
+                              : 'Select Sub Division'}
+                          </option>
+                          {subDivisionSuggestions.map((sd) => (
+                            <option key={sd} value={sd}>
+                              {sd}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Table with 4 columns (when OFFLINE SITES, Division, and Sub Division are selected) */}
+                  {application === 'offline' && division && (
                     <>
-                      <div className="bg-white rounded-lg p-4 border border-green-200">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          DIVISION
-                        </label>
-                        {isLoadingDivision ? (
-                          <p className="text-gray-500">Loading...</p>
-                        ) : division ? (
-                          <p className="text-gray-800 font-semibold">{division}</p>
-                        ) : subDivision ? (
-                          <p className="text-gray-500">No division found for this Sub Division</p>
-                        ) : (
-                          <p className="text-gray-500">Please enter a Sub Division</p>
-                        )}
-                      </div>
 
                       {/* Table with 4 columns */}
-                      {division && (
+                      {subDivision && (
                         <div className="bg-white rounded-lg p-4 border border-green-200">
                           <div className="flex justify-between items-center mb-4">
                             <h3 className="text-lg font-semibold text-gray-800">Site Details</h3>

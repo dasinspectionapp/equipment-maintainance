@@ -26,7 +26,7 @@ export default function ApprovalReset() {
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const siteCodeInputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
-  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Fetch sitecode suggestions
   const fetchSiteCodeSuggestions = useCallback(async (searchTerm: string = '') => {

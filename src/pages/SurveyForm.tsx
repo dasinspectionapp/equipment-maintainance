@@ -17,7 +17,7 @@ export default function SurveyForm() {
   const recordingVideoRef = useRef<HTMLVideoElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingStreamRef = useRef<MediaStream | null>(null);
-  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const videoFileInputRef = useRef<HTMLInputElement>(null);
 
   // PDF upload states

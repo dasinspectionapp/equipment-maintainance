@@ -151,7 +151,7 @@ export default function DeviceStatusTable() {
             return dcDate.getFullYear() === targetDate.getFullYear() &&
                    dcDate.getMonth() === targetDate.getMonth() &&
                    dcDate.getDate() === targetDate.getDate();
-          });
+          }) || null;
         } else {
           // If no date provided, use latest date column
           if (dateColumns.length > 0) {

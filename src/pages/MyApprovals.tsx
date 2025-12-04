@@ -1,25 +1,25 @@
 import { useEffect, useMemo, useState } from 'react';
 import { logActivity } from '../utils/activityLogger';
 
-interface ActionRecord {
-  _id: string;
-  rowData?: Record<string, any>;
-  headers?: string[];
-  routing?: string;
-  typeOfIssue?: string;
-  remarks?: string;
-  assignedToUserId?: string;
-  assignedToRole?: string;
-  assignedToDivision?: string;
-  assignedByUserId?: string;
-  assignedByRole?: string;
-  status?: string;
-  priority?: string;
-  assignedDate?: string;
-  updatedAt?: string;
-  createdAt?: string;
-  photo?: string | string[];
-}
+// interface ActionRecord {
+//   _id: string;
+//   rowData?: Record<string, any>;
+//   headers?: string[];
+//   routing?: string;
+//   typeOfIssue?: string;
+//   remarks?: string;
+//   assignedToUserId?: string;
+//   assignedToRole?: string;
+//   assignedToDivision?: string;
+//   assignedByUserId?: string;
+//   assignedByRole?: string;
+//   status?: string;
+//   priority?: string;
+//   assignedDate?: string;
+//   updatedAt?: string;
+//   createdAt?: string;
+//   photo?: string | string[];
+// }
 
 interface ApprovalRecord {
   _id: string;
@@ -46,8 +46,8 @@ interface ApprovalRecord {
   updatedAt?: string;
 }
 
-const APPROVAL_TYPE_EQUIPMENT = 'AMC Resolution Approval';
-const APPROVAL_TYPE_CCR = 'CCR Resolution Approval';
+// const APPROVAL_TYPE_EQUIPMENT = 'AMC Resolution Approval';
+// const APPROVAL_TYPE_CCR = 'CCR Resolution Approval';
 
 interface SupportDocument {
   name?: string;
