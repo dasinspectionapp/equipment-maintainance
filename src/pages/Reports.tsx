@@ -66,7 +66,7 @@ export default function Reports() {
   const [fromDate, setFromDate] = useState<string>('');
   const [toDate, setToDate] = useState<string>('');
   const [localRemoteDate, setLocalRemoteDate] = useState<string>(''); // Single date for LOCAL REMOTE
-  // const [latestDate, setLatestDate] = useState<string>(''); // Latest date from backend for LOCAL REMOTE
+  const [_latestDate, setLatestDate] = useState<string>(''); // Latest date from backend for LOCAL REMOTE (setter used for default date)
   
   const [circleOptions, setCircleOptions] = useState<string[]>([]);
   const [divisionOptions, setDivisionOptions] = useState<string[]>([]);

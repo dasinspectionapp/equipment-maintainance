@@ -51,8 +51,8 @@ export default function Dashboard() {
   const [division, setDivision] = useState<string>('');
   const [subDivision, setSubDivision] = useState('');
   const [subDivisionSuggestions, setSubDivisionSuggestions] = useState<string[]>([]);
-  // const [showSubDivisionSuggestions, setShowSubDivisionSuggestions] = useState(false);
-  // const [selectedSubDivisionIndex, setSelectedSubDivisionIndex] = useState(-1);
+  const [_showSubDivisionSuggestions, setShowSubDivisionSuggestions] = useState(false);
+  const [_selectedSubDivisionIndex, setSelectedSubDivisionIndex] = useState(-1);
   const [isLoadingSubDivisions, setIsLoadingSubDivisions] = useState(false);
   
   // Table rows state
@@ -3654,12 +3654,11 @@ export default function Dashboard() {
   // Handle Application change
   const handleApplicationChange = (value: 'offline' | 'rtu' | '') => {
     setApplication(value);
-    // Reset division and sub division when application changes
-    if (!value) {
-      setDivision('');
-      setSubDivision('');
-      setSubDivisionSuggestions([]);
-    }
+    // Reset division and sub division whenever application changes
+    // This prevents stale values from persisting when switching between applications
+    setDivision('');
+    setSubDivision('');
+    setSubDivisionSuggestions([]);
   };
 
   // Handle Division change

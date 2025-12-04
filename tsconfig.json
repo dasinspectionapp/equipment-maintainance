@@ -27,5 +27,5 @@
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"],
-  "exclude": ["vite.config.ts", "node_modules", "dist"]
+  "exclude": ["vite.config.ts", "node_modules", "dist", "Mobile"]
 }

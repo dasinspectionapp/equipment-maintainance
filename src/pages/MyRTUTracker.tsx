@@ -75,13 +75,13 @@ export default function MyRTUTracker() {
   
   // State for the five columns functionality
   const [siteObservations, setSiteObservations] = useState<Record<string, string>>({});
-  const [siteObservationsLastModified, setSiteObservationsLastModified] = useState<Record<string, number>>({});
+  const [_siteObservationsLastModified, setSiteObservationsLastModified] = useState<Record<string, number>>({});
   const [taskStatus, setTaskStatus] = useState<Record<string, string>>({});
   const [typeOfIssue, setTypeOfIssue] = useState<Record<string, string>>({});
   const [viewPhotos, setViewPhotos] = useState<Record<string, string[]>>({});
   const [photoMetadata, setPhotoMetadata] = useState<Record<string, Array<{ latitude?: number; longitude?: number; timestamp?: string; location?: string }>>>({});
   const [remarks, setRemarks] = useState<Record<string, string>>({});
-  const dataLoadedRef = useRef<string>('');
+  // const _dataLoadedRef = useRef<string>(''); // Reserved for future use
   const isLoadingRef = useRef<boolean>(false);
   
   // Refs to track latest state values for reliable saving
@@ -133,13 +133,13 @@ export default function MyRTUTracker() {
     uploadedDocuments: [] as File[]
   });
   const [siteObservationsStatus, setSiteObservationsStatus] = useState<string>('');
-  const [isTypeOfSpareDropdownOpen, setIsTypeOfSpareDropdownOpen] = useState(false);
-  const [showSiteObservationsCameraPreview, setShowSiteObservationsCameraPreview] = useState(false);
-  const [siteObservationsCameraStream, setSiteObservationsCameraStream] = useState<MediaStream | null>(null);
-  const [siteObservationsCapturedImageData, setSiteObservationsCapturedImageData] = useState<string | null>(null);
-  const [capturedPhotoMetadata, setCapturedPhotoMetadata] = useState<{ latitude?: number; longitude?: number; timestamp?: string; location?: string } | null>(null);
-  const siteObservationsCameraStreamRef = useRef<MediaStream | null>(null);
-  const [isSubmittingSiteObservations, setIsSubmittingSiteObservations] = useState(false);
+  const [_isTypeOfSpareDropdownOpen, _setIsTypeOfSpareDropdownOpen] = useState(false);
+  const [_showSiteObservationsCameraPreview, setShowSiteObservationsCameraPreview] = useState(false);
+  const [_siteObservationsCameraStream, setSiteObservationsCameraStream] = useState<MediaStream | null>(null);
+  const [_siteObservationsCapturedImageData, _setSiteObservationsCapturedImageData] = useState<string | null>(null);
+  const [_capturedPhotoMetadata, _setCapturedPhotoMetadata] = useState<{ latitude?: number; longitude?: number; timestamp?: string; location?: string } | null>(null);
+  // const _siteObservationsCameraStreamRef = useRef<MediaStream | null>(null); // Reserved for future use
+  const [_isSubmittingSiteObservations, _setIsSubmittingSiteObservations] = useState(false);
   
   // Function to save data to localStorage
   const saveToLocalStorage = useCallback(() => {
@@ -368,7 +368,7 @@ export default function MyRTUTracker() {
           // Variables to track merged columns
           let onlineOfflineColumnsToPreserve: string[] = [];
           let columnsToInsert: string[] = [];
-          let onlineOfflineColumnsList: string[] = [];
+          // let _onlineOfflineColumnsList: string[] = []; // Reserved for future use
           let rtuTrackerColumnsList: string[] = [];
           
           // Find SITE CODE column in main file
@@ -491,7 +491,7 @@ export default function MyRTUTracker() {
                   if (equipmentLRSwitchStatusHeader) onlineOfflineColumns.push(equipmentLRSwitchStatusHeader);
                   if (noOfDaysOfflineHeader) onlineOfflineColumns.push(noOfDaysOfflineHeader);
                   
-                  onlineOfflineColumnsList = [...onlineOfflineColumns];
+                  // _onlineOfflineColumnsList = [...onlineOfflineColumns]; // Reserved for future use
                   onlineOfflineColumns.forEach(col => {
                     if (!columnsToInsert.includes(col)) columnsToInsert.push(col);
                     if (!onlineOfflineColumnsToPreserve.includes(col)) onlineOfflineColumnsToPreserve.push(col);
@@ -1237,7 +1237,7 @@ export default function MyRTUTracker() {
                                   ...siteObservationsRef.current,
                                   [rowKey]: selectedValue
                                 };
-                                setSiteObservationsLastModified(prev => ({
+                                setSiteObservationsLastModified((prev) => ({
                                   ...prev,
                                   [rowKey]: Date.now()
                                 }));
@@ -1494,7 +1494,7 @@ export default function MyRTUTracker() {
                       try {
                         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
                         setSiteObservationsCameraStream(stream);
-                        setShowSiteObservationsCameraPreview(true);
+                        setShowSiteObservationsCameraPreview(true); // Used for future camera preview feature
                       } catch (error) {
                         alert('Could not access camera');
                       }
