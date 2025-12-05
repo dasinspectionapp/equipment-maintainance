@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import NotificationBell from './NotificationBell';
+import { API_BASE } from '../utils/api';
 
 type MenuItem = {
   label: string;
@@ -69,7 +70,7 @@ export default function DashboardLayout() {
         const token = localStorage.getItem('token');
         if (!token) return;
 
-        const response = await fetch('http://localhost:5000/api/admin/uploads/logo', {
+        const response = await fetch(`${API_BASE}/api/admin/uploads/logo`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }

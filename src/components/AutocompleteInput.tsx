@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { API_BASE } from '../utils/api';
 
 interface AutocompleteInputProps {
   name: string;
@@ -46,7 +47,7 @@ export default function AutocompleteInput({
 
       // Ensure fieldName is clean - remove any unwanted suffixes
       const cleanFieldName = String(fieldName).split(':')[0].trim();
-      const url = `http://localhost:5000/api/inspection/autocomplete?field=${encodeURIComponent(cleanFieldName)}`;
+      const url = `${API_BASE}/api/inspection/autocomplete?field=${encodeURIComponent(cleanFieldName)}`;
       console.log('Fetching autocomplete from:', url, 'original fieldName:', fieldName, 'cleaned:', cleanFieldName);
       
       const response = await fetch(url, {

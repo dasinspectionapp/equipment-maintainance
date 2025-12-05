@@ -1,7 +1,6 @@
 // Data synchronization utility for web app
 // Syncs localStorage data with backend API
-
-const API_BASE = 'http://localhost:5000';
+import { API_BASE } from './api';
 
 export interface DataState {
   siteObservations: Record<string, string>;

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE } from '../utils/api';
 
 interface Notification {
   _id: string;
@@ -134,7 +135,7 @@ export default function NotificationBell({ selectedApplication }: NotificationBe
         console.warn('[NotificationBell] No application specified, notifications may show from all applications');
       }
 
-      const url = `http://localhost:5000/api/notifications?${queryParams.toString()}`;
+      const url = `${API_BASE}/api/notifications?${queryParams.toString()}`;
       console.log('[NotificationBell] Fetching notifications from:', url);
 
       const response = await fetch(url, {
@@ -182,8 +183,8 @@ export default function NotificationBell({ selectedApplication }: NotificationBe
       }
 
       const url = queryParams.toString() 
-        ? `http://localhost:5000/api/notifications/unread-count?${queryParams.toString()}`
-        : 'http://localhost:5000/api/notifications/unread-count';
+        ? `${API_BASE}/api/notifications/unread-count?${queryParams.toString()}`
+        : `${API_BASE}/api/notifications/unread-count`;
 
       const response = await fetch(url, {
         headers: {
@@ -211,7 +212,7 @@ export default function NotificationBell({ selectedApplication }: NotificationBe
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch(`http://localhost:5000/api/notifications/${notificationId}/read`, {
+      const response = await fetch(`${API_BASE}/api/notifications/${notificationId}/read`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -241,7 +242,7 @@ export default function NotificationBell({ selectedApplication }: NotificationBe
       // Get selectedApplication from prop or localStorage
       const app = selectedApplication || localStorage.getItem('selectedApplication') || '';
 
-      const response = await fetch('http://localhost:5000/api/notifications/mark-all-read', {
+      const response = await fetch(`${API_BASE}/api/notifications/mark-all-read`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -283,8 +284,8 @@ export default function NotificationBell({ selectedApplication }: NotificationBe
       }
 
       const url = queryParams.toString()
-        ? `http://localhost:5000/api/notifications/all?${queryParams.toString()}`
-        : 'http://localhost:5000/api/notifications/all';
+        ? `${API_BASE}/api/notifications/all?${queryParams.toString()}`
+        : `${API_BASE}/api/notifications/all`;
 
       const response = await fetch(url, {
         method: 'DELETE',
