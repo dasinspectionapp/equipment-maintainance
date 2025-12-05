@@ -7,7 +7,8 @@ services:
     # Try without host network - use bridge network like other containers that work
     # network_mode: "host"  # Commented out - try bridge network instead
     environment:
-      MONGODB_URI: mongodb://admin:password@vcaan.in:27017/admin?authSource=admin&authMechanism=SCRAM-SHA-256
+      # Try IP address instead of domain (like staging does) - might resolve DNS issues
+      MONGODB_URI: mongodb://admin:password@192.168.29.14:27017/admin?authSource=admin&authMechanism=SCRAM-SHA-256
       PORT: 5001
       NODE_ENV: production
       JWT_SECRET: bescom_distribution_automation_system_secret_key_2024
