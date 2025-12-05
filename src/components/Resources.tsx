@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { API_BASE } from '../utils/api';
 
 interface ELibraryResource {
@@ -20,7 +19,6 @@ interface ELibraryResource {
 }
 
 export default function Resources() {
-  const navigate = useNavigate();
   const [resources, setResources] = useState<ELibraryResource[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
@@ -545,28 +543,31 @@ export default function Resources() {
                       </div>
                     ) : isVideoLink(resource.link) ? (
                       <div className="mb-2">
-                        {getVimeoEmbedUrl(resource.link) ? (
-                          <div className="relative" style={{ paddingBottom: '56.25%' }}>
-                            <iframe
-                              width="100%"
-                              height="100%"
-                              src={getVimeoEmbedUrl(resource.link)}
-                              frameBorder="0"
-                              allow="autoplay; fullscreen; picture-in-picture"
-                              allowFullScreen
-                              className="absolute top-0 left-0 w-full h-full rounded-lg"
-                              title={resource.title}
-                            ></iframe>
-                          </div>
-                        ) : (
-                          <video
-                            src={resource.link}
-                            controls
-                            className="w-full rounded-lg max-h-32"
-                          >
-                            Your browser does not support the video tag.
-                          </video>
-                        )}
+                        {(() => {
+                          const vimeoUrl = getVimeoEmbedUrl(resource.link);
+                          return vimeoUrl ? (
+                            <div className="relative" style={{ paddingBottom: '56.25%' }}>
+                              <iframe
+                                width="100%"
+                                height="100%"
+                                src={vimeoUrl}
+                                frameBorder="0"
+                                allow="autoplay; fullscreen; picture-in-picture"
+                                allowFullScreen
+                                className="absolute top-0 left-0 w-full h-full rounded-lg"
+                                title={resource.title}
+                              ></iframe>
+                            </div>
+                          ) : (
+                            <video
+                              src={resource.link}
+                              controls
+                              className="w-full rounded-lg max-h-32"
+                            >
+                              Your browser does not support the video tag.
+                            </video>
+                          );
+                        })()}
                       </div>
                     ) : isImageLink(resource.link) ? (
                       <div className="mb-2">

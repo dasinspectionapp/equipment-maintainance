@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import BackButton from '../components/BackButton';
 import { API_BASE } from '../utils/api';
 
 interface ELibraryResource {
@@ -502,7 +501,7 @@ export default function ELibraryAdmin() {
                             name="resourceType"
                             value="file"
                             checked={resourceType === 'file'}
-                            onChange={(e) => {
+                            onChange={() => {
                               setResourceType('file');
                               setSelectedFile(null);
                               setFormData({ ...formData, link: '' });
@@ -517,7 +516,7 @@ export default function ELibraryAdmin() {
                             name="resourceType"
                             value="link"
                             checked={resourceType === 'link'}
-                            onChange={(e) => {
+                            onChange={() => {
                               setResourceType('link');
                               setSelectedFile(null);
                             }}
