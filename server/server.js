@@ -68,8 +68,30 @@ app.use(cors({
 // Static assets for uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Health check
+// Health check endpoints
 app.get('/health', (req, res) => {
+  const mongoState = mongoose.connection.readyState;
+  const mongoStates = {
+    0: 'disconnected',
+    1: 'connected',
+    2: 'connecting',
+    3: 'disconnecting'
+  };
+  
+  res.json({
+    success: true,
+    message: 'Server is running',
+    timestamp: new Date().toISOString(),
+    mongodb: {
+      status: mongoStates[mongoState] || 'unknown',
+      readyState: mongoState,
+      connected: mongoState === 1
+    }
+  });
+});
+
+// Also provide health at /api/health for consistency
+app.get('/api/health', (req, res) => {
   const mongoState = mongoose.connection.readyState;
   const mongoStates = {
     0: 'disconnected',
