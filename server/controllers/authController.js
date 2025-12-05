@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import User from '../models/User.js';
 import jwt from 'jsonwebtoken';
 
@@ -132,6 +133,14 @@ export const registerUser = async (req, res) => {
 // @access  Public
 export const loginUser = async (req, res) => {
   try {
+    // Check MongoDB connection first
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        success: false,
+        error: 'Database connection unavailable. Please try again in a moment.'
+      });
+    }
+
     const { userId, password, application } = req.body;
 
     // Validation

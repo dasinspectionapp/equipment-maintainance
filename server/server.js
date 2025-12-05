@@ -140,8 +140,9 @@ const startServer = async () => {
   
   try {
     // Wait for MongoDB connection
-    console.log('Connecting to MongoDB...');
+    console.log('=== Starting MongoDB Connection ===');
     await connectDB();
+    console.log('=== MongoDB Connection Attempt Completed ===');
     
     // Wait a bit for connection to stabilize
     let retries = 0;
@@ -150,7 +151,7 @@ const startServer = async () => {
       await new Promise(resolve => setTimeout(resolve, 1000));
       retries++;
       if (retries % 5 === 0) {
-        console.log(`Waiting for MongoDB connection... (${retries}s)`);
+        console.log(`Waiting for MongoDB connection... (${retries}s, readyState: ${mongoose.connection.readyState})`);
       }
     }
     
