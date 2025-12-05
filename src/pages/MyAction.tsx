@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { logActivity } from '../utils/activityLogger';
+import { API_BASE } from '../utils/api';
 
 // Helper function to add metadata overlay to captured photo
 function addMetadataToPhoto(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, latitude?: number, longitude?: number, timestamp?: string, location?: string): void {
@@ -159,7 +160,7 @@ export default function MyAction() {
         const token = localStorage.getItem('token');
         if (!token) return;
         
-        const response = await fetch('http://localhost:5000/api/auth/users', {
+        const response = await fetch(`${API_BASE}/api/auth/users`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -191,7 +192,7 @@ export default function MyAction() {
 
         const params = new URLSearchParams();
 
-        const response = await fetch(`http://localhost:5000/api/actions/my-actions?${params.toString()}`, {
+        const response = await fetch(`${API_BASE}/api/actions/my-actions?${params.toString()}`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -570,7 +571,7 @@ export default function MyAction() {
         throw new Error('Authentication required');
       }
 
-      const response = await fetch(`http://localhost:5000/api/actions/${actionId}/reroute`, {
+      const response = await fetch(`${API_BASE}/api/actions/${actionId}/reroute`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -621,7 +622,7 @@ export default function MyAction() {
         throw new Error('Action not found');
       }
 
-      const response = await fetch(`http://localhost:5000/api/actions/${actionId}/status`, {
+      const response = await fetch(`${API_BASE}/api/actions/${actionId}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

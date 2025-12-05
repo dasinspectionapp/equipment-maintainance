@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import BackButton from '../components/BackButton';
+import { API_BASE } from '../utils/api';
 
 interface User {
   _id: string;
@@ -41,7 +42,7 @@ export default function UserManagement() {
   const fetchUsers = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/auth/users', {
+      const response = await fetch(`${API_BASE}/api/auth/users`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -140,7 +141,7 @@ export default function UserManagement() {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/auth/users/${selectedUserId}/approve`, {
+      const response = await fetch(`${API_BASE}/api/auth/users/${selectedUserId}/approve`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -177,7 +178,7 @@ export default function UserManagement() {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/auth/users/${selectedUserId}/update-mapping`, {
+      const response = await fetch(`${API_BASE}/api/auth/users/${selectedUserId}/update-mapping`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -215,7 +216,7 @@ export default function UserManagement() {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/auth/users/${editUser._id}`, {
+      const response = await fetch(`${API_BASE}/api/auth/users/${editUser._id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -258,7 +259,7 @@ export default function UserManagement() {
           handleApproveClick(userId);
           return; // Return early to show modal
         case 'reject':
-          response = await fetch(`http://localhost:5000/api/auth/users/${userId}/reject`, {
+          response = await fetch(`${API_BASE}/api/auth/users/${userId}/reject`, {
             method: 'PUT',
             headers: {
               'Authorization': `Bearer ${token}`,
@@ -267,7 +268,7 @@ export default function UserManagement() {
           });
           break;
         case 'activate':
-          response = await fetch(`http://localhost:5000/api/auth/users/${userId}/activate`, {
+          response = await fetch(`${API_BASE}/api/auth/users/${userId}/activate`, {
             method: 'PUT',
             headers: {
               'Authorization': `Bearer ${token}`,
@@ -276,7 +277,7 @@ export default function UserManagement() {
           });
           break;
         case 'deactivate':
-          response = await fetch(`http://localhost:5000/api/auth/users/${userId}/deactivate`, {
+          response = await fetch(`${API_BASE}/api/auth/users/${userId}/deactivate`, {
             method: 'PUT',
             headers: {
               'Authorization': `Bearer ${token}`,
@@ -286,7 +287,7 @@ export default function UserManagement() {
           break;
         case 'delete':
           if (!confirm(`Are you sure you want to delete user ${userId}?`)) return;
-          response = await fetch(`http://localhost:5000/api/auth/users/${userId}`, {
+          response = await fetch(`${API_BASE}/api/auth/users/${userId}`, {
             method: 'DELETE',
             headers: {
               'Authorization': `Bearer ${token}`,
@@ -296,7 +297,7 @@ export default function UserManagement() {
           break;
         case 'reset':
           if (!confirm(`Reset password for user ${userId}?`)) return;
-          response = await fetch(`http://localhost:5000/api/auth/users/${userId}/reset-password`, {
+          response = await fetch(`${API_BASE}/api/auth/users/${userId}/reset-password`, {
             method: 'PUT',
             headers: {
               'Authorization': `Bearer ${token}`,

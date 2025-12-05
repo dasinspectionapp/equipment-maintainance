@@ -9,7 +9,7 @@ interface UploadedFile {
   uploadedAt: Date | string;
 }
 
-const API_BASE = 'http://localhost:5000';
+import { API_BASE } from '../utils/api';
 
 export default function Uploads() {
   const [selectedOption, setSelectedOption] = useState<string>('device-status-upload');

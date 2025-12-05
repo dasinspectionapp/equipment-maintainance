@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import BackButton from '../components/BackButton';
+import { API_BASE } from '../utils/api';
 
 // Image Preview Component with Authentication
 function ImagePreview({ fieldId, fileName }: { fieldId: string; fileName: string }) {
@@ -8,7 +9,7 @@ function ImagePreview({ fieldId, fileName }: { fieldId: string; fileName: string
 
   useEffect(() => {
     const token = localStorage.getItem('token');
-    fetch(`http://localhost:5000/api/admin/uploads/files/${fieldId}`, {
+    fetch(`${API_BASE}/api/admin/uploads/files/${fieldId}`, {
       headers: {
         'Authorization': `Bearer ${token}`
       }
@@ -85,7 +86,7 @@ export default function AdminUploads() {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/admin/uploads/fields', {
+      const response = await fetch(`${API_BASE}/api/admin/uploads/fields`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -121,7 +122,7 @@ export default function AdminUploads() {
       const token = localStorage.getItem('token');
       
       // Step 1: Create the field
-      const createResponse = await fetch('http://localhost:5000/api/admin/uploads/fields', {
+      const createResponse = await fetch(`${API_BASE}/api/admin/uploads/fields`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -156,7 +157,7 @@ export default function AdminUploads() {
           formData.append('file', fileToUpload);
 
           try {
-            const uploadResponse = await fetch(`http://localhost:5000/api/admin/uploads/fields/${newField._id}/upload`, {
+            const uploadResponse = await fetch(`${API_BASE}/api/admin/uploads/fields/${newField._id}/upload`, {
               method: 'POST',
               headers: {
                 'Authorization': `Bearer ${token}`
@@ -236,7 +237,7 @@ export default function AdminUploads() {
       formData.append('file', file);
 
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/admin/uploads/fields/${fieldId}/upload`, {
+      const response = await fetch(`${API_BASE}/api/admin/uploads/fields/${fieldId}/upload`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -269,7 +270,7 @@ export default function AdminUploads() {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/admin/uploads/fields/${fieldId}/file`, {
+      const response = await fetch(`${API_BASE}/api/admin/uploads/fields/${fieldId}/file`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -299,7 +300,7 @@ export default function AdminUploads() {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/admin/uploads/fields/${fieldId}`, {
+      const response = await fetch(`${API_BASE}/api/admin/uploads/fields/${fieldId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -334,7 +335,7 @@ export default function AdminUploads() {
     setPreviewUrl(null);
 
     const token = localStorage.getItem('token');
-    fetch(`http://localhost:5000/api/admin/uploads/files/${fieldId}`, {
+    fetch(`${API_BASE}/api/admin/uploads/files/${fieldId}`, {
       headers: {
         'Authorization': `Bearer ${token}`
       }
@@ -363,7 +364,7 @@ export default function AdminUploads() {
 
   const handleDownloadFile = (fieldId: string, fileName: string) => {
     const token = localStorage.getItem('token');
-    const url = `http://localhost:5000/api/admin/uploads/files/${fieldId}`;
+    const url = `${API_BASE}/api/admin/uploads/files/${fieldId}`;
     
     fetch(url, {
       headers: {
@@ -841,7 +842,7 @@ export default function AdminUploads() {
                       <button
                         onClick={() => {
                           const token = localStorage.getItem('token');
-                          fetch(`http://localhost:5000/api/admin/uploads/files/${previewFile.fieldId}`, {
+                          fetch(`${API_BASE}/api/admin/uploads/files/${previewFile.fieldId}`, {
                             headers: { 'Authorization': `Bearer ${token}` }
                           })
                             .then(response => response.blob())
@@ -870,7 +871,7 @@ export default function AdminUploads() {
                       <button
                         onClick={() => {
                           const token = localStorage.getItem('token');
-                          fetch(`http://localhost:5000/api/admin/uploads/files/${previewFile.fieldId}`, {
+                          fetch(`${API_BASE}/api/admin/uploads/files/${previewFile.fieldId}`, {
                             headers: { 'Authorization': `Bearer ${token}` }
                           })
                             .then(response => response.blob())
@@ -902,7 +903,7 @@ export default function AdminUploads() {
                       <button
                         onClick={() => {
                           const token = localStorage.getItem('token');
-                          fetch(`http://localhost:5000/api/admin/uploads/files/${previewFile.fieldId}`, {
+                          fetch(`${API_BASE}/api/admin/uploads/files/${previewFile.fieldId}`, {
                             headers: { 'Authorization': `Bearer ${token}` }
                           })
                             .then(response => response.blob())
