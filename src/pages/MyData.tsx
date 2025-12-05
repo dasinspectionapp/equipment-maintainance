@@ -265,7 +265,7 @@ export default function MyData() {
         return; // No updates to save
       }
       
-      console.log('Saving action update to database for RTU/Communication user:`, {
+      console.log('Saving action update to database for RTU/Communication user:', {
         actionId: row._actionId,
         updates: updatePayload
       });
@@ -419,7 +419,7 @@ export default function MyData() {
             // If Site Observations is "Resolved", always update Task Status to "Resolved"
             const finalTaskStatus = siteObservationsValue === 'Resolved' ? 'Resolved' : taskStatusValue;
             
-            console.log(`[SAVE] Updating existing site ${rowKey} with Type of Issue and Remarks in database:`, {
+            console.log(`[SAVE] Updating existing site ${rowKey} with Type of Issue and Remarks in database:', {
               typeOfIssue: finalTypeOfIssue,
               remarks: finalRemarks,
               siteObservations: siteObservationsValue,
@@ -433,7 +433,7 @@ export default function MyData() {
             // When siteObservationsValue is 'Pending', keep as 'Pending' (non-empty string)
             const finalSiteObservations = siteObservationsValue === 'Resolved' ? '' : (siteObservationsValue || '');
             
-            console.log(`[SAVE] Site Observations conversion for existing rowKey ${rowKey}:`, {
+            console.log(`[SAVE] Site Observations conversion for existing rowKey ${rowKey}:', {
               original: siteObservationsValue,
               final: finalSiteObservations,
               willSave: !!finalSiteObservations || finalSiteObservations === ''
@@ -497,7 +497,7 @@ export default function MyData() {
             // When siteObservationsValue is 'Pending', keep as 'Pending' (non-empty string)
             const finalSiteObservations = siteObservationsValue === 'Resolved' ? '' : (siteObservationsValue || '');
             
-            console.log(`[SAVE] Site Observations conversion for rowKey ${rowKey}:`, {
+            console.log(`[SAVE] Site Observations conversion for rowKey ${rowKey}:', {
               original: siteObservationsValue,
               final: finalSiteObservations
             });
@@ -564,7 +564,7 @@ export default function MyData() {
         }
         
         console.log(`[SAVE] Total sites to save: ${sitesToSave.length}`);
-        console.log(`[SAVE] Site observations breakdown:`, {
+        console.log(`[SAVE] Site observations breakdown:', {
           resolved: sitesToSave.filter(s => s.siteObservations === '').length,
           pending: sitesToSave.filter(s => s.siteObservations === 'Pending').length,
           empty: sitesToSave.filter(s => !s.siteObservations || s.siteObservations === '').length
@@ -656,7 +656,7 @@ export default function MyData() {
           const excludedSiteCodes: string[] = result.excludedSiteCodes || []; // SiteCodes that should be excluded
           const excludedCount = result.excludedCount || 0;
           
-          console.log(`[loadFromEquipmentOfflineSitesDB] API Response:`, {
+          console.log(`[loadFromEquipmentOfflineSitesDB] API Response:', {
             dataKeys: Object.keys(dbData).length,
             excludedRowKeysCount: excludedRowKeys.length,
             excludedSiteCodesCount: excludedSiteCodes.length,
@@ -844,7 +844,7 @@ export default function MyData() {
                       Object.keys(dataToSave.supportDocuments).length > 0;
       
       if (hasData) {
-        console.log('Saving data to localStorage:`, {
+        console.log('Saving data to localStorage:', {
           file: selectedFile,
           siteObservations: Object.keys(dataToSave.siteObservations).length,
           resolvedEntries: Object.values(dataToSave.siteObservations).filter(v => v === 'Resolved').length,
@@ -976,7 +976,7 @@ export default function MyData() {
           return;
         }
         
-        console.log(`[FILTER ROWS] Found ${excludedRowKeys.length} excluded rowKeys and ${excludedSiteCodes.length} excluded siteCodes:`, {
+        console.log(`[FILTER ROWS] Found ${excludedRowKeys.length} excluded rowKeys and ${excludedSiteCodes.length} excluded siteCodes:', {
           excludedRowKeys: excludedRowKeys,
           excludedSiteCodes: excludedSiteCodes
         });
@@ -1204,7 +1204,7 @@ export default function MyData() {
       }
     }
     
-    console.log('MY Data - Current user data:`, {
+    console.log('MY Data - Current user data:', {
       role: userRole,
       divisions: currentDivisions,
       hasDivisions: currentDivisions && currentDivisions.length > 0,
@@ -1672,7 +1672,7 @@ export default function MyData() {
                       }
                     }
                   } else {
-                    console.warn('MY DATA - Cannot merge ONLINE-OFFLINE data:`, {
+                    console.warn('MY DATA - Cannot merge ONLINE-OFFLINE data:', {
                       hasMainSiteCode: !!mainSiteCodeHeader,
                       hasOnlineOfflineSiteCode: !!onlineOfflineSiteCodeHeader,
                       columnsToInsertCount: onlineOfflineColumns.length
@@ -1737,7 +1737,7 @@ export default function MyData() {
           
           // Use stored merged column names (set during ONLINE-OFFLINE merge)
           // These were merged from ONLINE-OFFLINE file and should not be filtered out
-          console.log('MY DATA - Preserving merged columns:`, {
+          console.log('MY DATA - Preserving merged columns:', {
             deviceStatus: mergedDeviceStatusColumn,
             noOfDaysOffline: mergedNoOfDaysOfflineColumn
           });
@@ -1854,7 +1854,7 @@ export default function MyData() {
           }
           
           // Verify merged columns are in headers
-          console.log('MY DATA - Final headers check:`, {
+          console.log('MY DATA - Final headers check:', {
             hasDeviceStatus: hdrs.includes(mergedDeviceStatusColumn || ''),
             hasNoOfDaysOffline: hdrs.includes(mergedNoOfDaysOfflineColumn || ''),
             deviceStatusIndex: hdrs.indexOf(mergedDeviceStatusColumn || ''),
@@ -2011,7 +2011,7 @@ export default function MyData() {
               console.warn('MY Data - User has no divisions assigned. User object:', user);
             } else {
               const beforeCount = filteredRows.length;
-              console.log(`MY Data - Applying division filter (${userRole} role):`, {
+              console.log(`MY Data - Applying division filter (${userRole} role):', {
                 divisionKey,
                 userDivisions,
                 beforeCount
@@ -2101,7 +2101,7 @@ export default function MyData() {
                 // Normalize excludedSiteCodes to uppercase for comparison
                 const normalizedExcludedSiteCodes = excludedSiteCodes.map((code: string) => String(code).trim().toUpperCase());
                 
-                console.log(`[FILE LOAD] Filtering rows with excludedSiteCodes:`, {
+                console.log(`[FILE LOAD] Filtering rows with excludedSiteCodes:', {
                   excludedSiteCodes: excludedSiteCodes,
                   normalizedExcludedSiteCodes: normalizedExcludedSiteCodes,
                   rowsBeforeFilter: beforeApprovedFilter,
@@ -2160,7 +2160,7 @@ export default function MyData() {
             }
           }
           
-          console.log('MY DATA - Final data summary:`, {
+          console.log('MY DATA - Final data summary:', {
             headersCount: hdrs.length,
             filteredRowsCount: finalFilteredRows.length,
             headers: hdrs,
@@ -2259,7 +2259,7 @@ export default function MyData() {
             
             // Log for debugging (especially for AMC users)
             if (userRole === 'AMC') {
-              console.log('AMC Action rowData:`, {
+              console.log('AMC Action rowData:', {
                 actionId: action._id,
                 typeOfIssue: action.typeOfIssue,
                 hasRowData: !!action.rowData,
@@ -2288,7 +2288,7 @@ export default function MyData() {
           
           console.log(`Converted ${actionRows.length} actions to rows for ${userRole}`);
           if (actionRows.length > 0 && userRole === 'AMC') {
-            console.log('Sample AMC action row:`, {
+            console.log('Sample AMC action row:', {
               keys: Object.keys(actionRows[0]),
               hasRowData: Object.keys(actionRows[0]).length > 20, // More than just metadata fields
               firstRow: actionRows[0]
@@ -3089,7 +3089,7 @@ export default function MyData() {
           localStorage.setItem(globalKey, JSON.stringify(mergedMap));
         }
         
-        console.log('Loaded site observations by Site Code:`, {
+        console.log('Loaded site observations by Site Code:', {
           fromAPI: Object.keys(apiObservationsMap).length,
           fromLocalStorage: Object.keys(localStorageMap).length,
           merged: Object.keys(mergedMap).length,
@@ -3378,7 +3378,7 @@ export default function MyData() {
               }
             }
             
-            console.log('Loading persisted data:`, {
+            console.log('Loading persisted data:', {
               source: apiData ? 'API' : 'localStorage',
               file: selectedFile,
               rowsCount: rows.length,
@@ -3392,7 +3392,7 @@ export default function MyData() {
             });
             
             // Debug: Show actual saved data structure
-            console.log('Actual saved data structure:`, {
+            console.log('Actual saved data structure:', {
               siteObservationsKeys: Object.keys(parsed.siteObservations || {}),
               siteObservationsSample: Object.entries(parsed.siteObservations || {}).slice(0, 2),
               taskStatusKeys: Object.keys(parsed.taskStatus || {}),
@@ -3406,7 +3406,7 @@ export default function MyData() {
               const sampleRowKey = generateRowKey(selectedFile, sampleRow, headers);
               const savedKeys = Object.keys(parsed.siteObservations || {});
               console.log('Sample generated row key:', sampleRowKey);
-              console.log('Sample row data:`, {
+              console.log('Sample row data:', {
                 first3Headers: headers.slice(0, 3),
                 first3Values: headers.slice(0, 3).map((h: string) => sampleRow[h])
               });
@@ -3480,7 +3480,7 @@ export default function MyData() {
                 }
               });
               
-              console.log('Migration result:`, {
+              console.log('Migration result:', {
                 oldKeys: oldKeys.length,
                 migrated: Object.keys(migratedSiteObservations).length
               });
@@ -6756,7 +6756,7 @@ export default function MyData() {
                       const isAMCIssue = siteObservationsDialogData.typeOfIssue === 'Spare Required' || siteObservationsDialogData.typeOfIssue === 'Faulty';
                       let amcRoutingTeam = null;
                       
-                      console.log('AMC Routing Check:`, {
+                      console.log('AMC Routing Check:', {
                         isAMCIssue,
                         typeOfIssue: siteObservationsDialogData.typeOfIssue,
                         hasRowData: !!rowData,
@@ -6787,7 +6787,7 @@ export default function MyData() {
                         for (const key of deviceTypeKeys) {
                           if (rowData[key]) {
                             deviceType = String(rowData[key]).trim();
-                            console.log('Device Type found:`, { key, deviceType });
+                            console.log('Device Type found:', { key, deviceType });
                             break;
                           }
                         }
@@ -6797,7 +6797,7 @@ export default function MyData() {
                             const normalizedKey = key.toLowerCase().replace(/[_\s]/g, '');
                             if (normalizedKey.includes('devicetype') || (normalizedKey.includes('device') && normalizedKey.includes('type'))) {
                               deviceType = String(rowData[key]).trim();
-                              console.log('Device Type found (case-insensitive):`, { key, deviceType });
+                              console.log('Device Type found (case-insensitive):', { key, deviceType });
                               break;
                             }
                           }
@@ -6854,7 +6854,7 @@ export default function MyData() {
                         for (const key of circleKeys) {
                           if (rowData[key]) {
                             circle = String(rowData[key]).trim().toUpperCase();
-                            console.log('Circle found in rowData (exact match):`, { key, circle, siteCode });
+                            console.log('Circle found in rowData (exact match):', { key, circle, siteCode });
                             break;
                           }
                         }
@@ -6865,7 +6865,7 @@ export default function MyData() {
                             const normalizedKey = key.toUpperCase().trim();
                             if (normalizedKey === 'CIRCLE') {
                               circle = String(rowData[key]).trim().toUpperCase();
-                              console.log('Circle found in rowData (case-insensitive key):`, { originalKey: key, circle, siteCode });
+                              console.log('Circle found in rowData (case-insensitive key):', { originalKey: key, circle, siteCode });
                               break;
                             }
                           }
@@ -6894,7 +6894,7 @@ export default function MyData() {
                                     return rSiteCode === String(siteCode).trim();
                                   });
                                   if (originalRow) {
-                                    console.log('Found original row by Site Code:`, { siteCodeKey: scKey, siteCode });
+                                    console.log('Found original row by Site Code:', { siteCodeKey: scKey, siteCode });
                                     break;
                                   }
                                 }
@@ -6916,7 +6916,7 @@ export default function MyData() {
                                     circle = String(originalRow[key]).trim().toUpperCase();
                                     // Update rowData to include circle
                                     rowData[key] = circle;
-                                    console.log('Circle found in original file data:`, { key, circle, siteCode });
+                                    console.log('Circle found in original file data:', { key, circle, siteCode });
                                     break;
                                   }
                                 }
@@ -6928,7 +6928,7 @@ export default function MyData() {
                                     if (normalizedKey === 'CIRCLE') {
                                       circle = String(originalRow[key]).trim().toUpperCase();
                                       rowData[key] = circle;
-                                      console.log('Circle found in original file data (case-insensitive):`, { originalKey: key, circle, siteCode });
+                                      console.log('Circle found in original file data (case-insensitive):', { originalKey: key, circle, siteCode });
                                       break;
                                     }
                                   }
@@ -6990,7 +6990,7 @@ export default function MyData() {
                             circle = 'SOUTH';
                             // Add circle to rowData for backend
                             rowData['CIRCLE'] = circle;
-                            console.log('Circle derived from Division (fallback):`, { division, circle, siteCode });
+                            console.log('Circle derived from Division (fallback):', { division, circle, siteCode });
                           }
                         }
                         
@@ -6999,8 +6999,8 @@ export default function MyData() {
                           rowData['CIRCLE'] = circle;
                         }
                         
-                        console.log('Final Circle value for AMC routing:`, { circle, siteCode, hasCircleInRowData: !!rowData['CIRCLE'] });
-                        console.log('Device Type value for AMC routing:`, { deviceType });
+                        console.log('Final Circle value for AMC routing:', { circle, siteCode, hasCircleInRowData: !!rowData['CIRCLE'] });
+                        console.log('Device Type value for AMC routing:', { deviceType });
                         console.log('Backend will check Site Code priority FIRST, then fall back to Device Type (RMU) + Circle if needed');
                       }
                       
@@ -7195,7 +7195,7 @@ export default function MyData() {
                           for (const key of circleKeys) {
                             if (routingRowData[key]) {
                               circle = String(routingRowData[key]).trim().toUpperCase();
-                              console.log('Circle found in routingRowData:`, { key, circle, siteCode });
+                              console.log('Circle found in routingRowData:', { key, circle, siteCode });
                               break;
                             }
                           }
@@ -7206,7 +7206,7 @@ export default function MyData() {
                               const normalizedKey = key.toUpperCase().trim();
                               if (normalizedKey === 'CIRCLE') {
                                 circle = String(routingRowData[key]).trim().toUpperCase();
-                                console.log('Circle found (case-insensitive):`, { originalKey: key, circle, siteCode });
+                                console.log('Circle found (case-insensitive):', { originalKey: key, circle, siteCode });
                                 break;
                               }
                             }
@@ -7235,7 +7235,7 @@ export default function MyData() {
                                       return rSiteCode === String(siteCode).trim();
                                     });
                                     if (originalRow) {
-                                      console.log('Found original row by Site Code:`, { siteCodeKey: scKey, siteCode });
+                                      console.log('Found original row by Site Code:', { siteCodeKey: scKey, siteCode });
                                       break;
                                     }
                                   }
@@ -7257,7 +7257,7 @@ export default function MyData() {
                                       circle = String(originalRow[key]).trim().toUpperCase();
                                       // Add circle to rowData for backend
                                       routingRowData[key] = circle;
-                                      console.log('Circle found in original file:`, { key, circle, siteCode });
+                                      console.log('Circle found in original file:', { key, circle, siteCode });
                                       break;
                                     }
                                   }
@@ -7269,7 +7269,7 @@ export default function MyData() {
                                       if (normalizedKey === 'CIRCLE') {
                                         circle = String(originalRow[key]).trim().toUpperCase();
                                         routingRowData[key] = circle;
-                                        console.log('Circle found in original file (case-insensitive):`, { originalKey: key, circle, siteCode });
+                                        console.log('Circle found in original file (case-insensitive):', { originalKey: key, circle, siteCode });
                                         break;
                                       }
                                     }
@@ -7293,7 +7293,7 @@ export default function MyData() {
                             for (const key of divisionKeys) {
                               if (routingRowData[key]) {
                                 division = String(routingRowData[key]).trim().toUpperCase();
-                                console.log('Division found for circle mapping:`, { key, division });
+                                console.log('Division found for circle mapping:', { key, division });
                                 break;
                               }
                             }
@@ -7318,7 +7318,7 @@ export default function MyData() {
                                       if (originalRow[key]) {
                                         division = String(originalRow[key]).trim().toUpperCase();
                                         routingRowData[key] = division;
-                                        console.log('Division found in original file:`, { key, division });
+                                        console.log('Division found in original file:', { key, division });
                                         break;
                                       }
                                     }
@@ -7336,7 +7336,7 @@ export default function MyData() {
                               circle = 'SOUTH';
                               // Add circle to rowData for backend (uppercase)
                               routingRowData['CIRCLE'] = circle;
-                              console.log('Circle derived from Division:`, { division, circle });
+                              console.log('Circle derived from Division:', { division, circle });
                             }
                           }
                           
@@ -7350,7 +7350,7 @@ export default function MyData() {
                         // Recalculate shouldRouteToBoth after potential amcRoutingTeam update
                         const shouldRouteToBoth = amcRoutingTeam && (siteObservationsDialogData.typeOfIssue === 'Spare Required' || siteObservationsDialogData.typeOfIssue === 'Faulty');
                         
-                        console.log('After re-check, routing state:`, {
+                        console.log('After re-check, routing state:', {
                           shouldRouteToOM,
                           amcRoutingTeam,
                           shouldRouteToBoth,
@@ -7395,7 +7395,7 @@ export default function MyData() {
                         // 1. Faulty/Spare Required → ALWAYS route to O&M Team (irrespective of Device Type)
                         // 2. Faulty/Spare Required + RMU Device Type → ALSO route to AMC Team (based on Circle)
                         
-                        console.log('Starting routing process:`, {
+                        console.log('Starting routing process:', {
                           shouldRouteToOM,
                           amcRoutingTeam,
                           shouldRouteToBoth,
@@ -7536,7 +7536,7 @@ export default function MyData() {
                             const vendorName = action.assignedToVendor || action.vendor || '';
                             const taskStatusKey = selectedSiteObservationRowKey;
                             
-                            console.log('AMC Routing Success - Updating task status immediately:`, {
+                            console.log('AMC Routing Success - Updating task status immediately:', {
                               vendorName,
                               taskStatusKey,
                               actionId: action._id,
@@ -7546,7 +7546,7 @@ export default function MyData() {
                             
                             if (taskStatusKey) {
                               const rowKey = generateRowKey(selectedFile, routingRowData, headers);
-                              console.log('Row keys for update:`, { rowKey, taskStatusKey });
+                              console.log('Row keys for update:', { rowKey, taskStatusKey });
                               
                               // Update task status immediately
                               setTaskStatus(prev => {
@@ -7621,7 +7621,7 @@ export default function MyData() {
                                   updated[originalRowKey] = actionData;
                                 }
                                 
-                                console.log('Updated routedActionsMap:`, {
+                                console.log('Updated routedActionsMap:', {
                                   rowKey: updated[rowKey] ? 'exists' : 'missing',
                                   taskStatusKey: updated[taskStatusKey] ? 'exists' : 'missing',
                                   vendorNames: updated[rowKey]?._vendorNames || updated[taskStatusKey]?._vendorNames
@@ -7829,7 +7829,7 @@ export default function MyData() {
 
                       const rowData = searchedRows[rowIndex];
                       
-                      console.log('Site Observations submitted:`, {
+                      console.log('Site Observations submitted:', {
                         rowKey: selectedSiteObservationRowKey,
                         status: siteObservationsStatus,
                         typeOfIssue: siteObservationsDialogData.typeOfIssue,
@@ -8331,7 +8331,7 @@ export default function MyData() {
                     setTimeout(async () => {
                       // Force save immediately using refs which have latest values
                       saveToLocalStorage();
-                      console.log('Force saved data to localStorage after dialog submission:`, {
+                      console.log('Force saved data to localStorage after dialog submission:', {
                         rowKey: selectedSiteObservationRowKey,
                         siteObservations: siteObservationsRef.current[selectedSiteObservationRowKey],
                         taskStatus: taskStatusRef.current[selectedSiteObservationRowKey],
