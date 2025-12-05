@@ -77,7 +77,6 @@ const connectDB = async () => {
       heartbeatFrequencyMS: 10000,
       retryWrites: true,
       retryReads: true,
-      // Try with direct connection first
       directConnection: false,
     });
 
@@ -85,6 +84,19 @@ const connectDB = async () => {
       console.log(`✓ MongoDB Connected: ${conn.connection.host}`);
       console.log(`✓ Database: ${conn.connection.name}`);
       console.log(`✓ Ready State: ${conn.connection.readyState}`);
+      
+      // If we need to use 'das' database instead of 'admin', switch to it
+      // Note: This only works if 'das' is a database, not a collection
+      // If 'das' is a collection, it will be in the current database (admin)
+      const currentDb = conn.connection.name;
+      if (currentDb === 'admin') {
+        console.log(`ℹ Connected to 'admin' database for authentication`);
+        console.log(`ℹ Collections will be in the 'admin' database`);
+        // If you need to switch to 'das' database, uncomment below:
+        // const dasDb = conn.connection.useDb('das');
+        // console.log(`✓ Switched to 'das' database`);
+      }
+      
       isConnected = true;
     } else {
       console.warn(`⚠ MongoDB connection state: ${conn.connection.readyState} (expected 1)`);
