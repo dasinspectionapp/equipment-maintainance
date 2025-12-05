@@ -419,7 +419,7 @@ export default function MyData() {
             // If Site Observations is "Resolved", always update Task Status to "Resolved"
             const finalTaskStatus = siteObservationsValue === 'Resolved' ? 'Resolved' : taskStatusValue;
             
-            console.log(`[SAVE] Updating existing site ${rowKey} with Type of Issue and Remarks in database:', {
+            console.log(`[SAVE] Updating existing site ${rowKey} with Type of Issue and Remarks in database:`, {
               typeOfIssue: finalTypeOfIssue,
               remarks: finalRemarks,
               siteObservations: siteObservationsValue,
@@ -433,7 +433,7 @@ export default function MyData() {
             // When siteObservationsValue is 'Pending', keep as 'Pending' (non-empty string)
             const finalSiteObservations = siteObservationsValue === 'Resolved' ? '' : (siteObservationsValue || '');
             
-            console.log(`[SAVE] Site Observations conversion for existing rowKey ${rowKey}:', {
+            console.log(`[SAVE] Site Observations conversion for existing rowKey ${rowKey}:`, {
               original: siteObservationsValue,
               final: finalSiteObservations,
               willSave: !!finalSiteObservations || finalSiteObservations === ''
@@ -497,7 +497,7 @@ export default function MyData() {
             // When siteObservationsValue is 'Pending', keep as 'Pending' (non-empty string)
             const finalSiteObservations = siteObservationsValue === 'Resolved' ? '' : (siteObservationsValue || '');
             
-            console.log(`[SAVE] Site Observations conversion for rowKey ${rowKey}:', {
+            console.log(`[SAVE] Site Observations conversion for rowKey ${rowKey}:`, {
               original: siteObservationsValue,
               final: finalSiteObservations
             });
@@ -564,7 +564,7 @@ export default function MyData() {
         }
         
         console.log(`[SAVE] Total sites to save: ${sitesToSave.length}`);
-        console.log(`[SAVE] Site observations breakdown:', {
+        console.log(`[SAVE] Site observations breakdown:`, {
           resolved: sitesToSave.filter(s => s.siteObservations === '').length,
           pending: sitesToSave.filter(s => s.siteObservations === 'Pending').length,
           empty: sitesToSave.filter(s => !s.siteObservations || s.siteObservations === '').length
@@ -656,7 +656,7 @@ export default function MyData() {
           const excludedSiteCodes: string[] = result.excludedSiteCodes || []; // SiteCodes that should be excluded
           const excludedCount = result.excludedCount || 0;
           
-          console.log(`[loadFromEquipmentOfflineSitesDB] API Response:', {
+          console.log(`[loadFromEquipmentOfflineSitesDB] API Response:`, {
             dataKeys: Object.keys(dbData).length,
             excludedRowKeysCount: excludedRowKeys.length,
             excludedSiteCodesCount: excludedSiteCodes.length,
@@ -976,7 +976,7 @@ export default function MyData() {
           return;
         }
         
-        console.log(`[FILTER ROWS] Found ${excludedRowKeys.length} excluded rowKeys and ${excludedSiteCodes.length} excluded siteCodes:', {
+        console.log(`[FILTER ROWS] Found ${excludedRowKeys.length} excluded rowKeys and ${excludedSiteCodes.length} excluded siteCodes:`, {
           excludedRowKeys: excludedRowKeys,
           excludedSiteCodes: excludedSiteCodes
         });
@@ -2011,7 +2011,7 @@ export default function MyData() {
               console.warn('MY Data - User has no divisions assigned. User object:', user);
             } else {
               const beforeCount = filteredRows.length;
-              console.log(`MY Data - Applying division filter (${userRole} role):', {
+              console.log(`MY Data - Applying division filter (${userRole} role):`, {
                 divisionKey,
                 userDivisions,
                 beforeCount
@@ -2101,7 +2101,7 @@ export default function MyData() {
                 // Normalize excludedSiteCodes to uppercase for comparison
                 const normalizedExcludedSiteCodes = excludedSiteCodes.map((code: string) => String(code).trim().toUpperCase());
                 
-                console.log(`[FILE LOAD] Filtering rows with excludedSiteCodes:', {
+                console.log(`[FILE LOAD] Filtering rows with excludedSiteCodes:`, {
                   excludedSiteCodes: excludedSiteCodes,
                   normalizedExcludedSiteCodes: normalizedExcludedSiteCodes,
                   rowsBeforeFilter: beforeApprovedFilter,
@@ -7493,7 +7493,7 @@ export default function MyData() {
 
                         // Additionally route to AMC Team if Device Type is RMU and Circle is valid
                         if (shouldRouteToBoth && amcRoutingTeam) {
-                          console.log('Routing to AMC Team...`, { amcRoutingTeam, shouldRouteToBoth });
+                          console.log('Routing to AMC Team...', { amcRoutingTeam, shouldRouteToBoth });
                           
                           // Ensure Circle is in rowData before sending
                           const circleInRowData = routingRowData['CIRCLE'] || routingRowData['Circle'] || routingRowData['circle'] || '';
