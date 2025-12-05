@@ -62,3 +62,4 @@ echo "  1. Use IP address instead of domain name"
 echo "  2. Check if MongoDB requires specific network configuration"
 echo "  3. Compare with working container's network setup"
 
+

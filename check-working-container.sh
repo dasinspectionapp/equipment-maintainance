@@ -45,3 +45,4 @@ echo "=== To inspect a specific container in detail ==="
 echo "docker inspect <container-name> | grep -A 30 'Config\|NetworkSettings'"
 
 
+

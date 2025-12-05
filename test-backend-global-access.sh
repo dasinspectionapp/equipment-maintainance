@@ -82,3 +82,4 @@ echo "  2. Cloud provider security groups (AWS, Azure, GCP)"
 echo "  3. Router port forwarding (if behind NAT)"
 echo "  4. Server logs: docker logs backend-prod"
 
+
