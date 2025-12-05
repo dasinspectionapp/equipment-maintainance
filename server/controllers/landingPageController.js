@@ -42,6 +42,13 @@ const extractImage = (file, required = false) => {
 
 export async function getSlides(req, res, next) {
   try {
+    // Check MongoDB connection
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ 
+        success: false, 
+        error: 'Database connection unavailable. Please check MongoDB connection.' 
+      });
+    }
     const slides = await LandingSlide.find({}).sort({ order: 1, createdAt: 1 }).lean();
     res.json({ success: true, slides });
   } catch (error) {
@@ -157,6 +164,13 @@ export async function deleteSlide(req, res, next) {
 
 export async function getBranding(req, res, next) {
   try {
+    // Check MongoDB connection
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ 
+        success: false, 
+        error: 'Database connection unavailable. Please check MongoDB connection.' 
+      });
+    }
     const preferredKeys = ['bescom-logo', 'branding-logo', 'brand-logo', 'header-logo', 'logo'];
 
     let field = await AdminUploadField.findOne({

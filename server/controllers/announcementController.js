@@ -18,6 +18,13 @@ const toNumber = (value, defaultValue) => {
 
 export async function getAnnouncements(req, res, next) {
   try {
+    // Check MongoDB connection
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ 
+        success: false, 
+        error: 'Database connection unavailable. Please check MongoDB connection.' 
+      });
+    }
     // Public endpoint - only return active announcements
     const activeOnly = req.query.activeOnly !== 'false';
     const query = activeOnly ? { isActive: true } : {};
