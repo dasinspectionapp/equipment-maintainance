@@ -27,9 +27,6 @@ const __dirname = path.dirname(__filename);
 // Load environment variables
 dotenv.config();
 
-// Connect to MongoDB
-connectDB();
-
 const app = express();
 
 // Middleware
@@ -115,16 +112,55 @@ app.use('/api/landing', landingPageRoutes);
 app.use(notFound);
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 5000;
+// Start server function - waits for MongoDB connection
+const startServer = async () => {
+  let mongoConnected = false;
+  
+  try {
+    // Wait for MongoDB connection
+    console.log('Connecting to MongoDB...');
+    await connectDB();
+    
+    // Wait a bit for connection to stabilize
+    let retries = 0;
+    const maxRetries = 30; // 30 seconds total
+    while (mongoose.connection.readyState !== 1 && retries < maxRetries) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      retries++;
+      if (retries % 5 === 0) {
+        console.log(`Waiting for MongoDB connection... (${retries}s)`);
+      }
+    }
+    
+    if (mongoose.connection.readyState === 1) {
+      mongoConnected = true;
+      console.log('✓ MongoDB connection established');
+    } else {
+      console.warn('⚠ MongoDB not connected, but starting server anyway...');
+      console.warn('⚠ API endpoints may fail until MongoDB connects');
+    }
+  } catch (error) {
+    console.error('Failed to connect to MongoDB:', error.message);
+    console.warn('⚠ Starting server anyway, but API endpoints may fail');
+  }
+  
+  // Start server regardless of MongoDB status
+  const PORT = process.env.PORT || 5000;
+  
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+    console.log(`Server accessible at:`);
+    console.log(`  - http://localhost:${PORT}`);
+    console.log(`  - http://127.0.0.1:${PORT}`);
+    if (mongoConnected) {
+      console.log(`✓ MongoDB: Connected`);
+    } else {
+      console.log(`⚠ MongoDB: Not connected - some features may not work`);
+      console.log(`⚠ Check MongoDB connection: ${process.env.MONGODB_URI?.replace(/:[^:@]*@/, ':****@') || 'MONGODB_URI not set'}`);
+    }
+  });
+};
 
-// Listen on all network interfaces (0.0.0.0) to allow mobile app connections
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
-  console.log(`Server accessible at:`);
-  console.log(`  - http://localhost:${PORT}`);
-  console.log(`  - http://127.0.0.1:${PORT}`);
-  console.log(`  - Check your network IP address for mobile device access`);
-  console.log(`  - Windows: Run 'ipconfig' to find your IPv4 address`);
-  console.log(`  - Mac/Linux: Run 'ifconfig' or 'ip addr' to find your IP address`);
-});
+// Start the server
+startServer();
 
