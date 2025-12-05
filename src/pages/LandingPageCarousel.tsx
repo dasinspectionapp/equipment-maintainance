@@ -18,7 +18,8 @@ interface Slide {
   isActive?: boolean
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000'
+// Use relative URL in production (nginx proxy), localhost in development
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:5000')
 
 const initialFormState = {
   title: '',

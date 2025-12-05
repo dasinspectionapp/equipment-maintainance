@@ -55,7 +55,8 @@ const FALLBACK_SLIDES: Slide[] = [
 ]
 
 const AUTO_PLAY_INTERVAL = 6000
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000'
+// Use relative URL in production (nginx proxy), localhost in development
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:5000')
 
 export default function ImageCarousel() {
   const [slides, setSlides] = useState<Slide[]>(FALLBACK_SLIDES)
