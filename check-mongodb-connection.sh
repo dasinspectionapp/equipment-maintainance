@@ -53,3 +53,4 @@ echo "  1. Can you reach vcaan.in from your host machine? Try: ping vcaan.in"
 echo "  2. Check backend logs: docker logs backend-prod"
 echo "  3. Verify MongoDB URI in docker-compose.prod.yml"
 
+

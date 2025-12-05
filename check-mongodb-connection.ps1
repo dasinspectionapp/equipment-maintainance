@@ -53,3 +53,4 @@ Write-Host "  1. Can you reach vcaan.in from your host machine? Try: Test-NetCon
 Write-Host "  2. Check backend logs: docker logs backend-prod" -ForegroundColor White
 Write-Host "  3. Verify MongoDB URI in docker-compose.prod.yml" -ForegroundColor White
 
+

@@ -27,3 +27,4 @@ echo "To inspect a specific container:"
 echo "  docker inspect <container-name> | grep -A 10 -i mongo"
 echo "  docker inspect <container-name> | grep -A 5 NetworkMode"
 
+

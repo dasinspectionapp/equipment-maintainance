@@ -72,3 +72,4 @@ console.log('5. Network routing issue from Docker container');
 
 process.exit(1);
 
+
