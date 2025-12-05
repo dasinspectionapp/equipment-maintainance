@@ -8,17 +8,17 @@ services:
     # network_mode: "host"  # Commented out - try bridge network instead
     environment:
       MONGODB_URI: mongodb://admin:password@vcaan.in:27017/admin?authSource=admin&authMechanism=SCRAM-SHA-256
-      PORT: 5000
+      PORT: 5001
       NODE_ENV: production
       JWT_SECRET: bescom_distribution_automation_system_secret_key_2024
       JWT_EXPIRE: 7d
       FRONTEND_URL: https://bescomdas.vcaan.in
     ports:
-      - "0.0.0.0:5000:5000"
+      - "0.0.0.0:5001:5001"
     # Note: When using host network mode, ports are automatically exposed
     # No need to map ports separately
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:5000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))\" || exit 1"]
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:5001/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))\" || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5

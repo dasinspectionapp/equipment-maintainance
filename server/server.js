@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import os from 'os';
 import mongoose from 'mongoose';
 import connectDB from './config/db.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
@@ -171,16 +172,49 @@ const startServer = async () => {
   const PORT = process.env.PORT || 5000;
   
   app.listen(PORT, '0.0.0.0', () => {
+    console.log(`\n${'='.repeat(60)}`);
     console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
-    console.log(`Server accessible at:`);
-    console.log(`  - http://localhost:${PORT}`);
-    console.log(`  - http://127.0.0.1:${PORT}`);
+    console.log(`${'='.repeat(60)}`);
+    console.log(`\n✓ Server listening on 0.0.0.0:${PORT} (all network interfaces)`);
+    console.log(`\nServer accessible at:`);
+    console.log(`  - Local: http://localhost:${PORT}`);
+    console.log(`  - Local: http://127.0.0.1:${PORT}`);
+    
+    // Get network IP addresses for global access
+    const nets = os.networkInterfaces();
+    const addresses = [];
+    for (const name of Object.keys(nets)) {
+      for (const net of nets[name]) {
+        if (net.family === 'IPv4' && !net.internal) {
+          addresses.push({ interface: name, address: net.address });
+        }
+      }
+    }
+    
+    if (addresses.length > 0) {
+      console.log(`\n  Global access (from other devices):`);
+      addresses.forEach(({ interface: iface, address }) => {
+        console.log(`  - http://${address}:${PORT} (${iface})`);
+      });
+    }
+    
+    if (process.env.FRONTEND_URL) {
+      console.log(`\n  Frontend URL: ${process.env.FRONTEND_URL}`);
+    }
+    
+    console.log(`\n  Health check: http://localhost:${PORT}/health`);
+    if (addresses.length > 0) {
+      console.log(`  Health check: http://${addresses[0].address}:${PORT}/health`);
+    }
+    
     if (mongoConnected) {
-      console.log(`✓ MongoDB: Connected`);
+      console.log(`\n✓ MongoDB: Connected`);
     } else {
-      console.log(`⚠ MongoDB: Not connected - some features may not work`);
+      console.log(`\n⚠ MongoDB: Not connected - some features may not work`);
       console.log(`⚠ Check MongoDB connection: ${process.env.MONGODB_URI?.replace(/:[^:@]*@/, ':****@') || 'MONGODB_URI not set'}`);
     }
+    
+    console.log(`\n${'='.repeat(60)}\n`);
   });
 };
 
