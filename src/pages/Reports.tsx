@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LabelList } from 'recharts';
+import { API_BASE } from '../utils/api';
 
 interface ReportRow {
   slNo: number;
@@ -97,7 +98,7 @@ export default function Reports() {
           return;
         }
 
-        const filtersUrl = `http://localhost:5000/api/equipment-offline-sites/reports/filters?_t=${Date.now()}`;
+        const filtersUrl = `${API_BASE}/api/equipment-offline-sites/reports/filters?_t=${Date.now()}`;
         console.log('Fetching filters from:', filtersUrl);
         
         const response = await fetch(filtersUrl, {
@@ -230,9 +231,9 @@ export default function Reports() {
             localRemoteParams.append('date', localRemoteDate);
           }
           localRemoteParams.append('_t', Date.now().toString());
-          url = `http://localhost:5000/api/equipment-offline-sites/reports/local-remote?${localRemoteParams.toString()}`;
+          url = `${API_BASE}/api/equipment-offline-sites/reports/local-remote?${localRemoteParams.toString()}`;
         } else {
-          url = `http://localhost:5000/api/equipment-offline-sites/reports?${params.toString()}`;
+          url = `${API_BASE}/api/equipment-offline-sites/reports?${params.toString()}`;
         }
         
         console.log('Fetching reports from:', url);
@@ -363,7 +364,7 @@ export default function Reports() {
       params.append('siteCode', siteCode);
       params.append('reportType', reportType);
 
-      const url = `http://localhost:5000/api/equipment-offline-sites/reports/details?${params.toString()}`;
+      const url = `${API_BASE}/api/equipment-offline-sites/reports/details?${params.toString()}`;
       const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${token}`,

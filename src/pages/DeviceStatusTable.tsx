@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import * as XLSX from 'xlsx';
+import { API_BASE } from '../utils/api';
 
 // Normalize function for case-insensitive matching
 const normalize = (str: string): string => {
@@ -56,7 +57,7 @@ export default function DeviceStatusTable() {
         const userDivisions = userData.division || [];
 
         // Fetch all uploads
-        const uploadsRes = await fetch('http://localhost:5000/api/uploads', {
+        const uploadsRes = await fetch(`${API_BASE}/api/uploads`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const uploadsJson = await uploadsRes.json();
@@ -89,7 +90,7 @@ export default function DeviceStatusTable() {
         })[0];
 
         // Fetch ONLINE-OFFLINE file data
-        const fileRes = await fetch(`http://localhost:5000/api/uploads/${latestFile.fileId}`, {
+        const fileRes = await fetch(`${API_BASE}/api/uploads/${latestFile.fileId}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const fileJson = await fileRes.json();
@@ -252,7 +253,7 @@ export default function DeviceStatusTable() {
 
         let hrnMap: { [key: string]: string } = {};
         if (deviceStatusUploadFile) {
-          const deviceStatusRes = await fetch(`http://localhost:5000/api/uploads/${deviceStatusUploadFile.fileId}`, {
+          const deviceStatusRes = await fetch(`${API_BASE}/api/uploads/${deviceStatusUploadFile.fileId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           const deviceStatusJson = await deviceStatusRes.json();
@@ -394,7 +395,7 @@ export default function DeviceStatusTable() {
       ? userData.circle.join(', ') 
       : (userData?.circle || 'N/A');
     
-    const downloadTime = new Date().toLocaleString('en-IN', {
+    const downloadTime = new Date().toLocaleString('en-IN`, {
       day: '2-digit',
       month: 'short',
       year: 'numeric',
@@ -408,7 +409,7 @@ export default function DeviceStatusTable() {
     let selectedDateFormatted = '';
     if (selectedDate) {
       const dateObj = new Date(selectedDate);
-      selectedDateFormatted = dateObj.toLocaleDateString('en-IN', {
+      selectedDateFormatted = dateObj.toLocaleDateString('en-IN`, {
         day: '2-digit',
         month: 'short',
         year: 'numeric'

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
+import { API_BASE } from '../utils/api';
 
 interface DashboardStats {
   totalUsers: number;
@@ -102,7 +103,7 @@ export default function Dashboard() {
       const token = localStorage.getItem('token');
       console.log('Fetching dashboard stats with token:', !!token);
       
-      const response = await fetch('http://localhost:5000/api/auth/dashboard-stats', {
+      const response = await fetch(`${API_BASE}/api/auth/dashboard-stats`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -181,7 +182,7 @@ export default function Dashboard() {
           userDivisions.forEach((div: string) => params.append('divisions', div));
         }
 
-        const url = `http://localhost:5000/api/equipment-offline-sites/reports/local-remote?${params.toString()}`;
+        const url = `${API_BASE}/api/equipment-offline-sites/reports/local-remote?${params.toString()}`;
         console.log('Fetching device status counts for date:', selectedDeviceStatusDate || 'latest', 'URL:', url);
         
         const response = await fetch(url, {
@@ -284,7 +285,7 @@ export default function Dashboard() {
       if (!token) return;
 
       // Fetch all uploads
-      const uploadsRes = await fetch('http://localhost:5000/api/uploads', {
+      const uploadsRes = await fetch(`${API_BASE}/api/uploads`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const uploadsJson = await uploadsRes.json();
@@ -320,7 +321,7 @@ export default function Dashboard() {
       if (!deviceStatusFile) return;
 
       // Fetch file data
-      const fileRes = await fetch(`http://localhost:5000/api/uploads/${deviceStatusFile.fileId}`, {
+      const fileRes = await fetch(`${API_BASE}/api/uploads/${deviceStatusFile.fileId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const fileJson = await fileRes.json();
@@ -362,7 +363,7 @@ export default function Dashboard() {
       if (!token) return;
 
       // Fetch all uploads
-      const uploadsRes = await fetch('http://localhost:5000/api/uploads', {
+      const uploadsRes = await fetch(`${API_BASE}/api/uploads`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const uploadsJson = await uploadsRes.json();
@@ -398,7 +399,7 @@ export default function Dashboard() {
       if (!deviceStatusFile) return;
 
       // Fetch file data
-      const fileRes = await fetch(`http://localhost:5000/api/uploads/${deviceStatusFile.fileId}`, {
+      const fileRes = await fetch(`${API_BASE}/api/uploads/${deviceStatusFile.fileId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const fileJson = await fileRes.json();
@@ -449,7 +450,7 @@ export default function Dashboard() {
         return;
       }
 
-      const uploadsRes = await fetch('http://localhost:5000/api/uploads', {
+      const uploadsRes = await fetch(`${API_BASE}/api/uploads`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const uploadsJson = await uploadsRes.json();
@@ -491,7 +492,7 @@ export default function Dashboard() {
       }
 
       // Fetch file data
-      const fileRes = await fetch(`http://localhost:5000/api/uploads/${deviceStatusFile.fileId}`, {
+      const fileRes = await fetch(`${API_BASE}/api/uploads/${deviceStatusFile.fileId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const fileJson = await fileRes.json();
@@ -559,7 +560,7 @@ export default function Dashboard() {
       }
 
       // Fetch all uploads
-      const uploadsRes = await fetch('http://localhost:5000/api/uploads', {
+      const uploadsRes = await fetch(`${API_BASE}/api/uploads`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const uploadsJson = await uploadsRes.json();
@@ -599,7 +600,7 @@ export default function Dashboard() {
       }
 
       // Fetch file data
-      const fileRes = await fetch(`http://localhost:5000/api/uploads/${deviceStatusFile.fileId}`, {
+      const fileRes = await fetch(`${API_BASE}/api/uploads/${deviceStatusFile.fileId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const fileJson = await fileRes.json();
@@ -670,7 +671,7 @@ export default function Dashboard() {
         })[0];
 
         if (latestOnlineOfflineFile) {
-          const onlineOfflineRes = await fetch(`http://localhost:5000/api/uploads/${latestOnlineOfflineFile.fileId}`, {
+          const onlineOfflineRes = await fetch(`${API_BASE}/api/uploads/${latestOnlineOfflineFile.fileId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           const onlineOfflineJson = await onlineOfflineRes.json();
@@ -778,7 +779,7 @@ export default function Dashboard() {
       if (!token) return;
 
       // Fetch all uploads to find Device Status Upload file
-      const uploadsRes = await fetch('http://localhost:5000/api/uploads', {
+      const uploadsRes = await fetch(`${API_BASE}/api/uploads`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const uploadsJson = await uploadsRes.json();
@@ -828,7 +829,7 @@ export default function Dashboard() {
       }
 
       // Fetch file data to find matching row
-      const fileRes = await fetch(`http://localhost:5000/api/uploads/${deviceStatusFile.fileId}`, {
+      const fileRes = await fetch(`${API_BASE}/api/uploads/${deviceStatusFile.fileId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const fileJson = await fileRes.json();
@@ -910,7 +911,7 @@ export default function Dashboard() {
       
       // For Equipment role users: First try to fetch from database (EquipmentOfflineSites)
       try {
-        const dbRes = await fetch(`http://localhost:5000/api/equipment-offline-sites/${deviceStatusFile.fileId}/${encodeURIComponent(rowKey)}`, {
+        const dbRes = await fetch(`${API_BASE}/api/equipment-offline-sites/${deviceStatusFile.fileId}/${encodeURIComponent(rowKey)}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         
@@ -998,7 +999,7 @@ export default function Dashboard() {
         // Calculate Task Status from routing actions (same logic as MY OFFLINE SITES)
         // Fetch actions routed by Equipment user to calculate detailed Task Status
         try {
-          const actionsRes = await fetch('http://localhost:5000/api/actions/my-routed-actions', {
+          const actionsRes = await fetch(`${API_BASE}/api/actions/my-routed-actions`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           
@@ -1186,7 +1187,7 @@ export default function Dashboard() {
       if (!token) return;
 
       // Fetch all uploads
-      const uploadsRes = await fetch('http://localhost:5000/api/uploads', {
+      const uploadsRes = await fetch(`${API_BASE}/api/uploads`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const uploadsJson = await uploadsRes.json();
@@ -1236,7 +1237,7 @@ export default function Dashboard() {
       }
 
       // Fetch Device Status Upload file data
-      const mainFileRes = await fetch(`http://localhost:5000/api/uploads/${deviceStatusFile.fileId}`, {
+      const mainFileRes = await fetch(`${API_BASE}/api/uploads/${deviceStatusFile.fileId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const mainFileJson = await mainFileRes.json();
@@ -1302,7 +1303,7 @@ export default function Dashboard() {
       }
 
       // Fetch RTU Tracker file data
-      const rtuTrackerFileRes = await fetch(`http://localhost:5000/api/uploads/${rtuTrackerFile.fileId}`, {
+      const rtuTrackerFileRes = await fetch(`${API_BASE}/api/uploads/${rtuTrackerFile.fileId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const rtuTrackerFileJson = await rtuTrackerFileRes.json();
@@ -1609,7 +1610,7 @@ export default function Dashboard() {
         return;
       }
 
-      const uploadsRes = await fetch('http://localhost:5000/api/uploads', {
+      const uploadsRes = await fetch(`${API_BASE}/api/uploads`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const uploadsJson = await uploadsRes.json();
@@ -1644,7 +1645,7 @@ export default function Dashboard() {
 
       if (!deviceStatusFile) return;
 
-      const fileRes = await fetch(`http://localhost:5000/api/uploads/${deviceStatusFile.fileId}`, {
+      const fileRes = await fetch(`${API_BASE}/api/uploads/${deviceStatusFile.fileId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const fileJson = await fileRes.json();
@@ -1685,7 +1686,7 @@ export default function Dashboard() {
 
         if (onlineOfflineFiles.length > 0 && mainSiteCodeHeader) {
           const latestOnlineOfflineFile = onlineOfflineFiles[0];
-          const onlineOfflineDataRes = await fetch(`http://localhost:5000/api/uploads/${latestOnlineOfflineFile.fileId}`, {
+          const onlineOfflineDataRes = await fetch(`${API_BASE}/api/uploads/${latestOnlineOfflineFile.fileId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           const onlineOfflineDataJson = await onlineOfflineDataRes.json();
@@ -1892,7 +1893,7 @@ export default function Dashboard() {
       const token = localStorage.getItem('token');
       if (!token) return '';
 
-      const uploadsRes = await fetch('http://localhost:5000/api/uploads', {
+      const uploadsRes = await fetch(`${API_BASE}/api/uploads`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const uploadsJson = await uploadsRes.json();
@@ -1918,7 +1919,7 @@ export default function Dashboard() {
 
       if (!onlineOfflineFile) return '';
 
-      const fileRes = await fetch(`http://localhost:5000/api/uploads/${onlineOfflineFile.fileId}`, {
+      const fileRes = await fetch(`${API_BASE}/api/uploads/${onlineOfflineFile.fileId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const fileJson = await fileRes.json();
@@ -2002,7 +2003,7 @@ export default function Dashboard() {
 
       // First, try to fetch from Location model (which has coordinates directly)
       try {
-        const locationsRes = await fetch('http://localhost:5000/api/locations/by-site-codes', {
+        const locationsRes = await fetch(`${API_BASE}/api/locations/by-site-codes`, {
           method: 'POST',
           headers: { 
             'Authorization': `Bearer ${token}`,
@@ -2081,7 +2082,7 @@ export default function Dashboard() {
               console.log(`Fetching KML file from: ${kmlFilePath}`);
               // Fetch KML file from server
               // kmlFilePath is stored as API endpoint like /api/admin/uploads/files/{fieldId}
-              const kmlFileUrl = `http://localhost:5000${kmlFilePath.startsWith('/') ? kmlFilePath : '/' + kmlFilePath}`;
+              const kmlFileUrl = `${API_BASE}${kmlFilePath.startsWith('/') ? kmlFilePath : '/' + kmlFilePath}`;
               console.log(`Full KML URL: ${kmlFileUrl}`);
               
               const kmlRes = await fetch(kmlFileUrl, {
@@ -2374,7 +2375,7 @@ export default function Dashboard() {
         const fileName = `navigate-${Date.now()}.kml`;
         formData.append('file', blob, fileName);
         
-        const uploadRes = await fetch('http://localhost:5000/api/locations/temp-kml', {
+        const uploadRes = await fetch(`${API_BASE}/api/locations/temp-kml`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`
@@ -2639,7 +2640,7 @@ export default function Dashboard() {
         siteCode: row?.siteCode
       });
       
-      const saveToDbResponse = await fetch('http://localhost:5000/api/equipment-offline-sites', {
+      const saveToDbResponse = await fetch(`${API_BASE}/api/equipment-offline-sites`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -2798,7 +2799,7 @@ export default function Dashboard() {
                 savedFrom: 'My Sites Dialog',
               };
               
-              const apiUrl = window.location.origin.replace(/:\d+$/, ':5000') + '/api/site-observations';
+              const apiUrl = `${API_BASE}/api/site-observations`;
               fetch(apiUrl, {
                 method: 'POST',
                 headers: {
@@ -2866,7 +2867,7 @@ export default function Dashboard() {
                 // Only Equipment users can update Task Status and Remarks
                 if (userRole === 'Equipment') {
                   // Fetch row data from MY OFFLINE SITES for this Site Code
-                  const uploadsRes = await fetch('http://localhost:5000/api/uploads', {
+                  const uploadsRes = await fetch(`${API_BASE}/api/uploads`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                   });
                   const uploadsJson = await uploadsRes.json();
@@ -2900,7 +2901,7 @@ export default function Dashboard() {
                     
                     if (deviceStatusFile) {
                       // Fetch file data to find matching row
-                      const fileRes = await fetch(`http://localhost:5000/api/uploads/${deviceStatusFile.fileId}`, {
+                      const fileRes = await fetch(`${API_BASE}/api/uploads/${deviceStatusFile.fileId}`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                       });
                       const fileJson = await fileRes.json();
@@ -2957,7 +2958,7 @@ export default function Dashboard() {
                             let existingTypeOfIssue = '';
                             try {
                               // Fetch all records for this file
-                              const existingRecordRes = await fetch(`http://localhost:5000/api/equipment-offline-sites/file/${deviceStatusFile.fileId}`, {
+                              const existingRecordRes = await fetch(`${API_BASE}/api/equipment-offline-sites/file/${deviceStatusFile.fileId}`, {
                                 headers: { 'Authorization': `Bearer ${token}` }
                               });
                               
@@ -3122,7 +3123,7 @@ export default function Dashboard() {
                             });
                             
                             // Save to database
-                            const saveResponse = await fetch('http://localhost:5000/api/equipment-offline-sites', {
+                            const saveResponse = await fetch(`${API_BASE}/api/equipment-offline-sites`, {
                               method: 'POST',
                               headers: {
                                 'Content-Type': 'application/json',
@@ -3148,7 +3149,7 @@ export default function Dashboard() {
                                 const ccrPhotosToSend = ccrPhotosData.length > 0 ? ccrPhotosData : null;
                                 
                                 // Create CCR approval action
-                                const ccrResponse = await fetch('http://localhost:5000/api/actions/submit', {
+                                const ccrResponse = await fetch(`${API_BASE}/api/actions/submit`, {
                                   method: 'POST',
                                   headers: {
                                     'Content-Type': 'application/json',
@@ -3227,7 +3228,7 @@ export default function Dashboard() {
               }
               
               // Fetch row data from MY OFFLINE SITES for this Site Code
-              const uploadsRes = await fetch('http://localhost:5000/api/uploads', {
+              const uploadsRes = await fetch(`${API_BASE}/api/uploads`, {
                 headers: { 'Authorization': `Bearer ${token}` }
               });
               const uploadsJson = await uploadsRes.json();
@@ -3269,7 +3270,7 @@ export default function Dashboard() {
               }
               
               // Fetch file data to find matching row
-              const fileRes = await fetch(`http://localhost:5000/api/uploads/${deviceStatusFile.fileId}`, {
+              const fileRes = await fetch(`${API_BASE}/api/uploads/${deviceStatusFile.fileId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
               });
               const fileJson = await fileRes.json();
@@ -3437,7 +3438,7 @@ export default function Dashboard() {
               
               // Route to O&M Team (if needed)
               if (shouldRouteToOM) {
-                const omRoutingResponse = await fetch('http://localhost:5000/api/actions/submit', {
+                const omRoutingResponse = await fetch(`${API_BASE}/api/actions/submit`, {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
@@ -3466,7 +3467,7 @@ export default function Dashboard() {
               // Route to AMC Team (if needed) - ALWAYS for Faulty/Spare Required
               if (shouldRouteToAMC) {
                 console.log('Routing to AMC Team from My Sites Dialog...');
-                const amcRoutingResponse = await fetch('http://localhost:5000/api/actions/submit', {
+                const amcRoutingResponse = await fetch(`${API_BASE}/api/actions/submit`, {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
@@ -3497,7 +3498,7 @@ export default function Dashboard() {
               
               // Route to RTU/Communication Team (if needed)
               if (shouldRouteToRTU) {
-                const rtuRoutingResponse = await fetch('http://localhost:5000/api/actions/submit', {
+                const rtuRoutingResponse = await fetch(`${API_BASE}/api/actions/submit`, {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
@@ -3716,7 +3717,7 @@ export default function Dashboard() {
       if (!token) return;
 
       // Try to fetch from AdminUploadField (KML files configured in Admin panel)
-      const adminFieldsRes = await fetch('http://localhost:5000/api/admin/uploads/fields', {
+      const adminFieldsRes = await fetch(`${API_BASE}/api/admin/uploads/fields`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
@@ -4274,7 +4275,7 @@ export default function Dashboard() {
                           }
 
                           // Fetch coordinates from Location database
-                          const locationsRes = await fetch('http://localhost:5000/api/locations/by-site-codes', {
+                          const locationsRes = await fetch(`${API_BASE}/api/locations/by-site-codes`, {
                             method: 'POST',
                             headers: { 
                               'Authorization': `Bearer ${token}`,

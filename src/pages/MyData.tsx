@@ -2,13 +2,14 @@
 import * as XLSX from 'xlsx';
 import { logActivity } from '../utils/activityLogger';
 import { loadUserDataState, loadAllUserDataStates, bulkSyncAllDataStates } from '../utils/dataSync';
+import { API_BASE } from '../utils/api';
 
 const PAGE_SIZE_OPTIONS = [25, 50, 75, 100];
 
 // Helper function to add metadata overlay to captured photo
 function addMetadataToPhoto(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, latitude?: number, longitude?: number, timestamp?: string, location?: string): void {
   const formattedTime = timestamp 
-    ? new Date(timestamp).toLocaleString('en-IN', {
+    ? new Date(timestamp).toLocaleString('en-IN`, {
         day: '2-digit',
         month: 'short',
         year: 'numeric',
@@ -17,7 +18,7 @@ function addMetadataToPhoto(canvas: HTMLCanvasElement, ctx: CanvasRenderingConte
         second: '2-digit',
         hour12: true
       })
-    : new Date().toLocaleString('en-IN', {
+    : new Date().toLocaleString('en-IN`, {
         day: '2-digit',
         month: 'short',
         year: 'numeric',
@@ -264,12 +265,12 @@ export default function MyData() {
         return; // No updates to save
       }
       
-      console.log('Saving action update to database for RTU/Communication user:', {
+      console.log('Saving action update to database for RTU/Communication user:`, {
         actionId: row._actionId,
         updates: updatePayload
       });
       
-      const updateResponse = await fetch(`http://localhost:5000/api/actions/${row._actionId}/status`, {
+      const updateResponse = await fetch(`${API_BASE}/api/actions/${row._actionId}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -324,7 +325,7 @@ export default function MyData() {
       let existingSitesMap = new Map<string, any>();
       let existingSitesByRowKey = new Map<string, any>(); // Also track by rowKey for exact matches
       try {
-        const existingRes = await fetch(`http://localhost:5000/api/equipment-offline-sites/file/${selectedFile}`, {
+        const existingRes = await fetch(`${API_BASE}/api/equipment-offline-sites/file/${selectedFile}`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -534,7 +535,7 @@ export default function MyData() {
 
       // First, update only noOfDaysOffline for matching sites
       if (daysOfflineUpdates.length > 0) {
-        const updateResponse = await fetch('http://localhost:5000/api/equipment-offline-sites/bulk-update-days-offline', {
+        const updateResponse = await fetch(`${API_BASE}/api/equipment-offline-sites/bulk-update-days-offline`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -570,7 +571,7 @@ export default function MyData() {
         });
         
         // Bulk save to database
-        const response = await fetch('http://localhost:5000/api/equipment-offline-sites/bulk', {
+        const response = await fetch(`${API_BASE}/api/equipment-offline-sites/bulk`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -641,7 +642,7 @@ export default function MyData() {
       }
 
       // Fetch data from database
-      const response = await fetch(`http://localhost:5000/api/equipment-offline-sites/file/${selectedFile}`, {
+      const response = await fetch(`${API_BASE}/api/equipment-offline-sites/file/${selectedFile}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -843,7 +844,7 @@ export default function MyData() {
                       Object.keys(dataToSave.supportDocuments).length > 0;
       
       if (hasData) {
-        console.log('Saving data to localStorage:', {
+        console.log('Saving data to localStorage:`, {
           file: selectedFile,
           siteObservations: Object.keys(dataToSave.siteObservations).length,
           resolvedEntries: Object.values(dataToSave.siteObservations).filter(v => v === 'Resolved').length,
@@ -937,7 +938,7 @@ export default function MyData() {
         
         if (token) {
           // Fetch fresh excludedSiteCodes from API
-          const exclusionRes = await fetch(`http://localhost:5000/api/equipment-offline-sites/file/${selectedFile}`, {
+          const exclusionRes = await fetch(`${API_BASE}/api/equipment-offline-sites/file/${selectedFile}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           
@@ -1181,7 +1182,7 @@ export default function MyData() {
       const token = localStorage.getItem('token');
       if (token) {
         console.log('MY Data - Divisions missing, fetching fresh user profile...');
-        fetch('http://localhost:5000/api/auth/profile', {
+        fetch(`${API_BASE}/api/auth/profile`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -1203,7 +1204,7 @@ export default function MyData() {
       }
     }
     
-    console.log('MY Data - Current user data:', {
+    console.log('MY Data - Current user data:`, {
       role: userRole,
       divisions: currentDivisions,
       hasDivisions: currentDivisions && currentDivisions.length > 0,
@@ -1249,7 +1250,7 @@ export default function MyData() {
     (async () => {
       try {
         const token = localStorage.getItem('token');
-        const res = await fetch('http://localhost:5000/api/uploads', {
+        const res = await fetch(`${API_BASE}/api/uploads`, {
           headers: {
             'Authorization': token ? `Bearer ${token}` : ''
           }
@@ -1383,7 +1384,7 @@ export default function MyData() {
       if (userRole === 'O&M' || userRole === 'AMC') {
         try {
           const token = localStorage.getItem('token');
-          const res = await fetch(`http://localhost:5000/api/uploads/${selectedFile}`, {
+          const res = await fetch(`${API_BASE}/api/uploads/${selectedFile}`, {
             headers: {
               'Authorization': token ? `Bearer ${token}` : ''
             }
@@ -1470,7 +1471,7 @@ export default function MyData() {
       // For other roles, fetch data normally
       try {
         const token = localStorage.getItem('token');
-        const res = await fetch(`http://localhost:5000/api/uploads/${selectedFile}`, {
+        const res = await fetch(`${API_BASE}/api/uploads/${selectedFile}`, {
           headers: {
             'Authorization': token ? `Bearer ${token}` : ''
           }
@@ -1502,7 +1503,7 @@ export default function MyData() {
           
           // Fetch ONLINE-OFFLINE DATA files to merge DEVICE STATUS and NO OF DAYS OFFLINE
           try {
-            const onlineOfflineRes = await fetch('http://localhost:5000/api/uploads', {
+            const onlineOfflineRes = await fetch(`${API_BASE}/api/uploads`, {
               headers: {
                 'Authorization': token ? `Bearer ${token}` : ''
               }
@@ -1535,7 +1536,7 @@ export default function MyData() {
                 console.log('MY DATA - Found ONLINE-OFFLINE DATA file:', latestOnlineOfflineFile.name);
                 
                 // Fetch the ONLINE-OFFLINE file data
-                const onlineOfflineDataRes = await fetch(`http://localhost:5000/api/uploads/${latestOnlineOfflineFile.fileId}`, {
+                const onlineOfflineDataRes = await fetch(`${API_BASE}/api/uploads/${latestOnlineOfflineFile.fileId}`, {
                   headers: {
                     'Authorization': token ? `Bearer ${token}` : ''
                   }
@@ -1671,7 +1672,7 @@ export default function MyData() {
                       }
                     }
                   } else {
-                    console.warn('MY DATA - Cannot merge ONLINE-OFFLINE data:', {
+                    console.warn('MY DATA - Cannot merge ONLINE-OFFLINE data:`, {
                       hasMainSiteCode: !!mainSiteCodeHeader,
                       hasOnlineOfflineSiteCode: !!onlineOfflineSiteCodeHeader,
                       columnsToInsertCount: onlineOfflineColumns.length
@@ -1736,7 +1737,7 @@ export default function MyData() {
           
           // Use stored merged column names (set during ONLINE-OFFLINE merge)
           // These were merged from ONLINE-OFFLINE file and should not be filtered out
-          console.log('MY DATA - Preserving merged columns:', {
+          console.log('MY DATA - Preserving merged columns:`, {
             deviceStatus: mergedDeviceStatusColumn,
             noOfDaysOffline: mergedNoOfDaysOfflineColumn
           });
@@ -1853,7 +1854,7 @@ export default function MyData() {
           }
           
           // Verify merged columns are in headers
-          console.log('MY DATA - Final headers check:', {
+          console.log('MY DATA - Final headers check:`, {
             hasDeviceStatus: hdrs.includes(mergedDeviceStatusColumn || ''),
             hasNoOfDaysOffline: hdrs.includes(mergedNoOfDaysOfflineColumn || ''),
             deviceStatusIndex: hdrs.indexOf(mergedDeviceStatusColumn || ''),
@@ -2064,7 +2065,7 @@ export default function MyData() {
               let excludedSiteCodes: string[] = [];
               
               if (token) {
-                const exclusionRes = await fetch(`http://localhost:5000/api/equipment-offline-sites/file/${selectedFile}`, {
+                const exclusionRes = await fetch(`${API_BASE}/api/equipment-offline-sites/file/${selectedFile}`, {
                   headers: { 'Authorization': `Bearer ${token}` }
                 });
                 
@@ -2159,7 +2160,7 @@ export default function MyData() {
             }
           }
           
-          console.log('MY DATA - Final data summary:', {
+          console.log('MY DATA - Final data summary:`, {
             headersCount: hdrs.length,
             filteredRowsCount: finalFilteredRows.length,
             headers: hdrs,
@@ -2207,7 +2208,7 @@ export default function MyData() {
         if (!token) return;
         
         // Fetch actions assigned to current user
-        const res = await fetch('http://localhost:5000/api/actions/my-actions', {
+        const res = await fetch(`${API_BASE}/api/actions/my-actions`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -2258,7 +2259,7 @@ export default function MyData() {
             
             // Log for debugging (especially for AMC users)
             if (userRole === 'AMC') {
-              console.log('AMC Action rowData:', {
+              console.log('AMC Action rowData:`, {
                 actionId: action._id,
                 typeOfIssue: action.typeOfIssue,
                 hasRowData: !!action.rowData,
@@ -2287,7 +2288,7 @@ export default function MyData() {
           
           console.log(`Converted ${actionRows.length} actions to rows for ${userRole}`);
           if (actionRows.length > 0 && userRole === 'AMC') {
-            console.log('Sample AMC action row:', {
+            console.log('Sample AMC action row:`, {
               keys: Object.keys(actionRows[0]),
               hasRowData: Object.keys(actionRows[0]).length > 20, // More than just metadata fields
               firstRow: actionRows[0]
@@ -2385,7 +2386,7 @@ export default function MyData() {
             
             // Also fetch actions they routed (though these won't include rerouted ones)
             try {
-              const reroutedRes = await fetch('http://localhost:5000/api/actions/my-routed-actions', {
+              const reroutedRes = await fetch(`${API_BASE}/api/actions/my-routed-actions`, {
                 headers: {
                   'Authorization': `Bearer ${token}`
                 }
@@ -2435,7 +2436,7 @@ export default function MyData() {
             const token = localStorage.getItem('token');
             if (token && selectedFile) {
               // Fetch fresh excludedSiteCodes from API
-              const exclusionRes = await fetch(`http://localhost:5000/api/equipment-offline-sites/file/${selectedFile}`, {
+              const exclusionRes = await fetch(`${API_BASE}/api/equipment-offline-sites/file/${selectedFile}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
               });
               
@@ -2559,7 +2560,7 @@ export default function MyData() {
         
         // Also fetch actions rerouted by RTU/Communication user (to see status updates)
         if (userRole === 'RTU/Communication') {
-          const reroutedRes = await fetch('http://localhost:5000/api/actions/my-routed-actions', {
+          const reroutedRes = await fetch(`${API_BASE}/api/actions/my-routed-actions`, {
             headers: {
               'Authorization': `Bearer ${token}`
             }
@@ -2617,7 +2618,7 @@ export default function MyData() {
         const token = localStorage.getItem('token');
         if (!token) return;
         
-        const res = await fetch('http://localhost:5000/api/actions/my-routed-actions', {
+        const res = await fetch(`${API_BASE}/api/actions/my-routed-actions`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -3042,7 +3043,7 @@ export default function MyData() {
         try {
           const token = localStorage.getItem('token');
           if (token) {
-            const response = await fetch('http://localhost:5000/api/site-observations', {
+            const response = await fetch(`${API_BASE}/api/site-observations`, {
               method: 'GET',
               headers: {
                 'Authorization': `Bearer ${token}`,
@@ -3088,7 +3089,7 @@ export default function MyData() {
           localStorage.setItem(globalKey, JSON.stringify(mergedMap));
         }
         
-        console.log('Loaded site observations by Site Code:', {
+        console.log('Loaded site observations by Site Code:`, {
           fromAPI: Object.keys(apiObservationsMap).length,
           fromLocalStorage: Object.keys(localStorageMap).length,
           merged: Object.keys(mergedMap).length,
@@ -3129,7 +3130,7 @@ export default function MyData() {
         const token = localStorage.getItem('token');
         if (!token) return;
         
-        const response = await fetch('http://localhost:5000/api/site-observations', {
+        const response = await fetch(`${API_BASE}/api/site-observations`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -3377,7 +3378,7 @@ export default function MyData() {
               }
             }
             
-            console.log('Loading persisted data:', {
+            console.log('Loading persisted data:`, {
               source: apiData ? 'API' : 'localStorage',
               file: selectedFile,
               rowsCount: rows.length,
@@ -3391,7 +3392,7 @@ export default function MyData() {
             });
             
             // Debug: Show actual saved data structure
-            console.log('Actual saved data structure:', {
+            console.log('Actual saved data structure:`, {
               siteObservationsKeys: Object.keys(parsed.siteObservations || {}),
               siteObservationsSample: Object.entries(parsed.siteObservations || {}).slice(0, 2),
               taskStatusKeys: Object.keys(parsed.taskStatus || {}),
@@ -3405,7 +3406,7 @@ export default function MyData() {
               const sampleRowKey = generateRowKey(selectedFile, sampleRow, headers);
               const savedKeys = Object.keys(parsed.siteObservations || {});
               console.log('Sample generated row key:', sampleRowKey);
-              console.log('Sample row data:', {
+              console.log('Sample row data:`, {
                 first3Headers: headers.slice(0, 3),
                 first3Values: headers.slice(0, 3).map((h: string) => sampleRow[h])
               });
@@ -3479,7 +3480,7 @@ export default function MyData() {
                 }
               });
               
-              console.log('Migration result:', {
+              console.log('Migration result:`, {
                 oldKeys: oldKeys.length,
                 migrated: Object.keys(migratedSiteObservations).length
               });
@@ -3875,7 +3876,7 @@ export default function MyData() {
     const userCircle = Array.isArray(currentUser?.circle) && currentUser.circle.length > 0 
       ? currentUser.circle.join(', ') 
       : 'N/A';
-    const downloadTime = new Date().toLocaleString('en-IN', {
+    const downloadTime = new Date().toLocaleString('en-IN`, {
       day: '2-digit',
       month: 'short',
       year: 'numeric',
@@ -6557,7 +6558,7 @@ export default function MyData() {
                         // Auto-reroute to RTU/Communication Team (backend will find the user)
                         // First, we need to find an RTU/Communication user in the same division
                         try {
-                          const usersRes = await fetch('http://localhost:5000/api/auth/users', {
+                          const usersRes = await fetch(`${API_BASE}/api/auth/users`, {
                             headers: {
                               'Authorization': `Bearer ${token}`
                             }
@@ -6582,7 +6583,7 @@ export default function MyData() {
                               }
 
                               // Reroute the action to RTU/Communication
-                              const rerouteResponse = await fetch(`http://localhost:5000/api/actions/${rowData._actionId}/reroute`, {
+                              const rerouteResponse = await fetch(`${API_BASE}/api/actions/${rowData._actionId}/reroute`, {
                                 method: 'PUT',
                                 headers: {
                                   'Content-Type': 'application/json',
@@ -6755,7 +6756,7 @@ export default function MyData() {
                       const isAMCIssue = siteObservationsDialogData.typeOfIssue === 'Spare Required' || siteObservationsDialogData.typeOfIssue === 'Faulty';
                       let amcRoutingTeam = null;
                       
-                      console.log('AMC Routing Check:', {
+                      console.log('AMC Routing Check:`, {
                         isAMCIssue,
                         typeOfIssue: siteObservationsDialogData.typeOfIssue,
                         hasRowData: !!rowData,
@@ -6786,7 +6787,7 @@ export default function MyData() {
                         for (const key of deviceTypeKeys) {
                           if (rowData[key]) {
                             deviceType = String(rowData[key]).trim();
-                            console.log('Device Type found:', { key, deviceType });
+                            console.log('Device Type found:`, { key, deviceType });
                             break;
                           }
                         }
@@ -6796,7 +6797,7 @@ export default function MyData() {
                             const normalizedKey = key.toLowerCase().replace(/[_\s]/g, '');
                             if (normalizedKey.includes('devicetype') || (normalizedKey.includes('device') && normalizedKey.includes('type'))) {
                               deviceType = String(rowData[key]).trim();
-                              console.log('Device Type found (case-insensitive):', { key, deviceType });
+                              console.log('Device Type found (case-insensitive):`, { key, deviceType });
                               break;
                             }
                           }
@@ -6806,7 +6807,7 @@ export default function MyData() {
                         if (!deviceType && selectedFile) {
                           try {
                             const token = localStorage.getItem('token');
-                            const fileRes = await fetch(`http://localhost:5000/api/uploads/${selectedFile}`, {
+                            const fileRes = await fetch(`${API_BASE}/api/uploads/${selectedFile}`, {
                               headers: {
                                 'Authorization': token ? `Bearer ${token}` : ''
                               }
@@ -6853,7 +6854,7 @@ export default function MyData() {
                         for (const key of circleKeys) {
                           if (rowData[key]) {
                             circle = String(rowData[key]).trim().toUpperCase();
-                            console.log('Circle found in rowData (exact match):', { key, circle, siteCode });
+                            console.log('Circle found in rowData (exact match):`, { key, circle, siteCode });
                             break;
                           }
                         }
@@ -6864,7 +6865,7 @@ export default function MyData() {
                             const normalizedKey = key.toUpperCase().trim();
                             if (normalizedKey === 'CIRCLE') {
                               circle = String(rowData[key]).trim().toUpperCase();
-                              console.log('Circle found in rowData (case-insensitive key):', { originalKey: key, circle, siteCode });
+                              console.log('Circle found in rowData (case-insensitive key):`, { originalKey: key, circle, siteCode });
                               break;
                             }
                           }
@@ -6874,7 +6875,7 @@ export default function MyData() {
                         if (!circle && selectedFile) {
                           try {
                             const token = localStorage.getItem('token');
-                            const fileRes = await fetch(`http://localhost:5000/api/uploads/${selectedFile}`, {
+                            const fileRes = await fetch(`${API_BASE}/api/uploads/${selectedFile}`, {
                               headers: {
                                 'Authorization': token ? `Bearer ${token}` : ''
                               }
@@ -6893,7 +6894,7 @@ export default function MyData() {
                                     return rSiteCode === String(siteCode).trim();
                                   });
                                   if (originalRow) {
-                                    console.log('Found original row by Site Code:', { siteCodeKey: scKey, siteCode });
+                                    console.log('Found original row by Site Code:`, { siteCodeKey: scKey, siteCode });
                                     break;
                                   }
                                 }
@@ -6915,7 +6916,7 @@ export default function MyData() {
                                     circle = String(originalRow[key]).trim().toUpperCase();
                                     // Update rowData to include circle
                                     rowData[key] = circle;
-                                    console.log('Circle found in original file data:', { key, circle, siteCode });
+                                    console.log('Circle found in original file data:`, { key, circle, siteCode });
                                     break;
                                   }
                                 }
@@ -6927,7 +6928,7 @@ export default function MyData() {
                                     if (normalizedKey === 'CIRCLE') {
                                       circle = String(originalRow[key]).trim().toUpperCase();
                                       rowData[key] = circle;
-                                      console.log('Circle found in original file data (case-insensitive):', { originalKey: key, circle, siteCode });
+                                      console.log('Circle found in original file data (case-insensitive):`, { originalKey: key, circle, siteCode });
                                       break;
                                     }
                                   }
@@ -6955,7 +6956,7 @@ export default function MyData() {
                           if (!division && selectedFile) {
                             try {
                               const token = localStorage.getItem('token');
-                              const fileRes = await fetch(`http://localhost:5000/api/uploads/${selectedFile}`, {
+                              const fileRes = await fetch(`${API_BASE}/api/uploads/${selectedFile}`, {
                                 headers: {
                                   'Authorization': token ? `Bearer ${token}` : ''
                                 }
@@ -6989,7 +6990,7 @@ export default function MyData() {
                             circle = 'SOUTH';
                             // Add circle to rowData for backend
                             rowData['CIRCLE'] = circle;
-                            console.log('Circle derived from Division (fallback):', { division, circle, siteCode });
+                            console.log('Circle derived from Division (fallback):`, { division, circle, siteCode });
                           }
                         }
                         
@@ -6998,8 +6999,8 @@ export default function MyData() {
                           rowData['CIRCLE'] = circle;
                         }
                         
-                        console.log('Final Circle value for AMC routing:', { circle, siteCode, hasCircleInRowData: !!rowData['CIRCLE'] });
-                        console.log('Device Type value for AMC routing:', { deviceType });
+                        console.log('Final Circle value for AMC routing:`, { circle, siteCode, hasCircleInRowData: !!rowData['CIRCLE'] });
+                        console.log('Device Type value for AMC routing:`, { deviceType });
                         console.log('Backend will check Site Code priority FIRST, then fall back to Device Type (RMU) + Circle if needed');
                       }
                       
@@ -7084,7 +7085,7 @@ export default function MyData() {
                             if (!circle && selectedFile) {
                               try {
                                 const token = localStorage.getItem('token');
-                                const fileRes = await fetch(`http://localhost:5000/api/uploads/${selectedFile}`, {
+                                const fileRes = await fetch(`${API_BASE}/api/uploads/${selectedFile}`, {
                                   headers: {
                                     'Authorization': token ? `Bearer ${token}` : ''
                                   }
@@ -7194,7 +7195,7 @@ export default function MyData() {
                           for (const key of circleKeys) {
                             if (routingRowData[key]) {
                               circle = String(routingRowData[key]).trim().toUpperCase();
-                              console.log('Circle found in routingRowData:', { key, circle, siteCode });
+                              console.log('Circle found in routingRowData:`, { key, circle, siteCode });
                               break;
                             }
                           }
@@ -7205,7 +7206,7 @@ export default function MyData() {
                               const normalizedKey = key.toUpperCase().trim();
                               if (normalizedKey === 'CIRCLE') {
                                 circle = String(routingRowData[key]).trim().toUpperCase();
-                                console.log('Circle found (case-insensitive):', { originalKey: key, circle, siteCode });
+                                console.log('Circle found (case-insensitive):`, { originalKey: key, circle, siteCode });
                                 break;
                               }
                             }
@@ -7215,7 +7216,7 @@ export default function MyData() {
                           if (!circle && selectedFile) {
                             try {
                               const token = localStorage.getItem('token');
-                              const fileRes = await fetch(`http://localhost:5000/api/uploads/${selectedFile}`, {
+                              const fileRes = await fetch(`${API_BASE}/api/uploads/${selectedFile}`, {
                                 headers: {
                                   'Authorization': token ? `Bearer ${token}` : ''
                                 }
@@ -7234,7 +7235,7 @@ export default function MyData() {
                                       return rSiteCode === String(siteCode).trim();
                                     });
                                     if (originalRow) {
-                                      console.log('Found original row by Site Code:', { siteCodeKey: scKey, siteCode });
+                                      console.log('Found original row by Site Code:`, { siteCodeKey: scKey, siteCode });
                                       break;
                                     }
                                   }
@@ -7256,7 +7257,7 @@ export default function MyData() {
                                       circle = String(originalRow[key]).trim().toUpperCase();
                                       // Add circle to rowData for backend
                                       routingRowData[key] = circle;
-                                      console.log('Circle found in original file:', { key, circle, siteCode });
+                                      console.log('Circle found in original file:`, { key, circle, siteCode });
                                       break;
                                     }
                                   }
@@ -7268,7 +7269,7 @@ export default function MyData() {
                                       if (normalizedKey === 'CIRCLE') {
                                         circle = String(originalRow[key]).trim().toUpperCase();
                                         routingRowData[key] = circle;
-                                        console.log('Circle found in original file (case-insensitive):', { originalKey: key, circle, siteCode });
+                                        console.log('Circle found in original file (case-insensitive):`, { originalKey: key, circle, siteCode });
                                         break;
                                       }
                                     }
@@ -7292,7 +7293,7 @@ export default function MyData() {
                             for (const key of divisionKeys) {
                               if (routingRowData[key]) {
                                 division = String(routingRowData[key]).trim().toUpperCase();
-                                console.log('Division found for circle mapping:', { key, division });
+                                console.log('Division found for circle mapping:`, { key, division });
                                 break;
                               }
                             }
@@ -7301,7 +7302,7 @@ export default function MyData() {
                             if (!division && selectedFile) {
                               try {
                                 const token = localStorage.getItem('token');
-                                const fileRes = await fetch(`http://localhost:5000/api/uploads/${selectedFile}`, {
+                                const fileRes = await fetch(`${API_BASE}/api/uploads/${selectedFile}`, {
                                   headers: {
                                     'Authorization': token ? `Bearer ${token}` : ''
                                   }
@@ -7317,7 +7318,7 @@ export default function MyData() {
                                       if (originalRow[key]) {
                                         division = String(originalRow[key]).trim().toUpperCase();
                                         routingRowData[key] = division;
-                                        console.log('Division found in original file:', { key, division });
+                                        console.log('Division found in original file:`, { key, division });
                                         break;
                                       }
                                     }
@@ -7335,7 +7336,7 @@ export default function MyData() {
                               circle = 'SOUTH';
                               // Add circle to rowData for backend (uppercase)
                               routingRowData['CIRCLE'] = circle;
-                              console.log('Circle derived from Division:', { division, circle });
+                              console.log('Circle derived from Division:`, { division, circle });
                             }
                           }
                           
@@ -7349,7 +7350,7 @@ export default function MyData() {
                         // Recalculate shouldRouteToBoth after potential amcRoutingTeam update
                         const shouldRouteToBoth = amcRoutingTeam && (siteObservationsDialogData.typeOfIssue === 'Spare Required' || siteObservationsDialogData.typeOfIssue === 'Faulty');
                         
-                        console.log('After re-check, routing state:', {
+                        console.log('After re-check, routing state:`, {
                           shouldRouteToOM,
                           amcRoutingTeam,
                           shouldRouteToBoth,
@@ -7394,7 +7395,7 @@ export default function MyData() {
                         // 1. Faulty/Spare Required → ALWAYS route to O&M Team (irrespective of Device Type)
                         // 2. Faulty/Spare Required + RMU Device Type → ALSO route to AMC Team (based on Circle)
                         
-                        console.log('Starting routing process:', {
+                        console.log('Starting routing process:`, {
                           shouldRouteToOM,
                           amcRoutingTeam,
                           shouldRouteToBoth,
@@ -7405,7 +7406,7 @@ export default function MyData() {
                         // Always route to O&M Team for Faulty/Spare Required
                         if (shouldRouteToOM) {
                           console.log('Routing to O&M Team...');
-                          const omRoutingResponse = await fetch('http://localhost:5000/api/actions/submit', {
+                          const omRoutingResponse = await fetch(`${API_BASE}/api/actions/submit`, {
                             method: 'POST',
                             headers: {
                               'Content-Type': 'application/json',
@@ -7492,7 +7493,7 @@ export default function MyData() {
 
                         // Additionally route to AMC Team if Device Type is RMU and Circle is valid
                         if (shouldRouteToBoth && amcRoutingTeam) {
-                          console.log('Routing to AMC Team...', { amcRoutingTeam, shouldRouteToBoth });
+                          console.log('Routing to AMC Team...`, { amcRoutingTeam, shouldRouteToBoth });
                           
                           // Ensure Circle is in rowData before sending
                           const circleInRowData = routingRowData['CIRCLE'] || routingRowData['Circle'] || routingRowData['circle'] || '';
@@ -7501,7 +7502,7 @@ export default function MyData() {
                           console.log('Full rowData for AMC routing:', JSON.stringify(routingRowData, null, 2));
                           
                           // Route to AMC Team
-                          const amcRoutingResponse = await fetch('http://localhost:5000/api/actions/submit', {
+                          const amcRoutingResponse = await fetch(`${API_BASE}/api/actions/submit`, {
                             method: 'POST',
                             headers: {
                               'Content-Type': 'application/json',
@@ -7535,7 +7536,7 @@ export default function MyData() {
                             const vendorName = action.assignedToVendor || action.vendor || '';
                             const taskStatusKey = selectedSiteObservationRowKey;
                             
-                            console.log('AMC Routing Success - Updating task status immediately:', {
+                            console.log('AMC Routing Success - Updating task status immediately:`, {
                               vendorName,
                               taskStatusKey,
                               actionId: action._id,
@@ -7545,7 +7546,7 @@ export default function MyData() {
                             
                             if (taskStatusKey) {
                               const rowKey = generateRowKey(selectedFile, routingRowData, headers);
-                              console.log('Row keys for update:', { rowKey, taskStatusKey });
+                              console.log('Row keys for update:`, { rowKey, taskStatusKey });
                               
                               // Update task status immediately
                               setTaskStatus(prev => {
@@ -7620,7 +7621,7 @@ export default function MyData() {
                                   updated[originalRowKey] = actionData;
                                 }
                                 
-                                console.log('Updated routedActionsMap:', {
+                                console.log('Updated routedActionsMap:`, {
                                   rowKey: updated[rowKey] ? 'exists' : 'missing',
                                   taskStatusKey: updated[taskStatusKey] ? 'exists' : 'missing',
                                   vendorNames: updated[rowKey]?._vendorNames || updated[taskStatusKey]?._vendorNames
@@ -7632,7 +7633,7 @@ export default function MyData() {
                           }
                         } else if (!shouldRouteToOM && finalRoutingTeam) {
                           // For other issues (RTU Issue, CS Issue, or other O&M issues), route to single team
-                          const routingResponse = await fetch('http://localhost:5000/api/actions/submit', {
+                          const routingResponse = await fetch(`${API_BASE}/api/actions/submit`, {
                             method: 'POST',
                             headers: {
                               'Content-Type': 'application/json',
@@ -7828,7 +7829,7 @@ export default function MyData() {
 
                       const rowData = searchedRows[rowIndex];
                       
-                      console.log('Site Observations submitted:', {
+                      console.log('Site Observations submitted:`, {
                         rowKey: selectedSiteObservationRowKey,
                         status: siteObservationsStatus,
                         typeOfIssue: siteObservationsDialogData.typeOfIssue,
@@ -7863,7 +7864,7 @@ export default function MyData() {
                             __siteObservationRemarks: siteObservationsDialogData.remarks || ''
                           };
 
-                          const approvalResponse = await fetch('http://localhost:5000/api/actions/submit', {
+                          const approvalResponse = await fetch(`${API_BASE}/api/actions/submit`, {
                             method: 'POST',
                             headers: {
                               'Content-Type': 'application/json',
@@ -7935,7 +7936,7 @@ export default function MyData() {
                             const token = localStorage.getItem('token');
                             if (token) {
                               try {
-                                const updateResponse = await fetch(`http://localhost:5000/api/actions/${row._actionId}/status`, {
+                                const updateResponse = await fetch(`${API_BASE}/api/actions/${row._actionId}/status`, {
                                   method: 'PUT',
                                   headers: {
                                     'Content-Type': 'application/json',
@@ -7990,7 +7991,7 @@ export default function MyData() {
                                   __siteObservationRemarks: siteObservationsDialogData.remarks || ''
                                 };
 
-                                const ccrResponse = await fetch('http://localhost:5000/api/actions/submit', {
+                                const ccrResponse = await fetch(`${API_BASE}/api/actions/submit`, {
                                   method: 'POST',
                                   headers: {
                                     'Content-Type': 'application/json',
@@ -8275,7 +8276,7 @@ export default function MyData() {
                             if (userRole === 'RTU/Communication') {
                               const token = localStorage.getItem('token');
                               if (token) {
-                                fetch('http://localhost:5000/api/actions/my-actions', {
+                                fetch(`${API_BASE}/api/actions/my-actions`, {
                                   headers: {
                                     'Authorization': `Bearer ${token}`
                                   }
@@ -8330,7 +8331,7 @@ export default function MyData() {
                     setTimeout(async () => {
                       // Force save immediately using refs which have latest values
                       saveToLocalStorage();
-                      console.log('Force saved data to localStorage after dialog submission:', {
+                      console.log('Force saved data to localStorage after dialog submission:`, {
                         rowKey: selectedSiteObservationRowKey,
                         siteObservations: siteObservationsRef.current[selectedSiteObservationRowKey],
                         taskStatus: taskStatusRef.current[selectedSiteObservationRowKey],
@@ -8398,7 +8399,7 @@ export default function MyData() {
                               });
                               
                               // Save to database immediately
-                              const saveResponse = await fetch('http://localhost:5000/api/equipment-offline-sites', {
+                              const saveResponse = await fetch(`${API_BASE}/api/equipment-offline-sites`, {
                                 method: 'POST',
                                 headers: {
                                   'Content-Type': 'application/json',

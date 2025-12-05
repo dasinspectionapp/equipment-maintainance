@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE } from '../utils/api';
 
 // Normalize function for case-insensitive matching
 const normalize = (str: string): string => {
@@ -282,7 +283,7 @@ export default function DeviceStatus() {
           return;
         }
 
-        const filtersUrl = `http://localhost:5000/api/equipment-offline-sites/reports/filters?_t=${Date.now()}`;
+        const filtersUrl = `${API_BASE}/api/equipment-offline-sites/reports/filters?_t=${Date.now()}`;
         const response = await fetch(filtersUrl, {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -331,7 +332,7 @@ export default function DeviceStatus() {
         }
 
         // First, fetch Device Status Upload file to get ALL site codes (like MY OFFLINE SITES does)
-        const uploadsRes = await fetch('http://localhost:5000/api/uploads', {
+        const uploadsRes = await fetch(`${API_BASE}/api/uploads`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const uploadsJson = await uploadsRes.json();
@@ -373,7 +374,7 @@ export default function DeviceStatus() {
         }
 
         // Fetch Device Status file data
-        const fileRes = await fetch(`http://localhost:5000/api/uploads/${deviceStatusFile.fileId}`, {
+        const fileRes = await fetch(`${API_BASE}/api/uploads/${deviceStatusFile.fileId}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const fileJson = await fileRes.json();
@@ -456,7 +457,7 @@ export default function DeviceStatus() {
             })[0];
 
           if (onlineOfflineFile) {
-            const onlineOfflineRes = await fetch(`http://localhost:5000/api/uploads/${onlineOfflineFile.fileId}`, {
+            const onlineOfflineRes = await fetch(`${API_BASE}/api/uploads/${onlineOfflineFile.fileId}`, {
               headers: { 'Authorization': `Bearer ${token}` }
             });
             const onlineOfflineJson = await onlineOfflineRes.json();
@@ -583,7 +584,7 @@ export default function DeviceStatus() {
 
         // Now fetch EquipmentOfflineSites data to merge with file data
         // For CCR role, include approved sites too (includeApproved=true) for tracking purposes
-        const offlineSitesRes = await fetch('http://localhost:5000/api/equipment-offline-sites?includeApproved=true', {
+        const offlineSitesRes = await fetch(`${API_BASE}/api/equipment-offline-sites?includeApproved=true`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const offlineSitesJson = await offlineSitesRes.json();
@@ -605,7 +606,7 @@ export default function DeviceStatus() {
         });
 
         // Fetch routing actions to determine Task Status, approval status, and dates
-        const actionsRes = await fetch('http://localhost:5000/api/actions', {
+        const actionsRes = await fetch(`${API_BASE}/api/actions`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (!actionsRes.ok) {
@@ -615,7 +616,7 @@ export default function DeviceStatus() {
         const actions = Array.isArray(actionsJson?.data) ? actionsJson.data : (Array.isArray(actionsJson?.actions) ? actionsJson.actions : []);
 
         // Fetch approvals to get CCR approval dates
-        const approvalsRes = await fetch('http://localhost:5000/api/approvals', {
+        const approvalsRes = await fetch(`${API_BASE}/api/approvals`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const approvalsJson = await approvalsRes.json();
@@ -643,7 +644,7 @@ export default function DeviceStatus() {
             })[0];
 
           if (onlineOfflineFile) {
-            const onlineOfflineRes = await fetch(`http://localhost:5000/api/uploads/${onlineOfflineFile.fileId}`, {
+            const onlineOfflineRes = await fetch(`${API_BASE}/api/uploads/${onlineOfflineFile.fileId}`, {
               headers: { 'Authorization': `Bearer ${token}` }
             });
             const onlineOfflineJson = await onlineOfflineRes.json();

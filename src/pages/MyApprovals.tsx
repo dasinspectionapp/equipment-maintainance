@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { logActivity } from '../utils/activityLogger';
+import { API_BASE } from '../utils/api';
 
 // interface ActionRecord {
 //   _id: string;
@@ -107,7 +108,7 @@ export default function MyApprovals() {
       }
 
       // Fetch from Approvals collection instead of Actions
-      const response = await fetch('http://localhost:5000/api/approvals', {
+      const response = await fetch(`${API_BASE}/api/approvals`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -182,7 +183,7 @@ export default function MyApprovals() {
         : 'Verified and approved by Equipment';
 
       // Update approval status via approval API
-      const response = await fetch(`http://localhost:5000/api/approvals/${approval._id}/status`, {
+      const response = await fetch(`${API_BASE}/api/approvals/${approval._id}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -203,7 +204,7 @@ export default function MyApprovals() {
       if (approval.actionId) {
         const actionId = typeof approval.actionId === 'string' ? approval.actionId : approval.actionId._id;
         try {
-          await fetch(`http://localhost:5000/api/actions/${actionId}/status`, {
+          await fetch(`${API_BASE}/api/actions/${actionId}/status`, {
             method: 'PUT',
             headers: {
               'Content-Type': 'application/json',
@@ -263,7 +264,7 @@ export default function MyApprovals() {
         : 'Recheck requested by Equipment');
 
       // Update approval status via approval API
-      const response = await fetch(`http://localhost:5000/api/approvals/${approval._id}/status`, {
+      const response = await fetch(`${API_BASE}/api/approvals/${approval._id}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -284,7 +285,7 @@ export default function MyApprovals() {
       if (approval.actionId) {
         const actionId = typeof approval.actionId === 'string' ? approval.actionId : approval.actionId._id;
         try {
-          await fetch(`http://localhost:5000/api/actions/${actionId}/status`, {
+          await fetch(`${API_BASE}/api/actions/${actionId}/status`, {
             method: 'PUT',
             headers: {
               'Content-Type': 'application/json',
@@ -345,7 +346,7 @@ export default function MyApprovals() {
         : 'Kept for monitoring by Equipment');
 
       // Update approval status via approval API
-      const response = await fetch(`http://localhost:5000/api/approvals/${approval._id}/status`, {
+      const response = await fetch(`${API_BASE}/api/approvals/${approval._id}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -366,7 +367,7 @@ export default function MyApprovals() {
       if (approval.actionId) {
         const actionId = typeof approval.actionId === 'string' ? approval.actionId : approval.actionId._id;
         try {
-          await fetch(`http://localhost:5000/api/actions/${actionId}/status`, {
+          await fetch(`${API_BASE}/api/actions/${actionId}/status`, {
             method: 'PUT',
             headers: {
               'Content-Type': 'application/json',

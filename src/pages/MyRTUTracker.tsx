@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import * as XLSX from 'xlsx';
+import { API_BASE } from '../utils/api';
 
 const PAGE_SIZE_OPTIONS = [25, 50, 75, 100];
 
@@ -221,7 +222,7 @@ export default function MyRTUTracker() {
     if ((userRole === 'Equipment' || userRole === 'RTU/Communication') && (!currentDivisions || currentDivisions.length === 0)) {
       const token = localStorage.getItem('token');
       if (token) {
-        fetch('http://localhost:5000/api/auth/profile', {
+        fetch(`${API_BASE}/api/auth/profile`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -247,7 +248,7 @@ export default function MyRTUTracker() {
     (async () => {
       try {
         const token = localStorage.getItem('token');
-        const res = await fetch('http://localhost:5000/api/uploads', {
+        const res = await fetch(`${API_BASE}/api/uploads`, {
           headers: {
             'Authorization': token ? `Bearer ${token}` : ''
           }
@@ -337,7 +338,7 @@ export default function MyRTUTracker() {
         const token = localStorage.getItem('token');
         
         // Fetch the main file data (Device Status Upload file)
-        const res = await fetch(`http://localhost:5000/api/uploads/${selectedFile}`, {
+        const res = await fetch(`${API_BASE}/api/uploads/${selectedFile}`, {
           headers: {
             'Authorization': token ? `Bearer ${token}` : ''
           }
@@ -381,7 +382,7 @@ export default function MyRTUTracker() {
           
           // Fetch ONLINE-OFFLINE DATA files and merge
           try {
-            const onlineOfflineRes = await fetch('http://localhost:5000/api/uploads', {
+            const onlineOfflineRes = await fetch(`${API_BASE}/api/uploads`, {
               headers: {
                 'Authorization': token ? `Bearer ${token}` : ''
               }
@@ -406,7 +407,7 @@ export default function MyRTUTracker() {
               })[0];
               
               if (latestOnlineOfflineFile) {
-                const onlineOfflineDataRes = await fetch(`http://localhost:5000/api/uploads/${latestOnlineOfflineFile.fileId}`, {
+                const onlineOfflineDataRes = await fetch(`${API_BASE}/api/uploads/${latestOnlineOfflineFile.fileId}`, {
                   headers: {
                     'Authorization': token ? `Bearer ${token}` : ''
                   }
@@ -556,7 +557,7 @@ export default function MyRTUTracker() {
           
           // Fetch RTU-TRACKER files and merge
           try {
-            const rtuTrackerRes = await fetch('http://localhost:5000/api/uploads', {
+            const rtuTrackerRes = await fetch(`${API_BASE}/api/uploads`, {
               headers: {
                 'Authorization': token ? `Bearer ${token}` : ''
               }
@@ -586,7 +587,7 @@ export default function MyRTUTracker() {
               })[0];
               
               if (latestRtuTrackerFile) {
-                const rtuTrackerDataRes = await fetch(`http://localhost:5000/api/uploads/${latestRtuTrackerFile.fileId}`, {
+                const rtuTrackerDataRes = await fetch(`${API_BASE}/api/uploads/${latestRtuTrackerFile.fileId}`, {
                   headers: {
                     'Authorization': token ? `Bearer ${token}` : ''
                   }
