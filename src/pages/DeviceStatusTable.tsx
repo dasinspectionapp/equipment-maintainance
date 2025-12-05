@@ -395,7 +395,7 @@ export default function DeviceStatusTable() {
       ? userData.circle.join(', ') 
       : (userData?.circle || 'N/A');
     
-    const downloadTime = new Date().toLocaleString('en-IN`, {
+    const downloadTime = new Date().toLocaleString('en-IN', {
       day: '2-digit',
       month: 'short',
       year: 'numeric',
@@ -409,7 +409,7 @@ export default function DeviceStatusTable() {
     let selectedDateFormatted = '';
     if (selectedDate) {
       const dateObj = new Date(selectedDate);
-      selectedDateFormatted = dateObj.toLocaleDateString('en-IN`, {
+      selectedDateFormatted = dateObj.toLocaleDateString('en-IN', {
         day: '2-digit',
         month: 'short',
         year: 'numeric'

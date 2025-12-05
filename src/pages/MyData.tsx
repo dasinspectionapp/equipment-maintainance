@@ -9,7 +9,7 @@ const PAGE_SIZE_OPTIONS = [25, 50, 75, 100];
 // Helper function to add metadata overlay to captured photo
 function addMetadataToPhoto(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, latitude?: number, longitude?: number, timestamp?: string, location?: string): void {
   const formattedTime = timestamp 
-    ? new Date(timestamp).toLocaleString('en-IN`, {
+    ? new Date(timestamp).toLocaleString('en-IN', {
         day: '2-digit',
         month: 'short',
         year: 'numeric',
@@ -18,7 +18,7 @@ function addMetadataToPhoto(canvas: HTMLCanvasElement, ctx: CanvasRenderingConte
         second: '2-digit',
         hour12: true
       })
-    : new Date().toLocaleString('en-IN`, {
+    : new Date().toLocaleString('en-IN', {
         day: '2-digit',
         month: 'short',
         year: 'numeric',
@@ -3876,7 +3876,7 @@ export default function MyData() {
     const userCircle = Array.isArray(currentUser?.circle) && currentUser.circle.length > 0 
       ? currentUser.circle.join(', ') 
       : 'N/A';
-    const downloadTime = new Date().toLocaleString('en-IN`, {
+    const downloadTime = new Date().toLocaleString('en-IN', {
       day: '2-digit',
       month: 'short',
       year: 'numeric',
