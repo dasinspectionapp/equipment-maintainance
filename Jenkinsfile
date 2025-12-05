@@ -27,8 +27,14 @@ pipeline {
 
         stage('Deploy Staging') {
             steps {
-                sh 'docker compose -f docker-compose.staging.yml down --remove-orphans'
-                sh 'docker compose -f docker-compose.staging.yml up -d --build'
+                script {
+                    // Forcefully remove existing containers if they exist
+                    sh '''
+                        docker rm -f backend-staging frontend-staging 2>/dev/null || true
+                        docker compose -f docker-compose.staging.yml down --remove-orphans -v || true
+                    '''
+                    sh 'docker compose -f docker-compose.staging.yml up -d --build'
+                }
             }
         }
 
@@ -40,8 +46,14 @@ pipeline {
 
         stage('Deploy Production') {
             steps {
-                sh 'docker compose -f docker-compose.prod.yml down --remove-orphans'
-                sh 'docker compose -f docker-compose.prod.yml up -d --build'
+                script {
+                    // Forcefully remove existing containers if they exist
+                    sh '''
+                        docker rm -f backend-prod frontend-prod 2>/dev/null || true
+                        docker compose -f docker-compose.prod.yml down --remove-orphans -v || true
+                    '''
+                    sh 'docker compose -f docker-compose.prod.yml up -d --build'
+                }
             }
         }
     }
