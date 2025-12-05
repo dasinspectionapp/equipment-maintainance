@@ -2,6 +2,7 @@ import express from 'express';
 import {
   registerUser,
   loginUser,
+  loginUserForResources,
   getUserProfile,
   getUsers,
   updateUser,
@@ -21,6 +22,7 @@ const router = express.Router();
 // Public routes
 router.post('/register', registerUser);
 router.post('/login', loginUser);
+router.post('/login-resources', loginUserForResources);
 
 // Protected routes
 router.get('/profile', protect, getUserProfile);

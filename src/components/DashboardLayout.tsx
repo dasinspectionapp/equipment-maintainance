@@ -211,6 +211,7 @@ export default function DashboardLayout() {
     children: [
       { label: 'Carousel', path: '/dashboard/landing-page/carousel', icon: '🖼️' },
       { label: 'Announcements', path: '/dashboard/landing-page/announcements', icon: '📢' },
+      { label: 'Resources', path: '/dashboard/elibrary-admin', icon: '📚' },
     ],
   };
 

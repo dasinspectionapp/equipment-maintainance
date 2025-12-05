@@ -259,6 +259,94 @@ export const loginUser = async (req, res) => {
   }
 };
 
+// @desc    Login user for Resources access (no application required)
+// @route   POST /api/auth/login-resources
+// @access  Public
+export const loginUserForResources = async (req, res) => {
+  try {
+    // Check MongoDB connection first
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        success: false,
+        error: 'Database connection unavailable. Please try again in a moment.'
+      });
+    }
+
+    const { userId, password } = req.body;
+
+    // Validation
+    if (!userId || !password) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please provide User ID and Password'
+      });
+    }
+
+    // Find user
+    const user = await User.findOne({ userId }).select('+password');
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid credentials'
+      });
+    }
+
+    // Check if user is active
+    if (!user.isActive) {
+      return res.status(401).json({
+        success: false,
+        error: 'Your account has been deactivated. Please contact administrator.'
+      });
+    }
+
+    // Check if user is approved (for non-admin users)
+    if (user.role !== 'Admin' && user.status !== 'approved') {
+      return res.status(401).json({
+        success: false,
+        error: 'Your account is pending approval. Please wait for admin approval.'
+      });
+    }
+
+    // Check password
+    const isPasswordMatch = await user.matchPassword(password);
+
+    if (!isPasswordMatch) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid credentials'
+      });
+    }
+
+    // For Resources access, we don't require application selection
+    // All authenticated users can access Resources regardless of application mapping
+
+    res.status(200).json({
+      success: true,
+      message: 'Login successful',
+      token: generateToken(user._id),
+      user: {
+        id: user._id,
+        fullName: user.fullName,
+        userId: user.userId,
+        email: user.email,
+        role: user.role,
+        designation: user.designation,
+        mappedTo: user.mappedTo,
+        division: user.division || [],
+        circle: user.circle || [],
+        subDivision: user.subDivision || []
+      }
+    });
+  } catch (error) {
+    console.error('Resources login error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Server error during login'
+    });
+  }
+};
+
 // @desc    Get user profile
 // @route   GET /api/auth/profile
 // @access  Private

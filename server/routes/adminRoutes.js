@@ -14,6 +14,12 @@ import {
   updateFieldOrder,
   getLogo
 } from '../controllers/adminUploadController.js';
+import {
+  getAllResourcesAdmin,
+  createResource,
+  updateResource,
+  deleteResource
+} from '../controllers/elibraryController.js';
 import { protect, authorize } from '../middleware/authMiddleware.js';
 import fileUpload from 'express-fileupload';
 
@@ -39,6 +45,15 @@ router.get('/uploads/logo', getLogo); // Logo accessible to all authenticated us
 router.delete('/uploads/fields/:fieldId/file', authorize('Admin'), deleteFile);
 router.delete('/uploads/fields/:fieldId', authorize('Admin'), deleteField);
 router.put('/uploads/fields/:fieldId/order', authorize('Admin'), updateFieldOrder);
+
+// E-Library Routes (Admin only)
+router.get('/elibrary', authorize('Admin'), getAllResourcesAdmin);
+router.post('/elibrary', authorize('Admin'), fileUpload({ 
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB limit
+  abortOnLimit: true 
+}), createResource);
+router.put('/elibrary/:id', authorize('Admin'), updateResource);
+router.delete('/elibrary/:id', authorize('Admin'), deleteResource);
 
 export default router;
 

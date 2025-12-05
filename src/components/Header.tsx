@@ -10,7 +10,7 @@ const navItems: NavItem[] = [
   { label: 'Home', href: '/' },
   { label: 'About DAS', href: '#about' },
   { label: 'Projects', href: '#updates' },
-  { label: 'Downloads', href: '#downloads' },
+  { label: 'Resources', href: '/resources' },
   { label: 'Contact', href: '#contact' },
   { label: 'Sign In', href: '/signin' },
 ]
@@ -102,15 +102,44 @@ export default function Header() {
         }`}
       >
         <div className="container mx-auto hidden h-12 items-center justify-end gap-1 px-4 sm:px-6 lg:flex lg:px-8">
-          {navItems.map((item) => (
-            <Link
-              key={item.label}
-              to={item.href || '#'}
-              className="rounded-md px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/15"
-            >
-              {item.label}
-            </Link>
-          ))}
+          {navItems.map((item) => {
+            // Use regular anchor for hash links, Link for routes
+            const isHashLink = item.href?.startsWith('#');
+            const handleClick = (e: React.MouseEvent) => {
+              if (isHashLink && item.href) {
+                e.preventDefault();
+                const element = document.querySelector(item.href);
+                if (element) {
+                  const headerOffset = 200; // Account for fixed header
+                  const elementPosition = element.getBoundingClientRect().top;
+                  const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+                  window.scrollTo({
+                    top: offsetPosition,
+                    behavior: 'smooth'
+                  });
+                }
+              }
+            };
+
+            return isHashLink ? (
+              <a
+                key={item.label}
+                href={item.href || '#'}
+                onClick={handleClick}
+                className="rounded-md px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/15"
+              >
+                {item.label}
+              </a>
+            ) : (
+              <Link
+                key={item.label}
+                to={item.href || '#'}
+                className="rounded-md px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/15"
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </div>
         <div className="flex h-12 items-center justify-between px-4 text-sm font-semibold uppercase tracking-wide lg:hidden">
           <span className="text-white/80">Navigation</span>
@@ -121,15 +150,48 @@ export default function Header() {
       {isMobileOpen && (
         <div className="border-b border-[#003768] bg-[#003b73] text-white lg:hidden">
           <div className="container mx-auto space-y-2 px-4 py-4 sm:px-6">
-            {navItems.map((item) => (
-              <Link
-                key={item.label}
-                to={item.href || '#'}
-                className="block rounded-lg bg-white/5 px-4 py-3 text-sm font-semibold transition hover:bg-white/10"
-              >
-                {item.label}
-              </Link>
-            ))}
+            {navItems.map((item) => {
+              // Use regular anchor for hash links, Link for routes
+              const isHashLink = item.href?.startsWith('#');
+              const handleClick = (e: React.MouseEvent) => {
+                if (isHashLink && item.href) {
+                  e.preventDefault();
+                  setIsMobileOpen(false);
+                  const element = document.querySelector(item.href);
+                  if (element) {
+                    const headerOffset = 200; // Account for fixed header
+                    const elementPosition = element.getBoundingClientRect().top;
+                    const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+                    window.scrollTo({
+                      top: offsetPosition,
+                      behavior: 'smooth'
+                    });
+                  }
+                } else {
+                  setIsMobileOpen(false);
+                }
+              };
+
+              return isHashLink ? (
+                <a
+                  key={item.label}
+                  href={item.href || '#'}
+                  onClick={handleClick}
+                  className="block rounded-lg bg-white/5 px-4 py-3 text-sm font-semibold transition hover:bg-white/10"
+                >
+                  {item.label}
+                </a>
+              ) : (
+                <Link
+                  key={item.label}
+                  to={item.href || '#'}
+                  onClick={handleClick}
+                  className="block rounded-lg bg-white/5 px-4 py-3 text-sm font-semibold transition hover:bg-white/10"
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
           </div>
         </div>
       )}

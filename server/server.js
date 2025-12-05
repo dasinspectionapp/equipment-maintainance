@@ -20,6 +20,7 @@ import siteObservationRoutes from './routes/siteObservationRoutes.js';
 import userDataStateRoutes from './routes/userDataStateRoutes.js';
 import equipmentOfflineSitesRoutes from './routes/equipmentOfflineSitesRoutes.js';
 import approvalRoutes from './routes/approvalRoutes.js';
+import elibraryRoutes from './routes/elibraryRoutes.js';
 import { getLocationsBySiteCodes } from './controllers/locationController.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -130,6 +131,7 @@ app.use('/api/approvals', approvalRoutes);
 app.post('/api/locations/by-site-codes', protect, getLocationsBySiteCodes);
 
 app.use('/api/landing', landingPageRoutes);
+app.use('/api/elibrary', elibraryRoutes);
 
 // Error handling middleware
 app.use(notFound);

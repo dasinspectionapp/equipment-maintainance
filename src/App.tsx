@@ -31,6 +31,8 @@ import LocationManagement from './pages/LocationManagement'
 import LandingPageCarousel from './pages/LandingPageCarousel'
 import LandingPageAnnouncements from './pages/LandingPageAnnouncements'
 import ApprovalReset from './pages/ApprovalReset'
+import ELibraryAdmin from './pages/ELibraryAdmin'
+import ResourcesPage from './pages/Resources'
 
 function App() {
   return (
@@ -39,6 +41,7 @@ function App() {
         <Route index element={<Home />} />
         <Route path="signin" element={<SignIn />} />
         <Route path="signup" element={<SignUp />} />
+        <Route path="resources" element={<ResourcesPage />} />
       </Route>
       <Route path="/dashboard" element={<DashboardLayout />}>
         {/* Admin-only routes */}
@@ -50,6 +53,7 @@ function App() {
         <Route path="approval-reset" element={<ApprovalReset />} />
         <Route path="landing-page/carousel" element={<LandingPageCarousel />} />
         <Route path="landing-page/announcements" element={<LandingPageAnnouncements />} />
+        <Route path="elibrary-admin" element={<ELibraryAdmin />} />
         {/* CCR-only routes */}
         <Route path="uploads" element={<Uploads />} />
         <Route path="upload" element={<Upload />} />
