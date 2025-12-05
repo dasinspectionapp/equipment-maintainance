@@ -36,8 +36,8 @@ export default function Resources() {
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
-    // Check authentication
-    const token = localStorage.getItem('token');
+    // Check authentication - use separate storage for Resources
+    const token = localStorage.getItem('resourcesToken');
     if (token) {
       setIsAuthenticated(true);
       fetchResources();
@@ -83,10 +83,10 @@ export default function Resources() {
         throw new Error(data.error || 'Login failed');
       }
 
-      // Store token and user data
+      // Store token and user data - use separate storage for Resources
       if (data.token) {
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
+        localStorage.setItem('resourcesToken', data.token);
+        localStorage.setItem('resourcesUser', JSON.stringify(data.user));
       }
 
       // Set authenticated and fetch resources
@@ -105,7 +105,7 @@ export default function Resources() {
   const fetchResources = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('resourcesToken');
       if (!token) {
         setIsAuthenticated(false);
         return;
@@ -123,8 +123,8 @@ export default function Resources() {
 
       if (response.status === 401) {
         // Token expired or invalid
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+        localStorage.removeItem('resourcesToken');
+        localStorage.removeItem('resourcesUser');
         setIsAuthenticated(false);
         return;
       }
@@ -144,7 +144,7 @@ export default function Resources() {
 
   const fetchCategories = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('resourcesToken');
       if (!token) {
         return;
       }
@@ -157,8 +157,8 @@ export default function Resources() {
 
       if (response.status === 401) {
         // Token expired or invalid
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+        localStorage.removeItem('resourcesToken');
+        localStorage.removeItem('resourcesUser');
         setIsAuthenticated(false);
         return;
       }
@@ -172,9 +172,19 @@ export default function Resources() {
     }
   };
 
+  const handleLogout = () => {
+    // Clear Resources-specific storage
+    localStorage.removeItem('resourcesToken');
+    localStorage.removeItem('resourcesUser');
+    setIsAuthenticated(false);
+    setLoginData({ userId: '', password: '' });
+    setResources([]);
+    setCategories([]);
+  };
+
   const handleDownload = async (resourceId: string, fileName: string, resource: ELibraryResource) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('resourcesToken');
       if (!token) {
         setIsAuthenticated(false);
         return;
@@ -206,8 +216,8 @@ export default function Resources() {
 
       if (response.status === 401) {
         // Token expired or invalid
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+        localStorage.removeItem('resourcesToken');
+        localStorage.removeItem('resourcesUser');
         setIsAuthenticated(false);
         return;
       }
@@ -461,7 +471,19 @@ export default function Resources() {
   }
 
   return (
-    <section className="py-16 bg-gradient-to-br from-blue-50 via-white to-purple-50">
+    <section className="py-16 bg-gradient-to-br from-blue-50 via-white to-purple-50 relative">
+      {/* Fixed Logout Button - Always visible */}
+      <button
+        onClick={handleLogout}
+        className="fixed top-4 right-4 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-semibold transition-colors flex items-center gap-2 shadow-lg hover:shadow-xl z-50 text-sm sm:text-base"
+        title="Logout from Resources"
+      >
+        <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+        </svg>
+        <span>Logout</span>
+      </button>
+
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="text-center mb-12">
