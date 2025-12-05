@@ -50,6 +50,8 @@ app.use(cors({
       'http://localhost:3002',
       'http://127.0.0.1:5173',
       'http://127.0.0.1:3000',
+      'https://bescomdas.vcaan.in',
+      'http://bescomdas.vcaan.in',
     ];
     
     // Allow any local network IP (for mobile app development)
