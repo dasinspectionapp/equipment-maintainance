@@ -188,6 +188,10 @@ export default function MyData() {
   const [actionsRows, setActionsRows] = useState<any[]>([]); // Store actions as rows for RTU/Communication users
   const [routedActionsMap, setRoutedActionsMap] = useState<Record<string, any>>({}); // Store actions routed from current user (for Equipment users)
   const [reroutedActionsMap, setReroutedActionsMap] = useState<Record<string, any>>({}); // Store actions rerouted by RTU/Communication users
+  const [approvalsMap, setApprovalsMap] = useState<Record<string, any>>({}); // Store approvals by site code for recheck detection
+  
+  // DEBUG: Log that component is loading
+  console.log('[APPROVALS] MyData component rendering, approvalsMap state:', Object.keys(approvalsMap).length);
   
   // Refs to track latest state values for reliable saving
   const siteObservationsRef = useRef<Record<string, string>>({});
@@ -679,6 +683,8 @@ export default function MyData() {
           
           // CRITICAL: Filter out rows that have been approved by CCR (ccrStatus === 'Approved')
           // These rows should be hidden from MY OFFLINE SITES tab
+          // DO NOT hide rows just because Site Observations is "Resolved"
+          // Rows should only be hidden when CCR has "Verify and Approve" (which sets excludedRowKeys/excludedSiteCodes)
           // Filter immediately if rows are already loaded
           // Filter by BOTH rowKey AND siteCode (in case rowKey doesn't match)
           if ((excludedRowKeys.length > 0 || excludedSiteCodes.length > 0) && rows.length > 0) {
@@ -687,17 +693,19 @@ export default function MyData() {
               const rowKey = generateRowKey(selectedFile || '', row, headers);
               const siteCode = (row['SITE CODE'] || row['Site Code'] || row['site code'] || '').trim().toUpperCase();
               
-              // Exclude if rowKey matches OR siteCode matches
+              // Exclude ONLY if rowKey matches OR siteCode matches (CCR approved rows)
+              // DO NOT hide rows just because Site Observations is "Resolved"
+              // Rows should only be hidden when CCR has "Verify and Approve" (which sets excludedRowKeys/excludedSiteCodes)
               const shouldExcludeByRowKey = excludedRowKeys.length > 0 && excludedRowKeys.includes(rowKey);
               const shouldExcludeBySiteCode = excludedSiteCodes.length > 0 && siteCode && excludedSiteCodes.includes(siteCode);
               const shouldExclude = shouldExcludeByRowKey || shouldExcludeBySiteCode;
               
               if (shouldExclude) {
-                console.log(`[loadFromEquipmentOfflineSitesDB] ❌ Hiding approved row - rowKey: ${rowKey}, siteCode: ${siteCode}, excludedByRowKey: ${shouldExcludeByRowKey}, excludedBySiteCode: ${shouldExcludeBySiteCode}`);
+                console.log(`[loadFromEquipmentOfflineSitesDB] ❌ Hiding CCR-approved row - rowKey: ${rowKey}, siteCode: ${siteCode}, excludedByRowKey: ${shouldExcludeByRowKey}, excludedBySiteCode: ${shouldExcludeBySiteCode}`);
               }
               return !shouldExclude;
             });
-            console.log(`[loadFromEquipmentOfflineSitesDB] ✅ Filtered rows: ${rows.length} -> ${filteredRows.length} (excluded ${rows.length - filteredRows.length} approved rows)`);
+            console.log(`[loadFromEquipmentOfflineSitesDB] ✅ Filtered rows: ${rows.length} -> ${filteredRows.length} (excluded ${rows.length - filteredRows.length} approved/resolved rows)`);
             setRows(filteredRows);
           }
           
@@ -982,17 +990,20 @@ export default function MyData() {
         });
         
         // Filter out rows whose rowKey OR siteCode matches exclusion criteria
+        // ONLY hide rows that have been approved by CCR (ccrStatus === 'Approved')
+        // DO NOT hide rows just because Site Observations is "Resolved"
+        // Rows should only be hidden when CCR has "Verify and Approve"
         const filteredRows = rows.filter((row) => {
           const rowKey = generateRowKey(selectedFile, row, headers);
           const siteCode = (row['SITE CODE'] || row['Site Code'] || row['site code'] || '').trim().toUpperCase();
           
-          // Exclude if rowKey matches OR siteCode matches
+          // Exclude ONLY if rowKey matches OR siteCode matches (CCR approved rows)
           const shouldExcludeByRowKey = excludedRowKeys.length > 0 && excludedRowKeys.includes(rowKey);
           const shouldExcludeBySiteCode = excludedSiteCodes.length > 0 && siteCode && excludedSiteCodes.includes(siteCode);
           const shouldExclude = shouldExcludeByRowKey || shouldExcludeBySiteCode;
           
           if (shouldExclude) {
-            console.log(`[FILTER ROWS] ❌ Hiding approved row - rowKey: ${rowKey}, siteCode: ${siteCode}, excludedByRowKey: ${shouldExcludeByRowKey}, excludedBySiteCode: ${shouldExcludeBySiteCode}`);
+            console.log(`[FILTER ROWS] ❌ Hiding CCR-approved row - rowKey: ${rowKey}, siteCode: ${siteCode}, excludedByRowKey: ${shouldExcludeByRowKey}, excludedBySiteCode: ${shouldExcludeBySiteCode}`);
           }
           return !shouldExclude;
         });
@@ -1083,6 +1094,7 @@ export default function MyData() {
   const [selectedRowKeyForPhotos, setSelectedRowKeyForPhotos] = useState<string>(''); // Track which row's photos to view
   const [showSiteObservationsDialog, setShowSiteObservationsDialog] = useState(false); // Control Site Observations dialog visibility
   const [selectedSiteObservationRowKey, setSelectedSiteObservationRowKey] = useState<string>(''); // Track which row's site observation was selected
+  const [selectedSiteObservationRowData, setSelectedSiteObservationRowData] = useState<any>(null); // Store the row data when dialog opens (to avoid "Row not found" errors)
   const [siteObservationsDialogData, setSiteObservationsDialogData] = useState({
     remarks: '',
     typeOfIssue: '',
@@ -2335,6 +2347,14 @@ export default function MyData() {
                 const rowKey = generateRowKey(action.sourceFileId, action.rowData || {}, action.headers || []);
                 if (!rowKey) return;
                 
+                // NEW: Check if this is an AMC Resolution Approval action with "In Progress" status (Recheck Requested)
+                // This should apply to ALL users who see this action
+                if (action.typeOfIssue === 'AMC Resolution Approval' && status === 'in progress') {
+                  // A recheck has been requested - show "Recheck Requested" in Task Status
+                  updatedTaskStatus[rowKey] = 'Recheck Requested';
+                  return; // Skip the rest of the logic for this action
+                }
+                
                 // Don't override existing resolved status from other actions
                 // Only set if there's no existing status or if it's not resolved
                 const existingStatus = updatedTaskStatus[rowKey] || '';
@@ -2641,14 +2661,43 @@ export default function MyData() {
         }
         
         if (userRole === 'Equipment') {
-          // Filter RTU Issue, CS Issue, O&M-related issues, and AMC Resolution Approval
+          // Filter RTU Issue, CS Issue, O&M-related issues, and ALL approval types (AMC, CCR, etc.)
           const omIssueTypes = ['Faulty', 'Bipassed', 'Line Idel', 'AT Jump cut', 'Dismantled', 'Replaced', 'Equipment Idle', 'Spare Required', 'AT-PT Chamber Flashover'];
           const routedActions = json.actions.filter((action: any) => 
             action.typeOfIssue === 'RTU Issue' || 
             action.typeOfIssue === 'CS Issue' ||
             action.typeOfIssue === 'AMC Resolution Approval' ||
+            action.typeOfIssue === 'CCR Resolution Approval' ||
+            (action.typeOfIssue && String(action.typeOfIssue).toLowerCase().includes('approval')) ||
             omIssueTypes.includes(action.typeOfIssue)
           );
+          
+          // ALSO: Extract approval actions with "In Progress" status and add to approvalsMap as fallback
+          const approvalActionsWithRecheck = json.actions.filter((action: any) => {
+            const isApprovalType = action.typeOfIssue === 'AMC Resolution Approval' ||
+                                   action.typeOfIssue === 'CCR Resolution Approval' ||
+                                   (action.typeOfIssue && String(action.typeOfIssue).toLowerCase().includes('approval'));
+            const actionStatus = String(action.status || '').toLowerCase();
+            return isApprovalType && (actionStatus === 'in progress' || actionStatus === 'recheck requested');
+          });
+          
+          if (approvalActionsWithRecheck.length > 0) {
+            console.log(`[APPROVALS FALLBACK] Found ${approvalActionsWithRecheck.length} approval actions with recheck status from actions API`);
+            const fallbackApprovalsMap: Record<string, any> = {};
+            approvalActionsWithRecheck.forEach((action: any) => {
+              const siteCode = (action.rowData?.['Site Code'] || action.rowData?.['SITE CODE'] || action.rowData?.['SiteCode'] || '').trim().toUpperCase();
+              if (siteCode) {
+                fallbackApprovalsMap[siteCode] = {
+                  status: action.status,
+                  approvalType: action.typeOfIssue,
+                  siteCode: siteCode
+                };
+                console.log(`[APPROVALS FALLBACK] Added approval for siteCode: ${siteCode} from actions API`);
+              }
+            });
+            // Merge with existing approvalsMap (approvals API takes precedence)
+            setApprovalsMap(prev => ({ ...prev, ...fallbackApprovalsMap }));
+          }
           
           const actionsMap: Record<string, any> = {};
           const actionsArrayMap: Record<string, any[]> = {}; // Store all actions per rowKey
@@ -2770,6 +2819,43 @@ export default function MyData() {
           setRoutedActionsMap(approvalMap);
           console.log('Loaded AMC approval actions (mapped by original row key when available):', Object.keys(approvalMap).length);
         }
+        
+        // UNIVERSAL FALLBACK: Extract approval actions with "In Progress" status for ALL user roles
+        // This ensures we catch recheck requests even if the approvals API useEffect doesn't run
+        const allApprovalActionsWithRecheck = json.actions.filter((action: any) => {
+          const isApprovalType = action.typeOfIssue === 'AMC Resolution Approval' ||
+                                 action.typeOfIssue === 'CCR Resolution Approval' ||
+                                 (action.typeOfIssue && String(action.typeOfIssue).toLowerCase().includes('approval'));
+          const actionStatus = String(action.status || '').toLowerCase();
+          return isApprovalType && (actionStatus === 'in progress' || actionStatus === 'recheck requested');
+        });
+        
+        if (allApprovalActionsWithRecheck.length > 0) {
+          console.log(`[APPROVALS FALLBACK] Found ${allApprovalActionsWithRecheck.length} approval actions with recheck status from actions API`);
+          const fallbackApprovalsMap: Record<string, any> = {};
+          allApprovalActionsWithRecheck.forEach((action: any) => {
+            const siteCode = (action.rowData?.['Site Code'] || action.rowData?.['SITE CODE'] || action.rowData?.['SiteCode'] || '').trim().toUpperCase();
+            if (siteCode) {
+              fallbackApprovalsMap[siteCode] = {
+                status: action.status,
+                approvalType: action.typeOfIssue,
+                siteCode: siteCode
+              };
+              if (siteCode === '5W1896') {
+                console.log(`[APPROVALS FALLBACK] ✓ Found 5W1896 in actions API:`, action);
+              }
+            }
+          });
+          // Merge with existing approvalsMap (approvals API takes precedence, but this is a fallback)
+          setApprovalsMap(prev => {
+            const merged = { ...prev, ...fallbackApprovalsMap };
+            console.log(`[APPROVALS FALLBACK] Merged approvalsMap. Total keys: ${Object.keys(merged).length}, New from fallback: ${Object.keys(fallbackApprovalsMap).length}`);
+            if (merged['5W1896']) {
+              console.log(`[APPROVALS FALLBACK] ✓ 5W1896 is now in merged approvalsMap:`, merged['5W1896']);
+            }
+            return merged;
+          });
+        }
       } catch (error) {
         console.error('Error fetching routed actions:', error);
         if (userRole === 'AMC') {
@@ -2778,6 +2864,119 @@ export default function MyData() {
       }
     })();
   }, [userRole, user, selectedFile, rows.length]);
+
+  // Fetch approvals to check for Recheck Requested status (for ALL users)
+  // This MUST run on every mount to ensure approvals are always loaded
+  useEffect(() => {
+    console.log('[APPROVALS] ========== useEffect STARTING ==========');
+    console.log('[APPROVALS] useEffect triggered, userRole:', userRole, 'user:', user?.userId);
+    
+    let isMounted = true;
+    
+    (async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          console.log('[APPROVALS] No token found, skipping fetch');
+          setApprovalsMap({}); // Clear map if no token
+          return;
+        }
+        
+        // Force the fetch to run - don't wait for user to be loaded
+        console.log('[APPROVALS] Starting fetch...');
+
+        console.log('[APPROVALS] Fetching approvals from:', `${API_BASE}/api/approvals`);
+        // Fetch approvals to check for recheck status
+        const approvalsRes = await fetch(`${API_BASE}/api/approvals`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        console.log('[APPROVALS] Response status:', approvalsRes.status, 'ok:', approvalsRes.ok);
+        
+        if (approvalsRes.ok) {
+          const approvalsJson = await approvalsRes.json();
+          console.log('[APPROVALS] Raw response:', {
+            success: approvalsJson?.success,
+            hasData: !!approvalsJson?.data,
+            dataIsArray: Array.isArray(approvalsJson?.data),
+            dataLength: Array.isArray(approvalsJson?.data) ? approvalsJson.data.length : 0
+          });
+          
+          if (approvalsJson?.success && Array.isArray(approvalsJson.data)) {
+            // Log all approvals to see what we're getting
+            console.log('[APPROVALS] All approvals:', approvalsJson.data.map((a: any) => ({
+              siteCode: a.siteCode,
+              status: a.status,
+              approvalType: a.approvalType
+            })));
+            
+            // Create a map of approvals by site code
+            // Store approvals with "In Progress" status (which means Recheck Requested)
+            const approvalsBySiteCode: Record<string, any> = {};
+            approvalsJson.data.forEach((approval: any) => {
+              const approvalStatus = String(approval.status || '').toLowerCase();
+              const siteCode = (approval.siteCode || '').trim().toUpperCase();
+              console.log(`[APPROVALS] Processing approval: siteCode="${siteCode}", status="${approvalStatus}", originalStatus="${approval.status}"`);
+              
+              // Check for both "in progress" and "recheck requested" statuses
+              const isRecheckStatus = approvalStatus === 'in progress' || approvalStatus === 'recheck requested';
+              
+              if (isRecheckStatus) {
+                if (siteCode) {
+                  // Store approval with its type (AMC Resolution Approval, CCR Resolution Approval, etc.)
+                  approvalsBySiteCode[siteCode] = {
+                    status: approval.status,
+                    approvalType: approval.approvalType,
+                    siteCode: siteCode
+                  };
+                  console.log(`[APPROVALS] Stored approval for siteCode: ${siteCode} (status: ${approval.status})`);
+                } else {
+                  console.log(`[APPROVALS] Skipping approval - no siteCode:`, approval);
+                }
+              } else {
+                if (siteCode === '5W1896') {
+                  console.log(`[APPROVALS] Approval for 5W1896 found but status is not 'in progress':`, {
+                    siteCode,
+                    status: approval.status,
+                    approvalStatus,
+                    approval
+                  });
+                }
+              }
+            });
+            if (isMounted) {
+              setApprovalsMap(approvalsBySiteCode);
+              console.log(`[APPROVALS] ========== SUCCESS: Loaded ${Object.keys(approvalsBySiteCode).length} approvals with Recheck Requested status ==========`);
+              console.log(`[APPROVALS] Site codes with Recheck:`, Object.keys(approvalsBySiteCode));
+            }
+            // Log specific site code if it exists
+            if (approvalsBySiteCode['5W1896']) {
+              console.log(`[APPROVALS] Found approval for 5W1896:`, approvalsBySiteCode['5W1896']);
+            } else {
+              console.log(`[APPROVALS] Approval for 5W1896 NOT found in approvalsBySiteCode. Available keys:`, Object.keys(approvalsBySiteCode));
+            }
+          } else {
+            console.error('[APPROVALS] Response format unexpected:', approvalsJson);
+          }
+        } else {
+          const errorText = await approvalsRes.text().catch(() => '');
+          console.error('[APPROVALS] Failed to fetch approvals:', approvalsRes.status, errorText);
+        }
+      } catch (error) {
+        console.error('[APPROVALS] ========== ERROR in approvals fetch ==========', error);
+        console.error('[APPROVALS] Error details:', error instanceof Error ? error.message : String(error));
+        console.error('[APPROVALS] Error stack:', error instanceof Error ? error.stack : 'No stack');
+      } finally {
+        console.log('[APPROVALS] ========== useEffect COMPLETED ==========');
+      }
+      
+      return () => {
+        isMounted = false;
+      };
+    })();
+  }, []); // Run once on mount, don't depend on user/userRole to ensure it always runs
 
   useEffect(() => {
     if (userRole !== 'AMC') {
@@ -2865,17 +3064,108 @@ export default function MyData() {
         const routedAction = routedActionsMap[rowKey];
         if (!routedAction) return;
 
-        // Check if Site Observations is "Resolved" - if so, set Task Status to "Resolved"
-        const siteObs = siteObservations[rowKey];
-        if (siteObs === 'Resolved') {
-          // If Site Observations is Resolved, Task Status should be Resolved
-          // (unless there are pending routing actions that need to be shown)
-          // But user requirement is: if Resolved is chosen, show Resolved
-          if (updated[rowKey] !== 'Resolved') {
-            updated[rowKey] = 'Resolved';
-            changed = true;
+        // PRIORITY 1: Check for Recheck Requested FIRST (takes priority over Resolved status)
+        // Check approvals directly by site code (works for ALL approval types: AMC, CCR, Equipment)
+        let hasRecheckRequested = false;
+        const siteCode = (routedAction.rowData?.['Site Code'] || routedAction.rowData?.['SITE CODE'] || routedAction.rowData?.['SiteCode'] || '').trim().toUpperCase();
+        
+        // FIRST: Check approvals map by site code (most reliable - works for ALL approval types)
+        if (siteCode && approvalsMap[siteCode]) {
+          const approval = approvalsMap[siteCode];
+          const approvalStatus = String(approval.status || '').toLowerCase();
+          if (approvalStatus === 'in progress') {
+            if (updated[rowKey] !== 'Recheck Requested') {
+              updated[rowKey] = 'Recheck Requested';
+              changed = true;
+              console.log(`[useEffect] Set Recheck Requested from approvalsMap for siteCode: ${siteCode}, approvalType: ${approval.approvalType}, rowKey: ${rowKey}`);
+            }
+            hasRecheckRequested = true;
+            return; // Skip normal routing logic for recheck requested
           }
-          return; // Skip routing action logic if Site Observations is Resolved
+        }
+        
+        // Also check approval actions (AMC Resolution Approval, CCR Resolution Approval, etc.)
+        if (!hasRecheckRequested) {
+          const isApprovalType = routedAction.typeOfIssue === 'AMC Resolution Approval' ||
+                                 routedAction.typeOfIssue === 'CCR Resolution Approval' ||
+                                 (routedAction.typeOfIssue && String(routedAction.typeOfIssue).toLowerCase().includes('approval'));
+          if (isApprovalType) {
+            const actionStatus = String(routedAction.status || '').toLowerCase();
+            if (actionStatus === 'in progress') {
+              // A recheck has been requested - show "Recheck Requested" in Task Status
+              if (updated[rowKey] !== 'Recheck Requested') {
+                updated[rowKey] = 'Recheck Requested';
+                changed = true;
+                console.log(`[useEffect] Set Recheck Requested by rowKey: ${rowKey}, siteCode: ${siteCode}, typeOfIssue: ${routedAction.typeOfIssue}`);
+              }
+              hasRecheckRequested = true;
+              return; // Skip normal routing logic for recheck requested
+            }
+          }
+        }
+        
+        // Also check all actions for this row to find approval actions with "In Progress"
+        if (!hasRecheckRequested) {
+          const allActionsMap = (routedActionsMap as any).__allActions || {};
+          const allActionsForRow = allActionsMap[rowKey] || [];
+          // Check for ANY approval type
+          const recheckAction = allActionsForRow.find((a: any) => {
+            const isApprovalType = a.typeOfIssue === 'AMC Resolution Approval' ||
+                                   a.typeOfIssue === 'CCR Resolution Approval' ||
+                                   (a.typeOfIssue && String(a.typeOfIssue).toLowerCase().includes('approval'));
+            return isApprovalType && String(a.status || '').toLowerCase() === 'in progress';
+          });
+          if (recheckAction) {
+            if (updated[rowKey] !== 'Recheck Requested') {
+              updated[rowKey] = 'Recheck Requested';
+              changed = true;
+              console.log(`[useEffect] Set Recheck Requested in allActionsForRow for rowKey: ${rowKey}, siteCode: ${siteCode}, typeOfIssue: ${recheckAction.typeOfIssue}`);
+            }
+            hasRecheckRequested = true;
+            return; // Skip normal routing logic for recheck requested
+          }
+        }
+        
+        // Fallback: Check by site code if rowKey lookup failed (actions might have different rowKey)
+        if (!hasRecheckRequested && siteCode) {
+          const allActionsMap = (routedActionsMap as any).__allActions || {};
+          // Check all actions in the map to find one matching this site code
+          const allActions = Object.values(allActionsMap).flat() as any[];
+          // Check for ANY approval type
+          const recheckActionBySiteCode = allActions.find((a: any) => {
+            const isApprovalType = a.typeOfIssue === 'AMC Resolution Approval' ||
+                                   a.typeOfIssue === 'CCR Resolution Approval' ||
+                                   (a.typeOfIssue && String(a.typeOfIssue).toLowerCase().includes('approval'));
+            if (!isApprovalType) return false;
+            if (String(a.status || '').toLowerCase() !== 'in progress') return false;
+            const aSiteCode = (a.rowData?.['Site Code'] || a.rowData?.['SITE CODE'] || a.rowData?.['SiteCode'] || '').trim().toUpperCase();
+            return aSiteCode === siteCode;
+          });
+          if (recheckActionBySiteCode) {
+            if (updated[rowKey] !== 'Recheck Requested') {
+              updated[rowKey] = 'Recheck Requested';
+              changed = true;
+              console.log(`[useEffect] Set Recheck Requested by siteCode lookup: ${siteCode}, rowKey: ${rowKey}, typeOfIssue: ${recheckActionBySiteCode.typeOfIssue}`);
+            }
+            hasRecheckRequested = true;
+            return; // Skip normal routing logic for recheck requested
+          }
+        }
+
+        // PRIORITY 2: Check if Site Observations is "Resolved" - if so, set Task Status to "Resolved"
+        // Only apply this if no recheck has been requested
+        if (!hasRecheckRequested) {
+          const siteObs = siteObservations[rowKey];
+          if (siteObs === 'Resolved') {
+            // If Site Observations is Resolved, Task Status should be Resolved
+            // (unless there are pending routing actions that need to be shown)
+            // But user requirement is: if Resolved is chosen, show Resolved
+            if (updated[rowKey] !== 'Resolved') {
+              updated[rowKey] = 'Resolved';
+              changed = true;
+            }
+            return; // Skip routing action logic if Site Observations is Resolved
+          }
         }
 
         const actionStatus = String(routedAction.status || '').toLowerCase();
@@ -2883,6 +3173,8 @@ export default function MyData() {
         const vendorNames: string[] = Array.isArray(routedAction._vendorNames)
           ? routedAction._vendorNames
           : [];
+        // Get all actions for this row (needed for checking pending actions)
+        const allActionsMap = (routedActionsMap as any).__allActions || {};
         const allActionsForRow = allActionsMap[rowKey] || [];
 
         if (actionStatus === 'completed') {
@@ -3023,7 +3315,11 @@ export default function MyData() {
 
       return prev;
     });
-  }, [userRole, routedActionsMap, siteObservations]);
+  }, [userRole, routedActionsMap, siteObservations, approvalsMap]);
+
+  // NOTE: Removed re-filtering based on "Resolved" status
+  // Rows should only be hidden when CCR has "Verify and Approve" (handled by excludedRowKeys/excludedSiteCodes)
+  // Rows with "Resolved" status should remain visible (just greyed out) until CCR approves
 
   // Reset dataLoadedRef when file changes
   useEffect(() => {
@@ -4451,9 +4747,33 @@ export default function MyData() {
                         }
                       } else {
                         // For other roles (AMC, Equipment, etc.), use the existing logic
-                        let isResolvedDefault =
-                        siteObservationValue === 'Resolved' ||
-                          isTaskStatusFullyResolved;
+                        // BUT: If there's a "Recheck Requested" status, allow editing even if Site Observations is "Resolved"
+                        const siteCode = (row['Site Code'] || row['SITE CODE'] || row['SiteCode'] || row['site code'] || '').trim().toUpperCase();
+                        const hasRecheckRequested = siteCode && approvalsMap[siteCode] && 
+                          (String(approvalsMap[siteCode].status || '').toLowerCase() === 'in progress' || 
+                           String(approvalsMap[siteCode].status || '').toLowerCase() === 'recheck requested');
+                        
+                        // Only grey out if:
+                        // 1. Site Observations is "Resolved" AND
+                        // 2. There's NO recheck requested (if recheck is requested, allow editing again)
+                        let isResolvedDefault = false;
+                        if (siteObservationValue === 'Resolved') {
+                          // If there's a recheck requested, DON'T grey out - allow Equipment user to update again
+                          if (hasRecheckRequested) {
+                            isResolvedDefault = false; // Allow editing when recheck is requested
+                            console.log(`[SITE OBS] Site Observations is Resolved but Recheck Requested found for ${siteCode}, allowing editing`);
+                          } else {
+                            isResolvedDefault = true; // Grey out only if no recheck requested
+                          }
+                        } else if (isTaskStatusFullyResolved) {
+                          // Task Status is fully resolved (but Site Observations might not be "Resolved")
+                          // Only grey out if there's no recheck requested
+                          if (hasRecheckRequested) {
+                            isResolvedDefault = false; // Allow editing when recheck is requested
+                          } else {
+                            isResolvedDefault = true;
+                          }
+                        }
                         isResolved = isResolvedDefault;
                       }
 
@@ -4609,6 +4929,9 @@ export default function MyData() {
                               // Open dialog when "Resolved" or "Pending" is selected
                               if (selectedValue.toLowerCase() === 'resolved' || selectedValue.toLowerCase() === 'pending') {
                                 setSelectedSiteObservationRowKey(rowKey);
+                                // CRITICAL: Store the row data when opening dialog to avoid "Row not found" errors
+                                // This ensures we have the row data even if it gets filtered out later
+                                setSelectedSiteObservationRowData(row);
                                 setSiteObservationsStatus(selectedValue.toLowerCase());
                                 
                                 // Try to load existing data from Site Code-based storage (from My Sites Dialog)
@@ -4724,22 +5047,244 @@ export default function MyData() {
                       // For action rows, show status based on current routing destination
                       // CRITICAL: Task Status is calculated from routing actions and contains full routing info
                       // like "Pending at O&M Team; Pending at Vendor (Shrishaila Electricals...)"
-                      // Always start with rowKey-based Task Status (has routing information from MY OFFLINE SITES)
-                      // The routing logic below will calculate/update displayValue based on actions
+                      
+                      // Get site code for lookup
+                      const siteCode = (row['Site Code'] || row['SITE CODE'] || row['SiteCode'] || row['site code'] || '').trim().toUpperCase();
+                      
+                      // PRIORITY 1: Check for "Recheck Requested" FIRST (takes priority over everything else)
+                      // UNIVERSAL CHECK: For ALL users, check if there's ANY approval (AMC, CCR, Equipment) with "In Progress" status
+                      // This indicates a recheck has been requested and should show "Recheck Requested" in Task Status
+                      // We check this BEFORE setting displayValue from taskStatus to ensure it takes priority
+                      let hasRecheckRequested = false;
                       let displayValue = taskStatus[rowKey] || '-';
                       
-                      // CRITICAL FIX: If Site Observations is "Resolved", Task Status MUST be "Resolved"
-                      // Check both rowKey-based and Site Code-based Site Observations
-                      const siteObsRowKey = siteObservations[rowKey];
-                      const siteObsSiteCode = getSiteObservationValue(rowKey, row);
-                      if ((siteObsRowKey === 'Resolved' || siteObsSiteCode === 'Resolved') && displayValue !== 'Resolved') {
-                        console.log(`[RENDER] Forcing Task Status to Resolved for rowKey ${rowKey} because Site Observations is Resolved`);
-                        displayValue = 'Resolved';
+                      // FIRST: Check approvals directly by site code (most reliable - works for ALL approval types)
+                      if (siteCode) {
+                        // Debug logging for specific site code
+                        if (siteCode === '5W1896') {
+                          console.log(`[RENDER DEBUG 5W1896] Checking approvalsMap:`, {
+                            siteCode,
+                            hasApproval: !!approvalsMap[siteCode],
+                            approvalsMapKeys: Object.keys(approvalsMap),
+                            approval: approvalsMap[siteCode],
+                            approvalsMapSize: Object.keys(approvalsMap).length
+                          });
+                        }
+                        
+                        if (approvalsMap[siteCode]) {
+                          const approval = approvalsMap[siteCode];
+                          const approvalStatus = String(approval.status || '').toLowerCase();
+                          // Check for both "in progress" and "recheck requested" statuses
+                          if (approvalStatus === 'in progress' || approvalStatus === 'recheck requested') {
+                            displayValue = 'Recheck Requested';
+                            hasRecheckRequested = true;
+                            console.log(`[RENDER] Found Recheck Requested in approvalsMap for siteCode: ${siteCode}, approvalType: ${approval.approvalType}, rowKey: ${rowKey}`);
+                          } else {
+                            if (siteCode === '5W1896') {
+                              console.log(`[RENDER DEBUG 5W1896] Approval found but status is not recheck:`, approvalStatus, approval);
+                            }
+                          }
+                        } else {
+                          if (siteCode === '5W1896') {
+                            console.log(`[RENDER DEBUG 5W1896] No approval found in approvalsMap. Current approvalsMap keys:`, Object.keys(approvalsMap));
+                          }
+                        }
                       }
                       
+                      // Check routedActionsMap for approval actions (by rowKey) - check ALL approval types
+                      if (!hasRecheckRequested) {
+                        const routedAction = routedActionsMap[rowKey];
+                        // Check for ANY approval type (AMC Resolution Approval, CCR Resolution Approval, etc.)
+                        if (routedAction && (
+                          routedAction.typeOfIssue === 'AMC Resolution Approval' ||
+                          routedAction.typeOfIssue === 'CCR Resolution Approval' ||
+                          (routedAction.typeOfIssue && String(routedAction.typeOfIssue).toLowerCase().includes('approval'))
+                        )) {
+                          const actionStatus = String(routedAction.status || '').toLowerCase();
+                          if (actionStatus === 'in progress') {
+                            displayValue = 'Recheck Requested';
+                            hasRecheckRequested = true;
+                            console.log(`[RENDER] Found Recheck Requested by rowKey: ${rowKey}, siteCode: ${siteCode}, typeOfIssue: ${routedAction.typeOfIssue}`);
+                          }
+                        }
+                      }
+                      
+                      // Also check by originalRowKey (AMC Resolution Approval actions might be stored with __siteObservationRowKey)
+                      if (!hasRecheckRequested) {
+                        const originalRowKey = (row as any).__siteObservationRowKey as string | undefined;
+                        if (originalRowKey) {
+                          const originalRoutedAction = routedActionsMap[originalRowKey];
+                          // Check for ANY approval type
+                          const isApprovalType = originalRoutedAction && (
+                            originalRoutedAction.typeOfIssue === 'AMC Resolution Approval' ||
+                            originalRoutedAction.typeOfIssue === 'CCR Resolution Approval' ||
+                            (originalRoutedAction.typeOfIssue && String(originalRoutedAction.typeOfIssue).toLowerCase().includes('approval'))
+                          );
+                          if (isApprovalType) {
+                            const actionStatus = String(originalRoutedAction.status || '').toLowerCase();
+                            if (actionStatus === 'in progress') {
+                              displayValue = 'Recheck Requested';
+                              hasRecheckRequested = true;
+                              console.log(`[RENDER] Found Recheck Requested by originalRowKey: ${originalRowKey}, current rowKey: ${rowKey}, siteCode: ${siteCode}, typeOfIssue: ${originalRoutedAction.typeOfIssue}`);
+                            }
+                          }
+                        }
+                      }
+                      
+                      // Also check all actions for this row (in case the primary action isn't the AMC Resolution Approval)
+                      if (!hasRecheckRequested) {
+                        const allActionsMap = (routedActionsMap as any).__allActions || {};
+                        const allActionsForRow = allActionsMap[rowKey] || [];
+                        // Check for ANY approval type (AMC Resolution Approval, CCR Resolution Approval, etc.)
+                        const recheckAction = allActionsForRow.find((a: any) => {
+                          const isApprovalType = a.typeOfIssue === 'AMC Resolution Approval' ||
+                                                 a.typeOfIssue === 'CCR Resolution Approval' ||
+                                                 (a.typeOfIssue && String(a.typeOfIssue).toLowerCase().includes('approval'));
+                          return isApprovalType && String(a.status || '').toLowerCase() === 'in progress';
+                        });
+                        if (recheckAction) {
+                          displayValue = 'Recheck Requested';
+                          hasRecheckRequested = true;
+                          console.log(`[RENDER] Found Recheck Requested in allActionsForRow for rowKey: ${rowKey}, siteCode: ${siteCode}`);
+                        }
+                      }
+                      
+                      // Also check all actions for originalRowKey
+                      if (!hasRecheckRequested) {
+                        const originalRowKey = (row as any).__siteObservationRowKey as string | undefined;
+                        if (originalRowKey) {
+                          const allActionsMap = (routedActionsMap as any).__allActions || {};
+                          const allActionsForOriginalRow = allActionsMap[originalRowKey] || [];
+                          // Check for ANY approval type (AMC Resolution Approval, CCR Resolution Approval, etc.)
+                          const recheckAction = allActionsForOriginalRow.find((a: any) => {
+                            const isApprovalType = a.typeOfIssue === 'AMC Resolution Approval' ||
+                                                   a.typeOfIssue === 'CCR Resolution Approval' ||
+                                                   (a.typeOfIssue && String(a.typeOfIssue).toLowerCase().includes('approval'));
+                            return isApprovalType && String(a.status || '').toLowerCase() === 'in progress';
+                          });
+                          if (recheckAction) {
+                            displayValue = 'Recheck Requested';
+                            hasRecheckRequested = true;
+                            console.log(`[RENDER] Found Recheck Requested in allActionsForOriginalRow for originalRowKey: ${originalRowKey}, current rowKey: ${rowKey}, siteCode: ${siteCode}`);
+                          }
+                        }
+                      }
+                      
+                      // Fallback: Check by site code if rowKey lookup failed (actions might have different rowKey)
+                      // Also check all actions in routedActionsMap (not just those keyed by rowKey)
+                      if (!hasRecheckRequested && siteCode) {
+                        // First check allActionsMap
+                        const allActionsMap = (routedActionsMap as any).__allActions || {};
+                        const allActionsFromMap = Object.values(allActionsMap).flat() as any[];
+                        
+                        // Also check all actions directly in routedActionsMap values
+                        const allRoutedActions = Object.values(routedActionsMap).filter((a: any) => 
+                          a && typeof a === 'object' && a.typeOfIssue
+                        ) as any[];
+                        
+                        // Combine both sources
+                        const allActionsToCheck = [...allActionsFromMap, ...allRoutedActions];
+                        
+                        // Check for ANY approval type (AMC Resolution Approval, CCR Resolution Approval, etc.)
+                        const recheckActionBySiteCode = allActionsToCheck.find((a: any) => {
+                          const isApprovalType = a.typeOfIssue === 'AMC Resolution Approval' ||
+                                                 a.typeOfIssue === 'CCR Resolution Approval' ||
+                                                 (a.typeOfIssue && String(a.typeOfIssue).toLowerCase().includes('approval'));
+                          if (!isApprovalType) return false;
+                          if (String(a.status || '').toLowerCase() !== 'in progress') return false;
+                          const aSiteCode = (a.rowData?.['Site Code'] || a.rowData?.['SITE CODE'] || a.rowData?.['SiteCode'] || a.rowData?.['site code'] || '').trim().toUpperCase();
+                          return aSiteCode === siteCode && aSiteCode !== '';
+                        });
+                        if (recheckActionBySiteCode) {
+                          displayValue = 'Recheck Requested';
+                          hasRecheckRequested = true;
+                          console.log(`[RENDER] Found Recheck Requested by siteCode lookup: ${siteCode}, rowKey: ${rowKey}`);
+                        }
+                      }
+                      
+                      // Also check action rows directly (for RTU/Communication, O&M, AMC users viewing action rows)
+                      // Check for ANY approval type
+                      if (!hasRecheckRequested) {
+                        const isApprovalType = row._typeOfIssue === 'AMC Resolution Approval' ||
+                                              row._typeOfIssue === 'CCR Resolution Approval' ||
+                                              (row._typeOfIssue && String(row._typeOfIssue).toLowerCase().includes('approval'));
+                        if (isApprovalType) {
+                          const actionStatus = String(row._status || '').toLowerCase();
+                          if (actionStatus === 'in progress') {
+                            displayValue = 'Recheck Requested';
+                            hasRecheckRequested = true;
+                            console.log(`[RENDER] Found Recheck Requested in action row: ${rowKey}, siteCode: ${siteCode}, typeOfIssue: ${row._typeOfIssue}`);
+                          }
+                        }
+                      }
+                      
+                      // PRIORITY 2: If Site Observations is "Resolved" AND no recheck requested, Task Status MUST be "Resolved"
+                      // Check both rowKey-based and Site Code-based Site Observations
+                      // Only apply this if we haven't already set "Recheck Requested"
+                      // CRITICAL: Check multiple conditions to ensure we never override "Recheck Requested"
+                      if (!hasRecheckRequested && displayValue !== 'Recheck Requested') {
+                        const siteObsRowKey = siteObservations[rowKey];
+                        const siteObsSiteCode = getSiteObservationValue(rowKey, row);
+                        if ((siteObsRowKey === 'Resolved' || siteObsSiteCode === 'Resolved') && 
+                            displayValue !== 'Resolved' && 
+                            displayValue !== 'Recheck Requested' &&
+                            !hasRecheckRequested) {
+                          console.log(`[RENDER] Forcing Task Status to Resolved for rowKey ${rowKey} because Site Observations is Resolved (no recheck found)`);
+                          displayValue = 'Resolved';
+                        } else if (hasRecheckRequested || displayValue === 'Recheck Requested') {
+                          // Explicitly prevent override if recheck was found
+                          if (siteCode === '5W1896') {
+                            console.log(`[RENDER DEBUG 5W1896] Skipping Resolved override because Recheck Requested was found. displayValue: ${displayValue}, hasRecheckRequested: ${hasRecheckRequested}`);
+                          }
+                        }
+                      }
+                      
+                      // Recalculate these flags AFTER all logic that might change displayValue
                       const lowerDisplay = displayValue.toLowerCase();
                       let isResolvedTask = lowerDisplay.includes('resolved');
-                      const isRecheckRequested = lowerDisplay === 'recheck requested';
+                      // Use hasRecheckRequested flag OR check displayValue - whichever is true
+                      const isRecheckRequested = hasRecheckRequested || lowerDisplay === 'recheck requested';
+                      
+                      // CRITICAL: If we found a recheck, ensure displayValue is set correctly and isResolvedTask is false
+                      if (hasRecheckRequested || lowerDisplay === 'recheck requested') {
+                        displayValue = 'Recheck Requested';
+                        isResolvedTask = false; // Recheck Requested should NOT be greyed out
+                      }
+                      
+                      // IMPORTANT: If displayValue is just "Pending" or "-", the routing logic below will calculate
+                      // the full routing info from actions. This ensures routing info is always shown when available.
+                      // BUT skip this if we already have Recheck Requested
+                      if (!hasRecheckRequested && !isResolvedTask && displayValue !== 'Recheck Requested') {
+                        // Check routedActionsMap for AMC Resolution Approval actions
+                        const routedAction = routedActionsMap[rowKey];
+                        if (routedAction && routedAction.typeOfIssue === 'AMC Resolution Approval') {
+                          const actionStatus = String(routedAction.status || '').toLowerCase();
+                          if (actionStatus === 'in progress') {
+                            displayValue = 'Recheck Requested';
+                          }
+                        }
+                        
+                        // Also check all actions for this row (in case the primary action isn't the AMC Resolution Approval)
+                        if (displayValue !== 'Recheck Requested') {
+                          const allActionsMap = (routedActionsMap as any).__allActions || {};
+                          const allActionsForRow = allActionsMap[rowKey] || [];
+                          const recheckAction = allActionsForRow.find((a: any) => 
+                            a.typeOfIssue === 'AMC Resolution Approval' && 
+                            String(a.status || '').toLowerCase() === 'in progress'
+                          );
+                          if (recheckAction) {
+                            displayValue = 'Recheck Requested';
+                          }
+                        }
+                        
+                        // Also check action rows directly (for RTU/Communication, O&M, AMC users viewing action rows)
+                        if (displayValue !== 'Recheck Requested' && row._typeOfIssue === 'AMC Resolution Approval') {
+                          const actionStatus = String(row._status || '').toLowerCase();
+                          if (actionStatus === 'in progress') {
+                            displayValue = 'Recheck Requested';
+                          }
+                        }
+                      }
                       
                       // IMPORTANT: If displayValue is just "Pending" or "-", the routing logic below will calculate
                       // the full routing info from actions. This ensures routing info is always shown when available.
@@ -4786,146 +5331,203 @@ export default function MyData() {
                       // For Equipment users: Check if action is resolved or rerouted,
                       // and show consolidated status including O&M and vendor teams
                       if (userRole === 'Equipment') {
-                        // CRITICAL: If Site Observations is "Resolved", Task Status MUST be "Resolved"
-                        // This takes priority over routing actions
-                        const siteObsRowKey = siteObservations[rowKey];
-                        const siteObsSiteCode = getSiteObservationValue(rowKey, row);
-                        if (siteObsRowKey === 'Resolved' || siteObsSiteCode === 'Resolved') {
-                          displayValue = 'Resolved';
-                          isResolvedTask = true;
-                        } else {
-                          const routedAction = routedActionsMap[rowKey];
-
-                          // CRITICAL: Always calculate Task Status from routing actions if available
-                          // This ensures routing info like "Pending at O&M Team; Pending at Vendor..." is shown
-                          // and updates when actions are resolved
-                          if (routedAction) {
-                          const actionStatus = String(routedAction.status || '').toLowerCase();
-                          const currentDestinationRole = routedAction.assignedToRole;
-                          const vendorNames: string[] = Array.isArray(routedAction._vendorNames)
-                            ? routedAction._vendorNames
-                            : [];
-
-                          if (actionStatus === 'completed') {
-                            // If this routed action represents AMC/vendor work that is now completed,
-                            // show it explicitly as resolved at the Vendor/AMC for Equipment users.
-                            // BUT also check if there are other pending routings (e.g., O&M) that should still be shown
-                            const issueType = (routedAction.typeOfIssue || '').toString();
-                            const isAMCIssue =
-                              routedAction._hasAMC ||
-                              currentDestinationRole === 'AMC' ||
-                              issueType === 'Spare Required' ||
-                              issueType === 'Faulty';
-
-                            const parts: string[] = [];
-
-                            if (isAMCIssue) {
-                              if (vendorNames.length > 0) {
-                                const uniqueVendors = Array.from(new Set(vendorNames)).join(', ');
-                                parts.push(`Resolved at Vendor (${uniqueVendors})`);
-                              } else {
-                                parts.push('Resolved at AMC Team');
-                              }
-                            } else {
-                              parts.push('Resolved');
-                            }
-                            
-                            // Check if there are other pending routings that should still be shown
-                            // O&M routing part (if still pending)
-                            if (routedAction._hasOM) {
-                              // Check if there's a separate O&M action that's still pending
-                              // We need to check allActionsMap to see if there's a pending O&M action
-                              const allActionsMap = (routedActionsMap as any).__allActions || {};
-                              const allActionsForRow = allActionsMap[rowKey] || [];
-                              
-                              // Also check all actions in routedActionsMap to find O&M actions
-                              const allRoutedActions = Object.values(routedActionsMap).filter((a: any) => 
-                                a && typeof a === 'object' && a._hasOM
-                              );
-                              
-                              // Check if any O&M action is still pending
-                              const hasPendingOM = allActionsForRow.some((a: any) => 
-                                a.assignedToRole === 'O&M' && 
-                                String(a.status || '').toLowerCase() !== 'completed'
-                              ) || allRoutedActions.some((a: any) => {
-                                // Match by row data to find O&M action for same row
-                                const aSiteCode = a.rowData?.['Site Code'] || a.rowData?.['SITE CODE'] || a.rowData?.['SiteCode'] || '';
-                                const rowSiteCode = row['Site Code'] || row['SITE CODE'] || row['SiteCode'] || '';
-                                return a.assignedToRole === 'O&M' && 
-                                       String(a.status || '').toLowerCase() !== 'completed' &&
-                                       aSiteCode === rowSiteCode &&
-                                       aSiteCode !== '';
-                              });
-                              
-                              if (hasPendingOM) {
-                                parts.push('Pending at O&M Team');
-                              }
-                            }
-                            
-                            // RTU/Communication routing part (if still pending)
-                            if (routedAction._hasRTU) {
-                              const allActionsMap = (routedActionsMap as any).__allActions || {};
-                              const allActionsForRow = allActionsMap[rowKey] || [];
-                              
-                              // Also check all actions in routedActionsMap to find RTU actions
-                              const allRoutedActions = Object.values(routedActionsMap).filter((a: any) => 
-                                a && typeof a === 'object' && a._hasRTU
-                              );
-                              
-                              const hasPendingRTU = allActionsForRow.some((a: any) => 
-                                a.assignedToRole === 'RTU/Communication' && 
-                                String(a.status || '').toLowerCase() !== 'completed'
-                              ) || allRoutedActions.some((a: any) => {
-                                // Match by row data to find RTU action for same row
-                                const aSiteCode = a.rowData?.['Site Code'] || a.rowData?.['SITE CODE'] || a.rowData?.['SiteCode'] || '';
-                                const rowSiteCode = row['Site Code'] || row['SITE CODE'] || row['SiteCode'] || '';
-                                return a.assignedToRole === 'RTU/Communication' && 
-                                       String(a.status || '').toLowerCase() !== 'completed' &&
-                                       aSiteCode === rowSiteCode &&
-                                       aSiteCode !== '';
-                              });
-                              
-                              if (hasPendingRTU) {
-                                parts.push('Pending at RTU/Communication Team');
-                              }
-                            }
-                            
-                            displayValue = parts.join('; ');
-                          } else {
-                            // Build consolidated status based on all routed actions for this row
-                            const parts: string[] = [];
-
-                            // O&M routing part
-                            if (routedAction._hasOM || currentDestinationRole === 'O&M') {
-                              parts.push('Pending at O&M Team');
-                            }
-
-                            // AMC / vendor routing part
-                            if (routedAction._hasAMC || currentDestinationRole === 'AMC') {
-                              if (vendorNames.length > 0) {
-                                const uniqueVendors = Array.from(new Set(vendorNames)).join(', ');
-                                parts.push(`Pending at Vendor (${uniqueVendors})`);
-                              } else {
-                                parts.push('Pending at AMC Team');
-                              }
-                            }
-
-                            // RTU/Communication routing part
-                            if (routedAction._hasRTU || currentDestinationRole === 'RTU/Communication') {
-                              parts.push('Pending at RTU/Communication Team');
-                            }
-
-                            if (parts.length > 0) {
-                              displayValue = parts.join('; ');
-                            } else if (currentDestinationRole) {
-                              // Fallback: Action has been rerouted to another team
-                              const destinationTeam = getTeamNameFromRole(currentDestinationRole);
-                              displayValue = `Pending at ${destinationTeam}`;
-                            } else {
-                              // Still at original destination - default to RTU/Communication for RTU/CS issues
-                              displayValue = 'Pending at RTU/Communication Team';
+                        const routedAction = routedActionsMap[rowKey];
+                        // Use the universal hasRecheckRequested flag - if already set, don't override
+                        let hasRecheckForEquipment = hasRecheckRequested;
+                        
+                        // PRIORITY 1: Check for Recheck Requested FIRST (takes priority over Resolved status)
+                        // Only check if not already found in universal check
+                        if (!hasRecheckForEquipment && siteCode && approvalsMap[siteCode]) {
+                          const approval = approvalsMap[siteCode];
+                          const approvalStatus = String(approval.status || '').toLowerCase();
+                          // Check for both "in progress" and "recheck requested" statuses
+                          if (approvalStatus === 'in progress' || approvalStatus === 'recheck requested') {
+                            displayValue = 'Recheck Requested';
+                            hasRecheckForEquipment = true;
+                            hasRecheckRequested = true; // Update universal flag too
+                            console.log(`[RENDER Equipment] Found Recheck Requested from approvalsMap for siteCode: ${siteCode}, approvalType: ${approval.approvalType}`);
+                          }
+                        }
+                        
+                        // Also check approval actions (AMC Resolution Approval, CCR Resolution Approval, etc.)
+                        if (!hasRecheckForEquipment && routedAction) {
+                          const isApprovalType = routedAction.typeOfIssue === 'AMC Resolution Approval' ||
+                                                 routedAction.typeOfIssue === 'CCR Resolution Approval' ||
+                                                 (routedAction.typeOfIssue && String(routedAction.typeOfIssue).toLowerCase().includes('approval'));
+                          if (isApprovalType) {
+                            const actionStatus = String(routedAction.status || '').toLowerCase();
+                            if (actionStatus === 'in progress' || actionStatus === 'recheck requested') {
+                              displayValue = 'Recheck Requested';
+                              hasRecheckForEquipment = true;
+                              hasRecheckRequested = true; // Update universal flag too
+                              console.log(`[RENDER Equipment] Found Recheck Requested by routedAction for siteCode: ${siteCode}, typeOfIssue: ${routedAction.typeOfIssue}`);
                             }
                           }
+                        }
+                        
+                        // Also check all actions for this row
+                        if (!hasRecheckForEquipment) {
+                          const allActionsMap = (routedActionsMap as any).__allActions || {};
+                          const allActionsForRow = allActionsMap[rowKey] || [];
+                          // Check for ANY approval type
+                          const recheckAction = allActionsForRow.find((a: any) => {
+                            const isApprovalType = a.typeOfIssue === 'AMC Resolution Approval' ||
+                                                   a.typeOfIssue === 'CCR Resolution Approval' ||
+                                                   (a.typeOfIssue && String(a.typeOfIssue).toLowerCase().includes('approval'));
+                            const actionStatus = String(a.status || '').toLowerCase();
+                            return isApprovalType && (actionStatus === 'in progress' || actionStatus === 'recheck requested');
+                          });
+                          if (recheckAction) {
+                            displayValue = 'Recheck Requested';
+                            hasRecheckForEquipment = true;
+                            hasRecheckRequested = true; // Update universal flag too
+                            console.log(`[RENDER Equipment] Found Recheck Requested in allActionsForRow for siteCode: ${siteCode}, typeOfIssue: ${recheckAction.typeOfIssue}`);
+                          }
+                        }
+                        
+                        // PRIORITY 2: If Site Observations is "Resolved" AND no recheck requested, Task Status MUST be "Resolved"
+                        // This takes priority over routing actions, but NOT over Recheck Requested
+                        // CRITICAL: Check both hasRecheckForEquipment AND hasRecheckRequested to ensure we don't override
+                        if (!hasRecheckForEquipment && !hasRecheckRequested && displayValue !== 'Recheck Requested') {
+                          const siteObsRowKey = siteObservations[rowKey];
+                          const siteObsSiteCode = getSiteObservationValue(rowKey, row);
+                          if (siteObsRowKey === 'Resolved' || siteObsSiteCode === 'Resolved') {
+                            displayValue = 'Resolved';
+                            isResolvedTask = true;
+                          } else {
+                            // CRITICAL: Always calculate Task Status from routing actions if available
+                            // This ensures routing info like "Pending at O&M Team; Pending at Vendor..." is shown
+                            // and updates when actions are resolved
+                            // BUT only if we haven't already set it to "Recheck Requested"
+                            // CRITICAL: Also check hasRecheckForEquipment flag to prevent override
+                            if (routedAction && displayValue !== 'Recheck Requested' && !hasRecheckForEquipment) {
+                              const actionStatus = String(routedAction.status || '').toLowerCase();
+                              const currentDestinationRole = routedAction.assignedToRole;
+                              const vendorNames: string[] = Array.isArray(routedAction._vendorNames)
+                                ? routedAction._vendorNames
+                                : [];
+
+                              if (actionStatus === 'completed') {
+                                // If this routed action represents AMC/vendor work that is now completed,
+                                // show it explicitly as resolved at the Vendor/AMC for Equipment users.
+                                // BUT also check if there are other pending routings (e.g., O&M) that should still be shown
+                                const issueType = (routedAction.typeOfIssue || '').toString();
+                                const isAMCIssue =
+                                  routedAction._hasAMC ||
+                                  currentDestinationRole === 'AMC' ||
+                                  issueType === 'Spare Required' ||
+                                  issueType === 'Faulty';
+
+                                const parts: string[] = [];
+
+                                if (isAMCIssue) {
+                                  if (vendorNames.length > 0) {
+                                    const uniqueVendors = Array.from(new Set(vendorNames)).join(', ');
+                                    parts.push(`Resolved at Vendor (${uniqueVendors})`);
+                                  } else {
+                                    parts.push('Resolved at AMC Team');
+                                  }
+                                } else {
+                                  parts.push('Resolved');
+                                }
+                                
+                                // Check if there are other pending routings that should still be shown
+                                // O&M routing part (if still pending)
+                                if (routedAction._hasOM) {
+                                  // Check if there's a separate O&M action that's still pending
+                                  // We need to check allActionsMap to see if there's a pending O&M action
+                                  const allActionsMap = (routedActionsMap as any).__allActions || {};
+                                  const allActionsForRow = allActionsMap[rowKey] || [];
+                                  
+                                  // Also check all actions in routedActionsMap to find O&M actions
+                                  const allRoutedActions = Object.values(routedActionsMap).filter((a: any) => 
+                                    a && typeof a === 'object' && a._hasOM
+                                  );
+                                  
+                                  // Check if any O&M action is still pending
+                                  const hasPendingOM = allActionsForRow.some((a: any) => 
+                                    a.assignedToRole === 'O&M' && 
+                                    String(a.status || '').toLowerCase() !== 'completed'
+                                  ) || allRoutedActions.some((a: any) => {
+                                    // Match by row data to find O&M action for same row
+                                    const aSiteCode = a.rowData?.['Site Code'] || a.rowData?.['SITE CODE'] || a.rowData?.['SiteCode'] || '';
+                                    const rowSiteCode = row['Site Code'] || row['SITE CODE'] || row['SiteCode'] || '';
+                                    return a.assignedToRole === 'O&M' && 
+                                           String(a.status || '').toLowerCase() !== 'completed' &&
+                                           aSiteCode === rowSiteCode &&
+                                           aSiteCode !== '';
+                                  });
+                                  
+                                  if (hasPendingOM) {
+                                    parts.push('Pending at O&M Team');
+                                  }
+                                }
+                                
+                                // RTU/Communication routing part (if still pending)
+                                if (routedAction._hasRTU) {
+                                  const allActionsMap = (routedActionsMap as any).__allActions || {};
+                                  const allActionsForRow = allActionsMap[rowKey] || [];
+                                  
+                                  // Also check all actions in routedActionsMap to find RTU actions
+                                  const allRoutedActions = Object.values(routedActionsMap).filter((a: any) => 
+                                    a && typeof a === 'object' && a._hasRTU
+                                  );
+                                  
+                                  const hasPendingRTU = allActionsForRow.some((a: any) => 
+                                    a.assignedToRole === 'RTU/Communication' && 
+                                    String(a.status || '').toLowerCase() !== 'completed'
+                                  ) || allRoutedActions.some((a: any) => {
+                                    // Match by row data to find RTU action for same row
+                                    const aSiteCode = a.rowData?.['Site Code'] || a.rowData?.['SITE CODE'] || a.rowData?.['SiteCode'] || '';
+                                    const rowSiteCode = row['Site Code'] || row['SITE CODE'] || row['SiteCode'] || '';
+                                    return a.assignedToRole === 'RTU/Communication' && 
+                                           String(a.status || '').toLowerCase() !== 'completed' &&
+                                           aSiteCode === rowSiteCode &&
+                                           aSiteCode !== '';
+                                  });
+                                  
+                                  if (hasPendingRTU) {
+                                    parts.push('Pending at RTU/Communication Team');
+                                  }
+                                }
+                                
+                                displayValue = parts.join('; ');
+                              } else {
+                                // Build consolidated status based on all routed actions for this row
+                                const parts: string[] = [];
+
+                                // O&M routing part
+                                if (routedAction._hasOM || currentDestinationRole === 'O&M') {
+                                  parts.push('Pending at O&M Team');
+                                }
+
+                                // AMC / vendor routing part
+                                if (routedAction._hasAMC || currentDestinationRole === 'AMC') {
+                                  if (vendorNames.length > 0) {
+                                    const uniqueVendors = Array.from(new Set(vendorNames)).join(', ');
+                                    parts.push(`Pending at Vendor (${uniqueVendors})`);
+                                  } else {
+                                    parts.push('Pending at AMC Team');
+                                  }
+                                }
+
+                                // RTU/Communication routing part
+                                if (routedAction._hasRTU || currentDestinationRole === 'RTU/Communication') {
+                                  parts.push('Pending at RTU/Communication Team');
+                                }
+
+                                if (parts.length > 0) {
+                                  displayValue = parts.join('; ');
+                                } else if (currentDestinationRole) {
+                                  // Fallback: Action has been rerouted to another team
+                                  const destinationTeam = getTeamNameFromRole(currentDestinationRole);
+                                  displayValue = `Pending at ${destinationTeam}`;
+                                } else {
+                                  // Still at original destination - default to RTU/Communication for RTU/CS issues
+                                  displayValue = 'Pending at RTU/Communication Team';
+                                }
+                              }
+                            }
                           }
                         }
                       }
@@ -5071,6 +5673,18 @@ export default function MyData() {
                       // Task Status should ALWAYS come from routing actions in MY OFFLINE SITES
                       // The routing logic above calculates the full routing info like "Pending at O&M Team; Pending at Vendor..."
                       // We do NOT use Site Code-based Task Status as it would override routing information
+                      
+                      // Final debug logging before render
+                      if (siteCode === '5W1896') {
+                        console.log(`[RENDER FINAL 5W1896] Before render:`, {
+                          displayValue,
+                          hasRecheckRequested,
+                          isResolvedTask,
+                          isRecheckRequested: lowerDisplayValue === 'recheck requested',
+                          siteObsRowKey: siteObservations[rowKey],
+                          siteObsSiteCode: getSiteObservationValue(rowKey, row)
+                        });
+                      }
                       
                       return (
                         <td
@@ -5876,6 +6490,7 @@ export default function MyData() {
             if (e.target === e.currentTarget) {
               setShowSiteObservationsDialog(false);
               setSelectedSiteObservationRowKey('');
+              setSelectedSiteObservationRowData(null); // Clear stored row data
               setSiteObservationsStatus('');
               setIsTypeOfSpareDropdownOpen(false);
               setSiteObservationsDialogData({
@@ -6423,6 +7038,7 @@ export default function MyData() {
                 onClick={() => {
                   setShowSiteObservationsDialog(false);
                   setSelectedSiteObservationRowKey('');
+                  setSelectedSiteObservationRowData(null); // Clear stored row data
                   setSiteObservationsStatus('');
                   setSiteObservationsDialogData({
                     remarks: '',
@@ -6487,19 +7103,64 @@ export default function MyData() {
                   // Give React time to update the UI
                   setTimeout(async () => {
                     try {
-                      // Find the row first to check if it's an action row
-                      const findRowIndex = searchedRows.findIndex((r: any) => {
-                        const currentRowKey = generateRowKey(selectedFile, r, headers);
-                        return currentRowKey === selectedSiteObservationRowKey;
-                      });
+                      // CRITICAL: Use stored row data first (saved when dialog opened)
+                      // This avoids "Row not found" errors if row gets filtered out after dialog opens
+                      let rowData: any = selectedSiteObservationRowData;
+                      
+                      // If stored row data exists, verify it matches the rowKey
+                      if (rowData) {
+                        const storedRowKey = generateRowKey(selectedFile, rowData, headers);
+                        if (storedRowKey === selectedSiteObservationRowKey) {
+                          console.log(`[SITE OBS] Using stored row data for rowKey: ${selectedSiteObservationRowKey}`);
+                        } else {
+                          console.warn(`[SITE OBS] Stored row data rowKey mismatch. Stored: ${storedRowKey}, Expected: ${selectedSiteObservationRowKey}. Will search for row.`);
+                          rowData = null; // Mismatch, need to search
+                        }
+                      }
+                      
+                      // If no stored row data or mismatch, search for the row
+                      if (!rowData) {
+                        // Check in searchedRows first (filtered/search results), then fallback to rows (all rows)
+                        let findRowIndex = searchedRows.findIndex((r: any) => {
+                          const currentRowKey = generateRowKey(selectedFile, r, headers);
+                          return currentRowKey === selectedSiteObservationRowKey;
+                        });
 
-                      if (findRowIndex === -1) {
+                        if (findRowIndex !== -1) {
+                          rowData = searchedRows[findRowIndex];
+                          console.log(`[SITE OBS] Row found in searchedRows, rowKey: ${selectedSiteObservationRowKey}`);
+                        } else {
+                          // Row not in searchedRows (might be filtered out or search doesn't match)
+                          // Try to find it in the original rows array
+                          const findRowIndexInAll = rows.findIndex((r: any) => {
+                            const currentRowKey = generateRowKey(selectedFile, r, headers);
+                            return currentRowKey === selectedSiteObservationRowKey;
+                          });
+                          
+                          if (findRowIndexInAll !== -1) {
+                            rowData = rows[findRowIndexInAll];
+                            console.log(`[SITE OBS] Row found in all rows (not in searchedRows), rowKey: ${selectedSiteObservationRowKey}`);
+                          } else {
+                            // Also check in actionsRows (for RTU/Communication, O&M, AMC users)
+                            const findRowIndexInActions = actionsRows.findIndex((r: any) => {
+                              const currentRowKey = generateRowKey(selectedFile, r, headers);
+                              return currentRowKey === selectedSiteObservationRowKey;
+                            });
+                            
+                            if (findRowIndexInActions !== -1) {
+                              rowData = actionsRows[findRowIndexInActions];
+                              console.log(`[SITE OBS] Row found in actionsRows, rowKey: ${selectedSiteObservationRowKey}`);
+                            }
+                          }
+                        }
+                      }
+
+                      if (!rowData) {
+                        console.error(`[SITE OBS] Row not found in any array. rowKey: ${selectedSiteObservationRowKey}, searchedRows: ${searchedRows.length}, rows: ${rows.length}, actionsRows: ${actionsRows.length}, hasStoredRowData: ${!!selectedSiteObservationRowData}`);
                         alert('Row not found. Please refresh and try again.');
                         setIsSubmittingSiteObservations(false);
                         return;
                       }
-
-                      const rowData = searchedRows[findRowIndex];
                       
                       // Check if O&M user selected RTU Issue or CS Issue - auto-route to RTU/Communication
                       const isRTUIssueOrCSIssue = (siteObservationsDialogData.typeOfIssue === 'RTU Issue' || siteObservationsDialogData.typeOfIssue === 'CS Issue');
@@ -6716,6 +7377,7 @@ export default function MyData() {
                               // Close dialog
                               setShowSiteObservationsDialog(false);
                               setSelectedSiteObservationRowKey('');
+                              setSelectedSiteObservationRowData(null); // Clear stored row data
                               setSiteObservationsStatus('');
                               setSiteObservationsDialogData({
                                 remarks: '',
@@ -7816,18 +8478,64 @@ export default function MyData() {
                     // Find row data if not already found (for non-RTU issues)
                     if (!isRTUIssue) {
                       const [_fileId, ..._rowIdentifierParts] = selectedSiteObservationRowKey.split('-');
-                      const rowIndex = searchedRows.findIndex((row: any) => {
-                        const currentRowKey = generateRowKey(selectedFile, row, headers);
-                        return currentRowKey === selectedSiteObservationRowKey;
-                      });
+                      
+                      // CRITICAL: Use stored row data first (saved when dialog opened)
+                      let rowData: any = selectedSiteObservationRowData;
+                      
+                      // If stored row data exists, verify it matches the rowKey
+                      if (rowData) {
+                        const storedRowKey = generateRowKey(selectedFile, rowData, headers);
+                        if (storedRowKey === selectedSiteObservationRowKey) {
+                          console.log(`[SITE OBS] Using stored row data for rowKey: ${selectedSiteObservationRowKey}`);
+                        } else {
+                          console.warn(`[SITE OBS] Stored row data rowKey mismatch. Stored: ${storedRowKey}, Expected: ${selectedSiteObservationRowKey}. Will search for row.`);
+                          rowData = null; // Mismatch, need to search
+                        }
+                      }
+                      
+                      // If no stored row data or mismatch, search for the row
+                      if (!rowData) {
+                        // Check in searchedRows first, then fallback to rows and actionsRows
+                        let rowIndex = searchedRows.findIndex((row: any) => {
+                          const currentRowKey = generateRowKey(selectedFile, row, headers);
+                          return currentRowKey === selectedSiteObservationRowKey;
+                        });
 
-                      if (rowIndex === -1) {
+                        if (rowIndex !== -1) {
+                          rowData = searchedRows[rowIndex];
+                          console.log(`[SITE OBS] Row found in searchedRows, rowKey: ${selectedSiteObservationRowKey}`);
+                        } else {
+                          // Row not in searchedRows (might be filtered out or search doesn't match)
+                          // Try to find it in the original rows array
+                          const rowIndexInAll = rows.findIndex((row: any) => {
+                            const currentRowKey = generateRowKey(selectedFile, row, headers);
+                            return currentRowKey === selectedSiteObservationRowKey;
+                          });
+                          
+                          if (rowIndexInAll !== -1) {
+                            rowData = rows[rowIndexInAll];
+                            console.log(`[SITE OBS] Row found in all rows (not in searchedRows), rowKey: ${selectedSiteObservationRowKey}`);
+                          } else {
+                            // Also check in actionsRows (for RTU/Communication, O&M, AMC users)
+                            const rowIndexInActions = actionsRows.findIndex((row: any) => {
+                              const currentRowKey = generateRowKey(selectedFile, row, headers);
+                              return currentRowKey === selectedSiteObservationRowKey;
+                            });
+                            
+                            if (rowIndexInActions !== -1) {
+                              rowData = actionsRows[rowIndexInActions];
+                              console.log(`[SITE OBS] Row found in actionsRows, rowKey: ${selectedSiteObservationRowKey}`);
+                            }
+                          }
+                        }
+                      }
+
+                      if (!rowData) {
+                        console.error(`[SITE OBS] Row not found in any array. rowKey: ${selectedSiteObservationRowKey}, searchedRows: ${searchedRows.length}, rows: ${rows.length}, actionsRows: ${actionsRows.length}, hasStoredRowData: ${!!selectedSiteObservationRowData}`);
                         alert('Row not found. Please refresh and try again.');
                         setIsSubmittingSiteObservations(false);
                         return;
                       }
-
-                      const rowData = searchedRows[rowIndex];
                       
                       console.log('Site Observations submitted:', {
                         rowKey: selectedSiteObservationRowKey,
@@ -7924,116 +8632,160 @@ export default function MyData() {
                         }
                         
                         // If this is an action row, update action status via API
-                        const rowIndex = searchedRows.findIndex((row: any) => {
-                          const currentRowKey = generateRowKey(selectedFile, row, headers);
-                          return currentRowKey === selectedSiteObservationRowKey;
-                        });
-                        
-                        if (rowIndex >= 0) {
-                          const row = searchedRows[rowIndex];
-                          if (row._actionId) {
-                            // Update action status to Completed – backend will route to CCR where required
-                            const token = localStorage.getItem('token');
-                            if (token) {
-                              try {
-                                const updateResponse = await fetch(`${API_BASE}/api/actions/${row._actionId}/status`, {
-                                  method: 'PUT',
-                                  headers: {
-                                    'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${token}`
-                                  },
-                                  body: JSON.stringify({
-                                    status: 'Completed',
-                                    remarks: siteObservationsDialogData.remarks || ''
-                                  })
-                                });
-                                
-                                if (updateResponse.ok) {
-                                  const updateResult = await updateResponse.json();
-                                  console.log('Action status updated to Completed:', updateResult);
-                                  
-                                  // Log activity for resolved action
-                                  const siteCode = row['Site Code'] || row['SITE CODE'] || row['Code'] || row['CODE'] || row['SiteCode'] || '';
-                                  const siteName = row['Site Name'] || row['SITE NAME'] || row['SiteName'] || row['Name'] || '';
-                                  const rowKey = generateRowKey(selectedFile, row, headers);
-                                  
-                                  logActivity({
-                                    action: 'Action Resolved',
-                                    typeOfIssue: siteObservationsDialogData.typeOfIssue || '',
-                                    routingTeam: row._routingTeam || undefined,
-                                    remarks: siteObservationsDialogData.remarks || '',
-                                    siteName: String(siteName),
-                                    siteCode: String(siteCode),
-                                    rowKey: rowKey,
-                                    sourceFileId: selectedFile,
-                                    photosCount: photoData.length,
-                                    photos: photoData.length > 0 ? photoData : undefined,
-                                    status: 'Resolved',
-                                    priority: 'Medium'
-                                  });
-                                } else {
-                                  console.error('Failed to update action status');
-                                }
-                              } catch (error) {
-                                console.error('Error updating action status:', error);
+                        // Use stored row data first, then search if needed
+                        let row: any = selectedSiteObservationRowData;
+                        if (!row || generateRowKey(selectedFile, row, headers) !== selectedSiteObservationRowKey) {
+                          const rowIndex = searchedRows.findIndex((r: any) => {
+                            const currentRowKey = generateRowKey(selectedFile, r, headers);
+                            return currentRowKey === selectedSiteObservationRowKey;
+                          });
+                          
+                          if (rowIndex >= 0) {
+                            row = searchedRows[rowIndex];
+                          } else {
+                            // Fallback to rows array
+                            const rowIndexInAll = rows.findIndex((r: any) => {
+                              const currentRowKey = generateRowKey(selectedFile, r, headers);
+                              return currentRowKey === selectedSiteObservationRowKey;
+                            });
+                            if (rowIndexInAll >= 0) {
+                              row = rows[rowIndexInAll];
+                            } else {
+                              // Fallback to actionsRows
+                              const rowIndexInActions = actionsRows.findIndex((r: any) => {
+                                const currentRowKey = generateRowKey(selectedFile, r, headers);
+                                return currentRowKey === selectedSiteObservationRowKey;
+                              });
+                              if (rowIndexInActions >= 0) {
+                                row = actionsRows[rowIndexInActions];
                               }
                             }
-                          } else if (userRole !== 'AMC') {
-                            // No existing action: create direct CCR approval for non-AMC roles
+                          }
+                        }
+                        
+                        if (row) {
+                          // Create CCR approval when marking as "Resolved" (for non-AMC users)
+                          if (userRole !== 'AMC') {
+                            console.log('[CCR APPROVAL] Starting approval creation process for Resolved status', {
+                              userRole,
+                              rowKey: selectedSiteObservationRowKey,
+                              hasRow: !!row
+                            });
+                            
                             const token = localStorage.getItem('token');
                             if (token) {
                               try {
-                                const ccrApprovalRowData = {
-                                  ...rowData,
-                                  __supportDocuments: documentsData,
-                                  __siteObservationRowKey: selectedSiteObservationRowKey,
-                                  __siteObservationStatus: 'Resolved',
-                                  __siteObservationRemarks: siteObservationsDialogData.remarks || ''
-                                };
+                                // Extract siteCode from rowData or row
+                                const siteCode = rowData['Site Code'] || rowData['SITE CODE'] || rowData['SiteCode'] || rowData['Site_Code'] || row['Site Code'] || row['SITE CODE'] || row['SiteCode'] || '';
+                                
+                                if (!siteCode) {
+                                  console.error('[CCR APPROVAL] Cannot create approval - siteCode not found');
+                                } else {
+                                  // Find row index for originalRowIndex parameter
+                                  const findRowIndex = searchedRows.findIndex((r: any) => {
+                                    const currentRowKey = generateRowKey(selectedFile, r, headers);
+                                    return currentRowKey === selectedSiteObservationRowKey;
+                                  });
+                                  
+                                  // Create CCR approval via action submit (backend will create approval automatically)
+                                  const ccrApprovalRowData = {
+                                    ...rowData,
+                                    __supportDocuments: documentsData,
+                                    __siteObservationRowKey: selectedSiteObservationRowKey,
+                                    __siteObservationStatus: 'Resolved',
+                                    __siteObservationRemarks: siteObservationsDialogData.remarks || ''
+                                  };
 
-                                const ccrResponse = await fetch(`${API_BASE}/api/actions/submit`, {
-                                  method: 'POST',
-                                  headers: {
-                                    'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${token}`
-                                  },
-                                  body: JSON.stringify({
-                                    rowData: ccrApprovalRowData,
-                                    headers,
-                                    routing: 'CCR Team',
-                                    typeOfIssue: 'CCR Resolution Approval',
-                                    remarks: siteObservationsDialogData.remarks || '',
-                                    priority: 'Medium',
-                                    photo: allPhotosData,
-                                    sourceFileId: selectedFile,
-                                    originalRowIndex: rowIndex >= 0 ? rowIndex : null,
-                                    rowKey: selectedSiteObservationRowKey
-                                  })
-                                });
+                                  console.log(`[CCR APPROVAL] Creating CCR approval for siteCode: ${siteCode}`);
+                                  const ccrResponse = await fetch(`${API_BASE}/api/actions/submit`, {
+                                    method: 'POST',
+                                    headers: {
+                                      'Content-Type': 'application/json',
+                                      'Authorization': `Bearer ${token}`
+                                    },
+                                    body: JSON.stringify({
+                                      rowData: ccrApprovalRowData,
+                                      headers,
+                                      routing: 'CCR Team',
+                                      typeOfIssue: 'CCR Resolution Approval',
+                                      remarks: siteObservationsDialogData.remarks || '',
+                                      priority: 'Medium',
+                                      photo: allPhotosData,
+                                      sourceFileId: selectedFile,
+                                      originalRowIndex: findRowIndex >= 0 ? findRowIndex : null,
+                                      rowKey: selectedSiteObservationRowKey
+                                    })
+                                  });
 
-                                const ccrResult = await ccrResponse.json().catch(() => null);
+                                  const ccrResult = await ccrResponse.json().catch(() => null);
 
-                                if (!ccrResponse.ok) {
-                                  const errorMsg = ccrResult?.error || 'Failed to send approval request to CCR team.';
-                                  console.error('CCR approval creation failed:', errorMsg);
-                                  // Don't show division-specific error for CCR since it's not division-specific
-                                  if (!errorMsg.includes('division')) {
-                                    alert(`Warning: ${errorMsg}`);
+                                  if (ccrResponse.ok) {
+                                    console.log(`[CCR APPROVAL] ✓ Successfully created CCR approval for siteCode: ${siteCode}`, {
+                                      actionId: ccrResult?.action?._id || ccrResult?.action?.id,
+                                      assignedToUserId: ccrResult?.action?.assignedToUserId
+                                    });
                                   } else {
-                                    alert(`Warning: ${errorMsg.replace(/division.*?\./gi, '')}`);
+                                    const errorMsg = ccrResult?.error || 'Failed to send approval request to CCR team.';
+                                    console.error(`[CCR APPROVAL] ✗ Failed to create approval for siteCode: ${siteCode}`, errorMsg);
+                                    // Don't block the UI, but log the error
+                                    if (!errorMsg.includes('already exists') && !errorMsg.includes('duplicate')) {
+                                      console.warn('[CCR APPROVAL] Approval creation failed, but continuing with site observation update');
+                                    }
                                   }
-                                  throw new Error(errorMsg);
-                                }
-
-                                console.log('Created CCR approval action for resolved observation:', ccrResult?.action?._id || ccrResult?.action?.id);
-                                if (ccrResult?.action?._id || ccrResult?.action?.id) {
-                                  console.log('CCR approval successfully created and assigned to:', ccrResult?.action?.assignedToUserId);
                                 }
                               } catch (error: any) {
-                                console.error('Error creating CCR approval request:', error);
+                                console.error('[CCR APPROVAL] Error creating CCR approval request:', error);
                                 // Don't block the UI, but log the error
-                                if (error?.message && !error.message.includes('Warning:')) {
-                                  console.warn('CCR approval creation failed, but continuing with site observation update');
+                              }
+                            } else {
+                              console.warn('[CCR APPROVAL] No token found, cannot create approval');
+                            }
+                            
+                            // Also update existing action status if it exists
+                            if (row._actionId) {
+                              const token = localStorage.getItem('token');
+                              if (token) {
+                                try {
+                                  const updateResponse = await fetch(`${API_BASE}/api/actions/${row._actionId}/status`, {
+                                    method: 'PUT',
+                                    headers: {
+                                      'Content-Type': 'application/json',
+                                      'Authorization': `Bearer ${token}`
+                                    },
+                                    body: JSON.stringify({
+                                      status: 'Completed',
+                                      remarks: siteObservationsDialogData.remarks || ''
+                                    })
+                                  });
+                                  
+                                  if (updateResponse.ok) {
+                                    const updateResult = await updateResponse.json();
+                                    console.log('Action status updated to Completed:', updateResult);
+                                    
+                                    // Log activity for resolved action
+                                    const siteCode = row['Site Code'] || row['SITE CODE'] || row['Code'] || row['CODE'] || row['SiteCode'] || '';
+                                    const siteName = row['Site Name'] || row['SITE NAME'] || row['SiteName'] || row['Name'] || '';
+                                    const rowKey = generateRowKey(selectedFile, row, headers);
+                                    
+                                    logActivity({
+                                      action: 'Action Resolved',
+                                      typeOfIssue: siteObservationsDialogData.typeOfIssue || '',
+                                      routingTeam: row._routingTeam || undefined,
+                                      remarks: siteObservationsDialogData.remarks || '',
+                                      siteName: String(siteName),
+                                      siteCode: String(siteCode),
+                                      rowKey: rowKey,
+                                      sourceFileId: selectedFile,
+                                      photosCount: photoData.length,
+                                      photos: photoData.length > 0 ? photoData : undefined,
+                                      status: 'Resolved',
+                                      priority: 'Medium'
+                                    });
+                                  } else {
+                                    console.error('Failed to update action status');
+                                  }
+                                } catch (error) {
+                                  console.error('Error updating action status:', error);
                                 }
                               }
                             }
@@ -8252,13 +9004,38 @@ export default function MyData() {
                     // For RTU/Communication users: Save action updates to database if this is an action row
                     // Note: When resolving, the status update is already handled above (line 4878-4924)
                     // This code handles remarks updates for pending actions and ensures remarks are saved when resolving
-                    const rowIndex = searchedRows.findIndex((row: any) => {
-                      const currentRowKey = generateRowKey(selectedFile, row, headers);
-                      return currentRowKey === selectedSiteObservationRowKey;
-                    });
+                    // Use stored row data first, then search if needed
+                    let row: any = selectedSiteObservationRowData;
+                    if (!row || generateRowKey(selectedFile, row, headers) !== selectedSiteObservationRowKey) {
+                      const rowIndex = searchedRows.findIndex((r: any) => {
+                        const currentRowKey = generateRowKey(selectedFile, r, headers);
+                        return currentRowKey === selectedSiteObservationRowKey;
+                      });
+                      
+                      if (rowIndex >= 0) {
+                        row = searchedRows[rowIndex];
+                      } else {
+                        // Fallback to rows array
+                        const rowIndexInAll = rows.findIndex((r: any) => {
+                          const currentRowKey = generateRowKey(selectedFile, r, headers);
+                          return currentRowKey === selectedSiteObservationRowKey;
+                        });
+                        if (rowIndexInAll >= 0) {
+                          row = rows[rowIndexInAll];
+                        } else {
+                          // Fallback to actionsRows
+                          const rowIndexInActions = actionsRows.findIndex((r: any) => {
+                            const currentRowKey = generateRowKey(selectedFile, r, headers);
+                            return currentRowKey === selectedSiteObservationRowKey;
+                          });
+                          if (rowIndexInActions >= 0) {
+                            row = actionsRows[rowIndexInActions];
+                          }
+                        }
+                      }
+                    }
                     
-                    if (rowIndex >= 0 && userRole === 'RTU/Communication') {
-                      const row = searchedRows[rowIndex];
+                    if (row && userRole === 'RTU/Communication') {
                       if (row._actionId) {
                         // If resolving, the status update is already handled above, but we should ensure remarks are saved
                         // If pending, save both remarks and status
@@ -8343,13 +9120,38 @@ export default function MyData() {
                       // CRITICAL: Auto-save to database for both Resolved and Pending status
                       // This ensures data is immediately persisted without requiring a manual save button
                       try {
-                        const rowIndex = searchedRows.findIndex((row: any) => {
-                          const currentRowKey = generateRowKey(selectedFile, row, headers);
-                          return currentRowKey === selectedSiteObservationRowKey;
-                        });
+                        // Use stored row data first, then search if needed
+                        let row: any = selectedSiteObservationRowData;
+                        if (!row || generateRowKey(selectedFile, row, headers) !== selectedSiteObservationRowKey) {
+                          const rowIndex = searchedRows.findIndex((r: any) => {
+                            const currentRowKey = generateRowKey(selectedFile, r, headers);
+                            return currentRowKey === selectedSiteObservationRowKey;
+                          });
+                          
+                          if (rowIndex >= 0) {
+                            row = searchedRows[rowIndex];
+                          } else {
+                            // Fallback to rows array
+                            const rowIndexInAll = rows.findIndex((r: any) => {
+                              const currentRowKey = generateRowKey(selectedFile, r, headers);
+                              return currentRowKey === selectedSiteObservationRowKey;
+                            });
+                            if (rowIndexInAll >= 0) {
+                              row = rows[rowIndexInAll];
+                            } else {
+                              // Fallback to actionsRows
+                              const rowIndexInActions = actionsRows.findIndex((r: any) => {
+                                const currentRowKey = generateRowKey(selectedFile, r, headers);
+                                return currentRowKey === selectedSiteObservationRowKey;
+                              });
+                              if (rowIndexInActions >= 0) {
+                                row = actionsRows[rowIndexInActions];
+                              }
+                            }
+                          }
+                        }
                         
-                        if (rowIndex >= 0) {
-                          const row = searchedRows[rowIndex];
+                        if (row) {
                           const siteCode = row['Site Code'] || 
                                           row['SITE CODE'] || 
                                           row['SiteCode'] || 
@@ -8523,6 +9325,7 @@ export default function MyData() {
                     // Close dialog
                       setShowSiteObservationsDialog(false);
                       setSelectedSiteObservationRowKey('');
+                      setSelectedSiteObservationRowData(null); // Clear stored row data
                       setSiteObservationsStatus('');
                       setSiteObservationsDialogData({
                       remarks: '',

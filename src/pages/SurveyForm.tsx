@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import AutocompleteInput from '../components/AutocompleteInput';
+import { API_BASE } from '../utils/api';
 
 export default function SurveyForm() {
   const [images, setImages] = useState<string[]>([]);
@@ -212,7 +213,7 @@ export default function SurveyForm() {
         throw new Error('Authentication required. Please login again.');
       }
 
-      const response = await fetch(`http://localhost:5000/api/inspection/sitecode/${encodeURIComponent(siteCode)}`, {
+      const response = await fetch(`${API_BASE}/api/inspection/sitecode/${encodeURIComponent(siteCode)}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -843,7 +844,7 @@ export default function SurveyForm() {
         pdfFile: pdfFile ? await fileToBase64(pdfFile) : null
       };
 
-      const response = await fetch('http://localhost:5000/api/inspection/submit', {
+      const response = await fetch(`${API_BASE}/api/inspection/submit`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

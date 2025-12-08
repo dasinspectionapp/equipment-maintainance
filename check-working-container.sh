@@ -46,3 +46,7 @@ echo "docker inspect <container-name> | grep -A 30 'Config\|NetworkSettings'"
 
 
 
+
+
+
+

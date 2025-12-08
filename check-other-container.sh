@@ -29,3 +29,7 @@ echo "  docker inspect <container-name> | grep -A 5 NetworkMode"
 
 
 
+
+
+
+
