@@ -3039,9 +3039,6 @@ export default function MyData() {
     setTaskStatus(prev => {
       let changed = false;
       const updated = { ...prev };
-
-      // Get all actions map
-      const allActionsMap = (routedActionsMap as any).__allActions || {};
       
       // First, check ALL rows where Site Observations is "Resolved" and ensure Task Status is "Resolved"
       // This handles the case where user selects "Resolved" in Site Observations dropdown
@@ -8563,6 +8560,12 @@ export default function MyData() {
                           if (!token) {
                             throw new Error('Authentication required. Please login again.');
                           }
+
+                          // Find row index for originalRowIndex parameter
+                          const findRowIndex = searchedRows.findIndex((r: any) => {
+                            const currentRowKey = generateRowKey(selectedFile, r, headers);
+                            return currentRowKey === selectedSiteObservationRowKey;
+                          });
 
                           const approvalRowData = {
                             ...rowData,
