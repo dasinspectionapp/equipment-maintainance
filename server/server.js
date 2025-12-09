@@ -71,6 +71,8 @@ app.use(cors({
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Health check endpoints
+// Always return success for health check - server is running even if MongoDB is not connected yet
+// This allows Docker health checks to pass while MongoDB connection is being established
 app.get('/health', (req, res) => {
   const mongoState = mongoose.connection.readyState;
   const mongoStates = {
@@ -80,7 +82,9 @@ app.get('/health', (req, res) => {
     3: 'disconnecting'
   };
   
-  res.json({
+  // Always return 200 OK - server is running
+  // MongoDB connection status is informational only
+  res.status(200).json({
     success: true,
     message: 'Server is running',
     timestamp: new Date().toISOString(),

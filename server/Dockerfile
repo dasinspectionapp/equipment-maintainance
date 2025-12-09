@@ -1,6 +1,9 @@
 # Use Node LTS
 FROM node:20
 
+# Install curl for health checks
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
 # Create app directory
 WORKDIR /app
 
