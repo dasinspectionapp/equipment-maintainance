@@ -6,6 +6,17 @@ import { fileURLToPath } from 'url';
 import os from 'os';
 import mongoose from 'mongoose';
 import connectDB from './config/db.js';
+
+// Handle uncaught exceptions and unhandled rejections to prevent server crashes
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  // Don't exit - let the server continue running
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  // Don't exit - let the server continue running
+});
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 import { protect } from './middleware/authMiddleware.js';
 import authRoutes from './routes/authRoutes.js';
