@@ -50,7 +50,7 @@ router.put('/uploads/fields/:fieldId/order', authorize('Admin'), updateFieldOrde
 router.get('/elibrary', authorize('Admin'), getAllResourcesAdmin);
 router.post('/elibrary', authorize('Admin'), fileUpload({ 
   limits: { 
-    fileSize: 100 * 1024 * 1024, // 100MB limit
+    fileSize: 200 * 1024 * 1024, // 200MB limit (increased from 100MB)
     files: 1 // Allow only 1 file
   },
   abortOnLimit: false, // Don't abort, return error instead
@@ -59,7 +59,7 @@ router.post('/elibrary', authorize('Admin'), fileUpload({
   limitHandler: (req, res, next) => {
     return res.status(413).json({ 
       success: false, 
-      error: 'File size too large. Maximum size is 100MB.' 
+      error: 'File size too large. Maximum size is 200MB.' 
     });
   }
 }), createResource);
