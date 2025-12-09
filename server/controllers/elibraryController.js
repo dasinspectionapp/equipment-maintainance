@@ -7,8 +7,16 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const uploadsDir = path.join(__dirname, '..', 'uploads', 'elibrary');
 
-// Ensure uploads directory exists
-await fs.mkdir(uploadsDir, { recursive: true }).catch(() => {});
+// Helper function to ensure uploads directory exists
+const ensureUploadsDir = async () => {
+  try {
+    await fs.mkdir(uploadsDir, { recursive: true });
+    console.log('E-Library uploads directory ensured:', uploadsDir);
+  } catch (error) {
+    console.error('Error creating uploads directory:', error);
+    throw error;
+  }
+};
 
 // @desc    Get all e-library resources (public - for landing page)
 // @route   GET /api/elibrary
@@ -84,12 +92,35 @@ export const getResource = async (req, res) => {
 // @access  Admin only
 export const createResource = async (req, res) => {
   try {
-    const { title, description, category, tags, link } = req.body;
+    // Handle both JSON and form-data requests
+    // For form-data, req.body contains string values that need to be parsed
+    let title, description, category, tags, link;
+    
+    if (req.headers['content-type']?.includes('application/json')) {
+      // JSON request (for link-based resources)
+      ({ title, description, category, tags, link } = req.body);
+    } else {
+      // Form-data request (for file uploads)
+      // Form-data values come as strings, handle them appropriately
+      title = typeof req.body.title === 'string' ? req.body.title.trim() : req.body.title;
+      description = typeof req.body.description === 'string' ? req.body.description.trim() : req.body.description;
+      category = typeof req.body.category === 'string' ? req.body.category.trim() : req.body.category;
+      tags = req.body.tags;
+      link = typeof req.body.link === 'string' ? req.body.link.trim() : req.body.link;
+    }
 
-    if (!title || !category) {
+    // Validate required fields
+    if (!title || (typeof title === 'string' && !title.trim())) {
       return res.status(400).json({
         success: false,
-        error: 'Title and category are required'
+        error: 'Title is required'
+      });
+    }
+
+    if (!category || (typeof category === 'string' && !category.trim())) {
+      return res.status(400).json({
+        success: false,
+        error: 'Category is required'
       });
     }
 
@@ -129,6 +160,9 @@ export const createResource = async (req, res) => {
 
     // Handle file upload
     if (hasFile) {
+      // Ensure uploads directory exists
+      await ensureUploadsDir();
+      
       const file = Array.isArray(req.files.file) ? req.files.file[0] : req.files.file;
     
     // Allowed file extensions (more permissive - support all common formats)
@@ -164,7 +198,15 @@ export const createResource = async (req, res) => {
       const filePath = path.join(uploadsDir, fileName);
 
       // Move file
-      await file.mv(filePath);
+      try {
+        await file.mv(filePath);
+      } catch (mvError: any) {
+        console.error('Error moving file:', mvError);
+        return res.status(500).json({
+          success: false,
+          error: mvError.message || 'Failed to save file. Please check file permissions.'
+        });
+      }
 
       resourceData.file = {
         fileName: file.name,
@@ -204,9 +246,22 @@ export const createResource = async (req, res) => {
     });
   } catch (error) {
     console.error('Error creating resource:', error);
+    
+    // Provide more detailed error messages
+    let errorMessage = 'Failed to create resource';
+    if (error.message) {
+      errorMessage = error.message;
+    } else if (error.code === 'LIMIT_FILE_SIZE') {
+      errorMessage = 'File size exceeds the maximum allowed limit (100MB)';
+    } else if (error.code === 'ENOENT') {
+      errorMessage = 'Upload directory not found. Please contact administrator.';
+    } else if (error.code === 'EACCES' || error.code === 'EPERM') {
+      errorMessage = 'Permission denied. Please contact administrator.';
+    }
+    
     res.status(500).json({
       success: false,
-      error: 'Failed to create resource'
+      error: errorMessage
     });
   }
 };

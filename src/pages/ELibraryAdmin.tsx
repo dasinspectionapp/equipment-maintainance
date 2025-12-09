@@ -118,9 +118,22 @@ export default function ELibraryAdmin() {
           await fetchResources();
           resetForm();
           setShowAddModal(false);
+          setError(null);
         } else {
-          const errorData = await response.json();
-          setError(errorData.error || 'Failed to create resource');
+          let errorMessage = 'Failed to create resource';
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.error || errorData.message || errorMessage;
+          } catch (parseError) {
+            // If response is not JSON, try to get text
+            try {
+              const errorText = await response.text();
+              if (errorText) errorMessage = errorText;
+            } catch (textError) {
+              errorMessage = `Server error: ${response.status} ${response.statusText}`;
+            }
+          }
+          setError(errorMessage);
         }
       } else {
         // Link-based resource
@@ -143,14 +156,27 @@ export default function ELibraryAdmin() {
           await fetchResources();
           resetForm();
           setShowAddModal(false);
+          setError(null);
         } else {
-          const errorData = await response.json();
-          setError(errorData.error || 'Failed to create resource');
+          let errorMessage = 'Failed to create resource';
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.error || errorData.message || errorMessage;
+          } catch (parseError) {
+            // If response is not JSON, try to get text
+            try {
+              const errorText = await response.text();
+              if (errorText) errorMessage = errorText;
+            } catch (textError) {
+              errorMessage = `Server error: ${response.status} ${response.statusText}`;
+            }
+          }
+          setError(errorMessage);
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating resource:', error);
-      setError('Failed to create resource');
+      setError(error.message || 'Failed to create resource. Please check your connection and try again.');
     } finally {
       setUploading(false);
     }

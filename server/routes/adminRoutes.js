@@ -49,8 +49,19 @@ router.put('/uploads/fields/:fieldId/order', authorize('Admin'), updateFieldOrde
 // E-Library Routes (Admin only)
 router.get('/elibrary', authorize('Admin'), getAllResourcesAdmin);
 router.post('/elibrary', authorize('Admin'), fileUpload({ 
-  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB limit
-  abortOnLimit: true 
+  limits: { 
+    fileSize: 100 * 1024 * 1024, // 100MB limit
+    files: 1 // Allow only 1 file
+  },
+  abortOnLimit: false, // Don't abort, return error instead
+  useTempFiles: false,
+  parseNested: true,
+  limitHandler: (req, res, next) => {
+    return res.status(413).json({ 
+      success: false, 
+      error: 'File size too large. Maximum size is 100MB.' 
+    });
+  }
 }), createResource);
 router.put('/elibrary/:id', authorize('Admin'), updateResource);
 router.delete('/elibrary/:id', authorize('Admin'), deleteResource);
