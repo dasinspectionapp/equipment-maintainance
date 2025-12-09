@@ -35,7 +35,8 @@ export default function Header() {
 
     async function fetchLogo() {
       try {
-        const response = await fetch(`${API_BASE}/api/landing/branding`, {
+        const apiUrl = API_BASE ? `${API_BASE}/api/landing/branding` : '/api/landing/branding'
+        const response = await fetch(apiUrl, {
           signal: controller.signal,
         })
         if (!response.ok) return
@@ -43,15 +44,26 @@ export default function Header() {
         if (!active || !data?.success) return
         const candidate: string | undefined = data.logoUrl || data.logoPath
         if (candidate) {
-          const normalized = candidate.startsWith('http')
-            ? candidate
-            : `${API_BASE}/${candidate.replace(/^\/+/, '')}`
-          setLogoSrc(normalized)
+          // If it's already a full URL, use it as-is
+          if (candidate.startsWith('http://') || candidate.startsWith('https://')) {
+            setLogoSrc(candidate)
+          } else {
+            // If it's a relative path, check if it starts with /
+            const normalizedPath = candidate.startsWith('/') ? candidate : `/${candidate}`
+            // In production, API_BASE is empty, so use relative path
+            // In development, prepend API_BASE
+            const normalized = API_BASE 
+              ? `${API_BASE}${normalizedPath}`
+              : normalizedPath
+            setLogoSrc(normalized)
+          }
         }
       } catch (error) {
         if (import.meta.env.DEV) {
           console.warn('Unable to load branding logo', error)
         }
+        // Ensure fallback to static logo on error
+        setLogoSrc('/bescom-logo.svg')
       }
     }
 
@@ -221,11 +233,37 @@ function TopBar() {
 
 function Branding({ logoSrc }: { logoSrc?: string | null }) {
   const resolvedLogo = logoSrc || '/bescom-logo.svg'
+  const [imgSrc, setImgSrc] = useState(resolvedLogo)
+  const [imgError, setImgError] = useState(false)
+
+  // Update imgSrc when logoSrc changes
+  useEffect(() => {
+    if (logoSrc) {
+      setImgSrc(logoSrc)
+      setImgError(false)
+    } else {
+      setImgSrc('/bescom-logo.svg')
+      setImgError(false)
+    }
+  }, [logoSrc])
+
+  const handleImageError = () => {
+    if (!imgError && imgSrc !== '/bescom-logo.svg') {
+      // Try fallback to static logo
+      setImgError(true)
+      setImgSrc('/bescom-logo.svg')
+    }
+  }
 
   return (
     <Link to="/" className="flex items-center gap-3">
       <span className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-[#005aa9]/10 ring-1 ring-[#005aa9]/30">
-        <img src={resolvedLogo} alt="BESCOM logo" className="h-full w-full object-contain p-1" />
+        <img 
+          src={imgSrc} 
+          alt="BESCOM logo" 
+          className="h-full w-full object-contain p-1" 
+          onError={handleImageError}
+        />
       </span>
       <span className="flex flex-col">
         <span className="text-base font-bold leading-tight text-slate-900">

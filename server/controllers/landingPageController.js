@@ -190,13 +190,31 @@ export async function getBranding(req, res, next) {
       return res.json({ success: true, logoUrl: null, logoPath: null });
     }
 
-    const relativePath = field.uploadedFile.fileUrl.replace(/^\/+/, '');
-    const baseUrl = process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`;
-    const logoUrl = relativePath.startsWith('http') ? relativePath : `${baseUrl}/${relativePath}`;
-
+    let fileUrl = field.uploadedFile.fileUrl;
+    
+    // If it's already a full URL, use it as-is
+    if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
+      return res.json({
+        success: true,
+        logoUrl: fileUrl,
+        logoPath: fileUrl,
+        meta: {
+          fileName: field.uploadedFile.fileName,
+          uploadedAt: field.uploadedFile.uploadedAt,
+          fieldName: field.fieldName,
+          fieldKey: field.fieldKey,
+        },
+      });
+    }
+    
+    // For relative paths, ensure it starts with /
+    const relativePath = fileUrl.startsWith('/') ? fileUrl : `/${fileUrl.replace(/^\/+/, '')}`;
+    
+    // Return relative path for frontend to handle (works better with proxies)
+    // Frontend will use this as-is if API_BASE is empty, or prepend API_BASE if needed
     res.json({
       success: true,
-      logoUrl,
+      logoUrl: relativePath, // Return relative path, frontend will handle URL construction
       logoPath: relativePath,
       meta: {
         fileName: field.uploadedFile.fileName,

@@ -30,6 +30,7 @@ import Settings from './pages/Settings'
 import LocationManagement from './pages/LocationManagement'
 import LandingPageCarousel from './pages/LandingPageCarousel'
 import LandingPageAnnouncements from './pages/LandingPageAnnouncements'
+import AnnouncementsList from './pages/AnnouncementsList'
 import ApprovalReset from './pages/ApprovalReset'
 import ELibraryAdmin from './pages/ELibraryAdmin'
 import ResourcesPage from './pages/Resources'
@@ -43,6 +44,7 @@ function App() {
         <Route path="signin" element={<SignIn />} />
         <Route path="signup" element={<SignUp />} />
         <Route path="resources" element={<ResourcesPage />} />
+        <Route path="announcements" element={<AnnouncementsList />} />
       </Route>
       <Route path="/dashboard" element={<DashboardLayout />}>
         {/* Admin-only routes */}
