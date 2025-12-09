@@ -200,7 +200,7 @@ export const createResource = async (req, res) => {
       // Move file
       try {
         await file.mv(filePath);
-      } catch (mvError: any) {
+      } catch (mvError) {
         console.error('Error moving file:', mvError);
         return res.status(500).json({
           success: false,
