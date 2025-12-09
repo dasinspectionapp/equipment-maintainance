@@ -177,7 +177,9 @@ const startServer = async () => {
   // Start server regardless of MongoDB status
   const PORT = process.env.PORT || 5000;
   
-  app.listen(PORT, '0.0.0.0', () => {
+  // Ensure server starts even if there are errors
+  try {
+    const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n${'='.repeat(60)}`);
     console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
     console.log(`${'='.repeat(60)}`);
@@ -221,9 +223,27 @@ const startServer = async () => {
     }
     
     console.log(`\n${'='.repeat(60)}\n`);
-  });
+    });
+    
+    // Handle server errors
+    server.on('error', (error) => {
+      console.error('Server error:', error);
+      if (error.code === 'EADDRINUSE') {
+        console.error(`Port ${PORT} is already in use`);
+        process.exit(1);
+      } else {
+        console.error('Unexpected server error:', error);
+      }
+    });
+  } catch (listenError) {
+    console.error('Failed to start server:', listenError);
+    process.exit(1);
+  }
 };
 
-// Start the server
-startServer();
+// Start the server with error handling
+startServer().catch((error) => {
+  console.error('Fatal error starting server:', error);
+  process.exit(1);
+});
 

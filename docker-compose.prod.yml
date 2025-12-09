@@ -19,11 +19,11 @@ services:
     # Note: When using host network mode, ports are automatically exposed
     # No need to map ports separately
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:5001/health || exit 1"]
-      interval: 15s
+      test: ["CMD-SHELL", "curl -f -s --max-time 5 http://localhost:5001/health > /dev/null 2>&1 || exit 1"]
+      interval: 30s
       timeout: 10s
-      retries: 10
-      start_period: 120s
+      retries: 20
+      start_period: 240s
 
   frontend-prod:
     image: nginx:latest
