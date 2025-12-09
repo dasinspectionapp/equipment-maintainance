@@ -33,6 +33,7 @@ import LandingPageAnnouncements from './pages/LandingPageAnnouncements'
 import ApprovalReset from './pages/ApprovalReset'
 import ELibraryAdmin from './pages/ELibraryAdmin'
 import ResourcesPage from './pages/Resources'
+import SurveyMassUpload from './pages/SurveyMassUpload'
 
 function App() {
   return (
@@ -51,6 +52,7 @@ function App() {
         <Route path="admin-uploads" element={<AdminUploads />} />
         <Route path="location" element={<LocationManagement />} />
         <Route path="approval-reset" element={<ApprovalReset />} />
+        <Route path="survey-mass-upload" element={<SurveyMassUpload />} />
         <Route path="landing-page/carousel" element={<LandingPageCarousel />} />
         <Route path="landing-page/announcements" element={<LandingPageAnnouncements />} />
         <Route path="elibrary-admin" element={<ELibraryAdmin />} />

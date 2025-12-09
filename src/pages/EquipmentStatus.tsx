@@ -53,7 +53,6 @@ interface InspectionData {
   doorGasket: string;
   dummyLatchCommand: string;
   terminals: any;
-  cableICFromOrOGTo: string;
   remarks: string;
   images: string[];
   video: string;
@@ -376,11 +375,10 @@ export default function EquipmentStatus() {
 
         ${terminalTables}
 
-        ${(hasValue(inspectionData.cableICFromOrOGTo) || (hasValue(inspectionData.remarks))) ? `
+        ${hasValue(inspectionData.remarks) ? `
         <div class="section">
           <div class="section-title">Additional Information</div>
           <table>
-            ${hasValue(inspectionData.cableICFromOrOGTo) ? `<tr><td class="label">Cable IC From or OG To</td><td colspan="3">${inspectionData.cableICFromOrOGTo}</td></tr>` : ''}
             ${hasValue(inspectionData.remarks) ? `<tr><td class="label">Remarks/Issues</td><td colspan="3" style="height: 80px; vertical-align: top;">${inspectionData.remarks}</td></tr>` : ''}
           </table>
         </div>
@@ -634,19 +632,16 @@ export default function EquipmentStatus() {
             )}
 
             {/* Additional Information */}
-            {(inspectionData.cableICFromOrOGTo || (inspectionData.remarks && inspectionData.remarks.trim() !== '')) && (
+            {inspectionData.remarks && inspectionData.remarks.trim() !== '' && (
               <div className="mb-6">
                 <h3 className="text-xl font-semibold text-blue-700 mb-4 pb-2 border-b-2 border-blue-700">
                   5. Additional Information
                 </h3>
                 <div className="space-y-4">
-                  <InfoCard label="Cable IC From or OG To" value={inspectionData.cableICFromOrOGTo} fullWidth />
-                  {inspectionData.remarks && inspectionData.remarks.trim() !== '' && (
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Remarks/Issues</label>
-                      <p className="text-gray-800 whitespace-pre-wrap">{inspectionData.remarks}</p>
-                    </div>
-                  )}
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Remarks/Issues</label>
+                    <p className="text-gray-800 whitespace-pre-wrap">{inspectionData.remarks}</p>
+                  </div>
                 </div>
               </div>
             )}

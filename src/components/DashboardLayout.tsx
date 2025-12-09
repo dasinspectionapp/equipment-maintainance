@@ -215,6 +215,15 @@ export default function DashboardLayout() {
     ],
   };
 
+  // Survey menu for Admin
+  const surveyAdminMenu: MenuItem = {
+    label: 'Survey',
+    icon: '📋',
+    children: [
+      { label: 'Mass Upload', path: '/dashboard/survey-mass-upload', icon: '📤' },
+    ],
+  };
+
   const adminMenu: MenuItem[] = [
     { label: 'Dashboard', path: '/dashboard', icon: '📊' },
     { label: 'User Management', path: '/dashboard/users', icon: '👥' },
@@ -223,6 +232,7 @@ export default function DashboardLayout() {
     { label: 'Admin Uploads', path: '/dashboard/admin-uploads', icon: '📤' },
     { label: 'Location', path: '/dashboard/location', icon: '📍' },
     { label: 'Approval Reset', path: '/dashboard/approval-reset', icon: '🔄' },
+    surveyAdminMenu,
     landingPageMenu,
   ];
 

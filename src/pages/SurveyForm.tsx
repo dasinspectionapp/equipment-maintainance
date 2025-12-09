@@ -180,8 +180,12 @@ export default function SurveyForm() {
     vl3_electricalOperation: '',
     vl3_remoteOperation: '',
     
-    // Field 60
-    cableICFromOrOGTo: '',
+    // Field 60: Cable IC From or OG To - separated for each terminal
+    od1_cableICFromOrOGTo: '',
+    od2_cableICFromOrOGTo: '',
+    vl1_cableICFromOrOGTo: '',
+    vl2_cableICFromOrOGTo: '',
+    vl3_cableICFromOrOGTo: '',
     
     // Remarks
     remarks: '',
@@ -276,7 +280,6 @@ export default function SurveyForm() {
           controlCabinetDoor: inspection.controlCabinetDoor || '',
           doorGasket: inspection.doorGasket || '',
           dummyLatchCommand: inspection.dummyLatchCommand || '',
-          cableICFromOrOGTo: inspection.cableICFromOrOGTo || '',
           remarks: inspection.remarks || ''
         };
 
@@ -287,7 +290,7 @@ export default function SurveyForm() {
           'switchPosition', 'onOffMotors', 'healthinessSwitch', 'breakerStatus',
           'cableEntryDoors', 'cableClamped', 'localRemoteSwitch', 'vpisIndication',
           'mfmWorking', 'relayWorking', 'rmuSide24Pin', 'cableSize',
-          'electricalOperation', 'remoteOperation'
+          'electricalOperation', 'remoteOperation', 'cableICFromOrOGTo'
         ];
 
         if (inspection.terminals) {
@@ -2009,17 +2012,42 @@ export default function SurveyForm() {
           </div>
         </div>
 
-        {/* Field 60 */}
+        {/* Field 60: Cable I/C from or O/G to - separated for each terminal */}
         <div className="bg-white rounded-lg shadow-sm p-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">60) Cable I/C from or O/G to:</label>
-            <input
-              type="text"
-              name="cableICFromOrOGTo"
-              value={formData.cableICFromOrOGTo}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="DAS, Corporate Office, BESCOM"
-            />
+          <h3 className="text-lg font-semibold mb-4">60) Cable I/C from or O/G to:</h3>
+          <div className="overflow-x-auto">
+            <table className="min-w-full border-collapse border border-gray-300">
+              <thead>
+                <tr>
+                  <th className="border border-gray-300 px-4 py-2 text-sm font-medium bg-gray-50 w-16">S.No</th>
+                  <th className="border border-gray-300 px-4 py-2 text-sm font-medium bg-gray-50">Field</th>
+                  <th className="border border-gray-300 px-4 py-2 text-sm font-medium bg-gray-50">OD1</th>
+                  <th className="border border-gray-300 px-4 py-2 text-sm font-medium bg-gray-50">OD2</th>
+                  <th className="border border-gray-300 px-4 py-2 text-sm font-medium bg-gray-50">VL1</th>
+                  <th className="border border-gray-300 px-4 py-2 text-sm font-medium bg-gray-50">VL2</th>
+                  <th className="border border-gray-300 px-4 py-2 text-sm font-medium bg-gray-50">VL3</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="border border-gray-300 px-4 py-2 text-sm">60</td>
+                  <td className="border border-gray-300 px-4 py-2 text-sm">Cable I/C from or O/G to</td>
+                  {['od1', 'od2', 'vl1', 'vl2', 'vl3'].map(prefix => (
+                    <td key={prefix} className="border border-gray-300 px-4 py-2">
+                      <input
+                        type="text"
+                        name={`${prefix}_cableICFromOrOGTo`}
+                        value={formData[`${prefix}_cableICFromOrOGTo` as keyof typeof formData] as string}
+                        onChange={handleChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                        placeholder="e.g., DAS, Corporate Office"
+                      />
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {/* Field 61: Remarks */}
