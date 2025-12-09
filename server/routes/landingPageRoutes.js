@@ -28,10 +28,19 @@ router.use(authorize('Admin'));
 router.post(
   '/slides',
   fileUpload({
-    limits: { fileSize: 5 * 1024 * 1024 },
-    abortOnLimit: true,
+    limits: { 
+      fileSize: 10 * 1024 * 1024, // 10MB per file (increased from 5MB)
+      files: 2 // Allow up to 2 files (carousel image + background image)
+    },
+    abortOnLimit: false, // Don't abort, return error instead
     useTempFiles: false,
     parseNested: true,
+    limitHandler: (req, res, next) => {
+      return res.status(413).json({ 
+        success: false, 
+        message: 'File size too large. Maximum size is 10MB per file.' 
+      });
+    }
   }),
   createSlide
 );
@@ -39,10 +48,19 @@ router.post(
 router.put(
   '/slides/:id',
   fileUpload({
-    limits: { fileSize: 5 * 1024 * 1024 },
-    abortOnLimit: true,
+    limits: { 
+      fileSize: 10 * 1024 * 1024, // 10MB per file (increased from 5MB)
+      files: 2 // Allow up to 2 files (carousel image + background image)
+    },
+    abortOnLimit: false, // Don't abort, return error instead
     useTempFiles: false,
     parseNested: true,
+    limitHandler: (req, res, next) => {
+      return res.status(413).json({ 
+        success: false, 
+        message: 'File size too large. Maximum size is 10MB per file.' 
+      });
+    }
   }),
   updateSlide
 );

@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 import LandingSlide from '../models/LandingSlide.js';
 import AdminUploadField from '../models/AdminUploadField.js';
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB (increased from 5MB to handle larger images)
 
 const toBoolean = (value, defaultValue = true) => {
   if (value === undefined || value === null || value === '') return defaultValue;
@@ -24,7 +24,7 @@ const encodeFileToDataUrl = (file) => {
     throw new Error('Uploaded file must be an image');
   }
   if (file.size > MAX_FILE_SIZE) {
-    throw new Error('Image exceeds maximum allowed size of 5MB');
+    throw new Error('Image exceeds maximum allowed size of 10MB');
   }
   const base64 = file.data.toString('base64');
   return `data:${file.mimetype};base64,${base64}`;
