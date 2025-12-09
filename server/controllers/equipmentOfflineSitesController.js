@@ -1820,9 +1820,11 @@ export const getReports = async (req, res) => {
       baseQuery.userId = userId;
     }
 
-    // Filter by report type using taskStatus (case-insensitive)
+    // Filter by report type using taskStatus and siteObservations (case-insensitive)
     // Resolved = taskStatus is empty string ("") or "Resolved" (string, any case: resolved, RESOLVED, Resolved, etc.)
+    // OR siteObservations is empty string (which means Resolved per Reports compatibility logic)
     // Pending = taskStatus has any non-empty value except "Resolved" (case-insensitive) (e.g., "Pending", "Pending at O&M Team", etc.)
+    // OR siteObservations is "Pending" (non-empty string)
     const statusConditions = [];
     
     if (reportType === 'Resolved') {
@@ -1831,15 +1833,38 @@ export const getReports = async (req, res) => {
           { taskStatus: '' },
           { taskStatus: { $regex: /^resolved$/i } }, // Case-insensitive match for "Resolved"
           { taskStatus: null },
-          { taskStatus: { $exists: false } }
+          { taskStatus: { $exists: false } },
+          // Also check siteObservations: empty string means Resolved
+          { siteObservations: '' },
+          { siteObservations: { $exists: false } }
         ]
       });
     } else if (reportType === 'Pending') {
-      // Explicitly exclude empty string, null, and "Resolved" (case-insensitive)
-      statusConditions.push({ taskStatus: { $exists: true } });
-      statusConditions.push({ taskStatus: { $ne: '' } });
-      statusConditions.push({ taskStatus: { $ne: null } });
-      statusConditions.push({ taskStatus: { $not: { $regex: /^resolved$/i } } }); // Exclude "Resolved" in any case
+      // Include records where:
+      // 1. taskStatus is non-empty and not "Resolved" (case-insensitive)
+      // 2. OR siteObservations is "Pending" (non-empty string)
+      statusConditions.push({
+        $or: [
+          // Check taskStatus: non-empty and not "Resolved"
+          {
+            $and: [
+              { taskStatus: { $exists: true } },
+              { taskStatus: { $ne: '' } },
+              { taskStatus: { $ne: null } },
+              { taskStatus: { $not: { $regex: /^resolved$/i } } }
+            ]
+          },
+          // OR check siteObservations: "Pending" (non-empty)
+          {
+            $and: [
+              { siteObservations: { $exists: true } },
+              { siteObservations: { $ne: '' } },
+              { siteObservations: { $ne: null } },
+              { siteObservations: 'Pending' }
+            ]
+          }
+        ]
+      });
       // Note: CCR-approved resolved records are excluded in post-processing filter below
     }
     
