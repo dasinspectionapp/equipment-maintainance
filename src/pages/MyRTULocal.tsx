@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import * as XLSX from 'xlsx';
+import { API_BASE } from '../utils/api';
 
 const PAGE_SIZE_OPTIONS = [25, 50, 75, 100];
 
@@ -200,7 +201,7 @@ export default function MyRTULocal() {
       const token = localStorage.getItem('token');
       if (token) {
         console.log('MY RTU LOCAL - Divisions missing, fetching fresh user profile...');
-        fetch('http://localhost:5000/api/auth/profile', {
+        fetch(`${API_BASE}/api/auth/profile`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -234,7 +235,7 @@ export default function MyRTULocal() {
     (async () => {
       try {
         const token = localStorage.getItem('token');
-        const res = await fetch('http://localhost:5000/api/uploads', {
+        const res = await fetch(`${API_BASE}/api/uploads`, {
           headers: {
             'Authorization': token ? `Bearer ${token}` : ''
           }
@@ -373,7 +374,7 @@ export default function MyRTULocal() {
     const refreshFiles = async () => {
       try {
         const token = localStorage.getItem('token');
-        const res = await fetch('http://localhost:5000/api/uploads', {
+        const res = await fetch(`${API_BASE}/api/uploads`, {
           headers: {
             'Authorization': token ? `Bearer ${token}` : ''
           }
@@ -529,7 +530,7 @@ export default function MyRTULocal() {
         const token = localStorage.getItem('token');
         
         // Fetch the main file data
-        const res = await fetch(`http://localhost:5000/api/uploads/${selectedFile}`, {
+        const res = await fetch(`${API_BASE}/api/uploads/${selectedFile}`, {
           headers: {
             'Authorization': token ? `Bearer ${token}` : ''
           }
@@ -557,7 +558,7 @@ export default function MyRTULocal() {
           
           // Fetch ONLINE-OFFLINE DATA files
           try {
-            const onlineOfflineRes = await fetch('http://localhost:5000/api/uploads', {
+            const onlineOfflineRes = await fetch(`${API_BASE}/api/uploads`, {
               headers: {
                 'Authorization': token ? `Bearer ${token}` : ''
               }
@@ -598,7 +599,7 @@ export default function MyRTULocal() {
                 console.log('Found ONLINE-OFFLINE DATA file:', latestOnlineOfflineFile.name);
                 
                 // Fetch the ONLINE-OFFLINE file data
-                const onlineOfflineDataRes = await fetch(`http://localhost:5000/api/uploads/${latestOnlineOfflineFile.fileId}`, {
+                const onlineOfflineDataRes = await fetch(`${API_BASE}/api/uploads/${latestOnlineOfflineFile.fileId}`, {
                   headers: {
                     'Authorization': token ? `Bearer ${token}` : ''
                   }
@@ -992,7 +993,7 @@ export default function MyRTULocal() {
           // IMPORTANT: This MUST run independently of ONLINE-OFFLINE processing
           console.log('=== STARTING RTU-TRACKER FILE FETCH ===');
           try {
-            const rtuTrackerRes = await fetch('http://localhost:5000/api/uploads', {
+            const rtuTrackerRes = await fetch(`${API_BASE}/api/uploads`, {
               headers: {
                 'Authorization': token ? `Bearer ${token}` : ''
               }
@@ -1050,7 +1051,7 @@ export default function MyRTULocal() {
                 console.log('RTU-TRACKER file ID:', latestRtuTrackerFile.fileId);
                 
                 try {
-                  const rtuTrackerDataRes = await fetch(`http://localhost:5000/api/uploads/${latestRtuTrackerFile.fileId}`, {
+                  const rtuTrackerDataRes = await fetch(`${API_BASE}/api/uploads/${latestRtuTrackerFile.fileId}`, {
                     headers: {
                       'Authorization': token ? `Bearer ${token}` : ''
                     }
