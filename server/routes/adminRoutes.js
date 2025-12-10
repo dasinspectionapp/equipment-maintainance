@@ -25,7 +25,10 @@ import fileUpload from 'express-fileupload';
 
 const router = express.Router();
 
-// All routes require authentication
+// Logo endpoint should be public (accessible without authentication)
+router.get('/uploads/logo', getLogo);
+
+// All other routes require authentication
 router.use(protect);
 
 // SMTP Configuration Routes
@@ -41,7 +44,6 @@ router.post('/uploads/fields/:fieldId/upload', authorize('Admin'), fileUpload({
   abortOnLimit: true 
 }), uploadFile);
 router.get('/uploads/files/:fieldId', authorize('Admin'), getFile);
-router.get('/uploads/logo', getLogo); // Logo accessible to all authenticated users
 router.delete('/uploads/fields/:fieldId/file', authorize('Admin'), deleteFile);
 router.delete('/uploads/fields/:fieldId', authorize('Admin'), deleteField);
 router.put('/uploads/fields/:fieldId/order', authorize('Admin'), updateFieldOrder);

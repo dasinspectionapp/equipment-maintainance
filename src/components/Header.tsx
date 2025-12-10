@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
+// Default logo path - Vite serves files from public folder at root
+const DEFAULT_LOGO = '/bescom-logo.svg'
+
 type NavItem = {
   label: string
   href?: string
@@ -21,7 +24,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.PROD ? ''
 export default function Header() {
   const [isScrolled, setIsScrolled] = useState(false)
   const [isMobileOpen, setIsMobileOpen] = useState(false)
-  const [logoSrc, setLogoSrc] = useState('/bescom-logo.svg')
+  const [logoSrc, setLogoSrc] = useState(DEFAULT_LOGO)
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 0)
@@ -35,15 +38,50 @@ export default function Header() {
 
     async function fetchLogo() {
       try {
+        // First try to get logo from Admin Uploads (same as DashboardLayout)
+        // Try with token if available (for authenticated users)
+        const token = localStorage.getItem('token')
+        const logoUrl = API_BASE ? `${API_BASE}/api/admin/uploads/logo` : '/api/admin/uploads/logo'
+        const headers: HeadersInit = {}
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`
+        }
+        
+        const response = await fetch(logoUrl, {
+          signal: controller.signal,
+          headers,
+        })
+        
+        if (response.ok) {
+          // If the API returns the image directly, create a blob URL
+          const blob = await response.blob()
+          const imageUrl = URL.createObjectURL(blob)
+          if (active) {
+            setLogoSrc(imageUrl)
+          }
+          return
+        }
+
+        // Fallback: Try landing/branding endpoint (doesn't require auth)
         const apiUrl = API_BASE ? `${API_BASE}/api/landing/branding` : '/api/landing/branding'
-        const response = await fetch(apiUrl, {
+        const brandingResponse = await fetch(apiUrl, {
           signal: controller.signal,
         })
-        if (!response.ok) return
-        const data = await response.json()
-        if (!active || !data?.success) return
+        if (!brandingResponse.ok) {
+          if (active) {
+            setLogoSrc(DEFAULT_LOGO)
+          }
+          return
+        }
+        const data = await brandingResponse.json()
+        if (!active || !data?.success) {
+          if (active) {
+            setLogoSrc(DEFAULT_LOGO)
+          }
+          return
+        }
         const candidate: string | undefined = data.logoUrl || data.logoPath
-        if (candidate) {
+        if (candidate && active) {
           // If it's already a full URL, use it as-is
           if (candidate.startsWith('http://') || candidate.startsWith('https://')) {
             setLogoSrc(candidate)
@@ -57,13 +95,17 @@ export default function Header() {
               : normalizedPath
             setLogoSrc(normalized)
           }
+        } else if (active) {
+          setLogoSrc(DEFAULT_LOGO)
         }
       } catch (error) {
         if (import.meta.env.DEV) {
           console.warn('Unable to load branding logo', error)
         }
         // Ensure fallback to static logo on error
-        setLogoSrc('/bescom-logo.svg')
+        if (active) {
+          setLogoSrc(DEFAULT_LOGO)
+        }
       }
     }
 
@@ -232,7 +274,7 @@ function TopBar() {
 }
 
 function Branding({ logoSrc }: { logoSrc?: string | null }) {
-  const resolvedLogo = logoSrc || '/bescom-logo.svg'
+  const resolvedLogo = logoSrc || DEFAULT_LOGO
   const [imgSrc, setImgSrc] = useState(resolvedLogo)
   const [imgError, setImgError] = useState(false)
 
@@ -242,16 +284,16 @@ function Branding({ logoSrc }: { logoSrc?: string | null }) {
       setImgSrc(logoSrc)
       setImgError(false)
     } else {
-      setImgSrc('/bescom-logo.svg')
+      setImgSrc(DEFAULT_LOGO)
       setImgError(false)
     }
   }, [logoSrc])
 
   const handleImageError = () => {
-    if (!imgError && imgSrc !== '/bescom-logo.svg') {
+    if (!imgError && imgSrc !== DEFAULT_LOGO) {
       // Try fallback to static logo
       setImgError(true)
-      setImgSrc('/bescom-logo.svg')
+      setImgSrc(DEFAULT_LOGO)
     }
   }
 
