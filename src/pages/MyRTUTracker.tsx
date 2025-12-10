@@ -1442,7 +1442,7 @@ export default function MyRTUTracker() {
                                   delete viewPhotosRef.current[rowKey];
                                   delete remarksRef.current[rowKey];
                                   delete photoMetadataRef.current[rowKey];
-                                  setTimeout(() => saveToLocalStorage(), 50);
+                                  setTimeout(() => saveToRTUTrackerSitesDB(), 50);
                                 } else {
                                   // For other values, update immediately
                                   setSiteObservations(prev => ({
@@ -1457,7 +1457,7 @@ export default function MyRTUTracker() {
                                     ...prev,
                                     [rowKey]: Date.now()
                                   }));
-                                  setTimeout(() => saveToLocalStorage(), 50);
+                                  setTimeout(() => saveToRTUTrackerSitesDB(), 50);
                                 }
                               }}
                               disabled={isResolved}

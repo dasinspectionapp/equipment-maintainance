@@ -802,7 +802,6 @@ export default function RTUTrackerStatus() {
         const rows: RTUTrackerRow[] = fileRows.map((row: any, index: number) => {
           const siteCode = mainSiteCodeHeader ? String(row[mainSiteCodeHeader] || '').trim().toUpperCase() : '';
           const rtuTrackerApproval = rtuTrackerApprovalsMap[siteCode] || {};
-          const offlineSite = offlineSitesMap[siteCode] || {};
 
           const division = divisionHeader ? String(row[divisionHeader] || '').trim() : '';
           const subDivision = subDivisionHeader ? String(row[subDivisionHeader] || '').trim() : '';

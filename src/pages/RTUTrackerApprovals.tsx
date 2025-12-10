@@ -6,7 +6,7 @@ interface ApprovalRecord {
   _id: string;
   actionId?: string | { _id: string; status?: string; remarks?: string };
   siteCode: string;
-  rtuTrackerSiteId?: string | { siteCode?: string; siteObservations?: string; dateOfInspection?: string };
+  rtuTrackerSiteId?: string | { _id?: string; siteCode?: string; siteObservations?: string; dateOfInspection?: string };
   approvalType: string;
   status: 'Pending' | 'Approved' | 'Kept for Monitoring' | 'Recheck Requested';
   submittedByUserId?: string;
@@ -315,7 +315,7 @@ export default function RTUTrackerApprovals() {
     }
   };
 
-  const handleRecheck = async (approval: ApprovalRecord) => {
+  // Removed handleRecheck and handleKeptForMonitoring - no longer used after removing Recheck and Kept for Monitoring buttons
     if (!approval?._id) return;
 
     try {
@@ -400,6 +400,7 @@ export default function RTUTrackerApprovals() {
     }
   };
 
+  eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleKeptForMonitoring = async (approval: ApprovalRecord) => {
     if (!approval?._id) return;
 
