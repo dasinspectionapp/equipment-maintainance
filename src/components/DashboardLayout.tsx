@@ -162,7 +162,14 @@ export default function DashboardLayout() {
   ];
 
   const approvalsMenuItem = { label: 'MY APPROVALS', path: '/dashboard/my-approvals', icon: '✅' };
-  const ccrApprovalsMenuItem = { label: 'APPROVALS', path: '/dashboard/my-approvals', icon: '✅' };
+  const ccrApprovalsMenu: MenuItem = {
+    label: 'APPROVALS',
+    icon: '✅',
+    children: [
+      { label: 'DEVICE APPROVALS', path: '/dashboard/my-approvals', icon: '✅' },
+      { label: 'RTU TRACKER APPROVALS', path: '/dashboard/rtu-tracker-approvals', icon: '📍' },
+    ],
+  };
 
   // Construct Equipment Maintenance menu items based on role
   const equipmentMaintenanceItems = (() => {
@@ -245,11 +252,13 @@ export default function DashboardLayout() {
             { label: 'Uploads', path: '/dashboard/uploads', icon: '📤' },
             { label: 'View Data', path: '/dashboard/view-data', icon: '👁️' },
             { label: 'Device Status', path: '/dashboard/device-status', icon: '📊' },
-            ccrApprovalsMenuItem,
+            { label: 'RTU Tracker Status', path: '/dashboard/rtu-tracker-status', icon: '📍' },
+            ccrApprovalsMenu,
           ]
         : [
             { label: 'Upload', path: '/dashboard/upload', icon: '📤' },
-            ccrApprovalsMenuItem,
+            { label: 'RTU Tracker Status', path: '/dashboard/rtu-tracker-status', icon: '📍' },
+            ccrApprovalsMenu,
           ]) as MenuItem[])
     : (isEquipment || isRTUComm) && isEquipmentMaintenance
     ? (equipmentMaintenanceItems as MenuItem[])

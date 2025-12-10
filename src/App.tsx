@@ -16,6 +16,8 @@ import MyDataFiltered from './pages/MyDataFiltered'
 import MyDivisionData from './pages/MyDivisionData'
 import MyRTUTracker from './pages/MyRTUTracker'
 import MyRTULocal from './pages/MyRTULocal'
+import RTUTrackerStatus from './pages/RTUTrackerStatus'
+import RTUTrackerApprovals from './pages/RTUTrackerApprovals'
 import MyLogs from './pages/MyLogs'
 import MyApprovals from './pages/MyApprovals'
 import Reports from './pages/Reports'
@@ -64,6 +66,8 @@ function App() {
         <Route path="device-status-upload" element={<Upload />} />
         <Route path="view-data" element={<ViewData />} />
         <Route path="device-status" element={<DeviceStatus />} />
+        <Route path="rtu-tracker-status" element={<RTUTrackerStatus />} />
+        <Route path="rtu-tracker-approvals" element={<RTUTrackerApprovals />} />
         {/* Equipment and RTU/Communication routes */}
         <Route path="my-data-filtered" element={<MyDataFiltered />} />
         <Route path="my-data" element={<MyData />} />

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import * as XLSX from 'xlsx';
 import { API_BASE } from '../utils/api';
 
 // Normalize function for case-insensitive matching
@@ -1283,6 +1284,260 @@ export default function DeviceStatus() {
     setSiteStatuses(filtered);
   }, [applicationType, selectedCircles, selectedDivisions, selectedSubDivisions, searchTerm, timeRange, startDate, endDate, allSiteStatuses]);
 
+  // Download functions
+  function downloadCSV() {
+    if (!siteStatuses.length) return;
+    
+    const dateColumnLabel = siteStatuses.some(site => site.presentStatus === 'Pending at Equipment Team') ? 'Pending from Date' : 'Date';
+    const headers = [
+      'SL NO',
+      'Division',
+      'Sub Division',
+      'SITE CODE',
+      'HRN',
+      dateColumnLabel,
+      'Present Status',
+      'Remarks'
+    ];
+    
+    const csvRows = [
+      headers.join(','),
+      ...siteStatuses.map((site, index) => {
+        return [
+          index + 1,
+          `"${String(site.division || '').replace(/"/g, '""')}"`,
+          `"${String(site.subDivision || '').replace(/"/g, '""')}"`,
+          `"${String(site.siteCode || '').replace(/"/g, '""')}"`,
+          `"${String(site.hrn || '').replace(/"/g, '""')}"`,
+          `"${String(site.date || '').replace(/"/g, '""')}"`,
+          `"${String(site.presentStatus || '').replace(/"/g, '""')}"`,
+          `"${String(site.remarks || '').replace(/"/g, '""')}"`
+        ].join(',');
+      })
+    ];
+    
+    const csvContent = csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `device-status-${new Date().getTime()}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  function downloadXLSX() {
+    if (!siteStatuses.length) return;
+    
+    const dateColumnLabel = siteStatuses.some(site => site.presentStatus === 'Pending at Equipment Team') ? 'Pending from Date' : 'Date';
+    const headers = [
+      'SL NO',
+      'Division',
+      'Sub Division',
+      'SITE CODE',
+      'HRN',
+      dateColumnLabel,
+      'Present Status',
+      'Remarks'
+    ];
+    
+    const exportRows = siteStatuses.map((site, index) => [
+      index + 1,
+      site.division || '',
+      site.subDivision || '',
+      site.siteCode || '',
+      site.hrn || '',
+      site.date || '',
+      site.presentStatus || '',
+      site.remarks || ''
+    ]);
+    
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...exportRows]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Device Status');
+    XLSX.writeFile(wb, `device-status-${new Date().getTime()}.xlsx`);
+  }
+
+  function downloadPDF() {
+    if (!siteStatuses.length) return;
+    
+    const w = window.open('', '_blank');
+    if (!w) return;
+
+    const title = 'Device Status';
+    const colPercent = (100 / 8).toFixed(2);
+    
+    // Get user information
+    const currentUser = getCurrentUser();
+    const userName = currentUser?.fullName || currentUser?.userId || 'Unknown User';
+    const userRole = currentUser?.role || getCurrentUserRole() || 'Unknown Role';
+    const userDesignation = currentUser?.designation || currentUser?.Designation || 'N/A';
+    const userCircle = Array.isArray(currentUser?.circle) && currentUser.circle.length > 0 
+      ? currentUser.circle.join(', ') 
+      : 'N/A';
+    
+    const downloadTime = new Date().toLocaleString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
+
+    const dateColumnLabel = siteStatuses.some(site => site.presentStatus === 'Pending at Equipment Team') ? 'Pending from Date' : 'Date';
+
+    const styles = `
+      @page { 
+        size: A4 landscape; 
+        margin: 8mm;
+      }
+      body { 
+        font-family: "Times New Roman", serif;
+        margin: 0;
+        padding: 10px;
+      }
+      .header-section {
+        margin-bottom: 10px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid #3b82f6;
+      }
+      h3 { 
+        margin: 0 0 5px 0; 
+        color: #1e40af;
+        font-size: 16px;
+      }
+      .meta { 
+        font-size: 10px; 
+        color: #475569; 
+        margin: 0 0 5px 0; 
+      }
+      .user-info {
+        font-size: 10px;
+        color: #0f172a;
+        margin-top: 5px;
+        padding: 5px;
+        background-color: #f0f9ff;
+        border-left: 3px solid #3b82f6;
+      }
+      .user-info strong {
+        color: #1e40af;
+      }
+      table { 
+        width: 100%; 
+        border-collapse: collapse; 
+        table-layout: fixed;
+        margin-top: 10px;
+      }
+      th, td { 
+        border: 1px solid #94a3b8; 
+        padding: 6px 6px; 
+        text-align: center; 
+        font-size: 10px; 
+        word-wrap: break-word; 
+        white-space: normal; 
+        width: ${colPercent}%; 
+      }
+      thead th { 
+        font-weight: 700; 
+        color: #ffffff; 
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 50%, #1d4ed8 100%);
+        border: 1px solid #1e40af;
+        padding: 8px 6px;
+      }
+      tbody tr:nth-child(even) { 
+        background-color: #f0f9ff; 
+      }
+      tbody tr:nth-child(odd) { 
+        background-color: #ffffff; 
+      }
+      tbody td { 
+        color: #0f172a; 
+      }
+      .table-wrap { 
+        width: 100%; 
+      }
+      .footer {
+        margin-top: 10px;
+        padding-top: 8px;
+        border-top: 2px solid #3b82f6;
+        font-size: 9px;
+        color: #64748b;
+        text-align: center;
+      }
+    `;
+
+    const headers = [
+      'SL NO',
+      'Division',
+      'Sub Division',
+      'SITE CODE',
+      'HRN',
+      dateColumnLabel,
+      'Present Status',
+      'Remarks'
+    ];
+
+    const thead = `<tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr>`;
+    const tbody = siteStatuses.map((site, idx) => {
+      const isEven = idx % 2 === 0;
+      return `<tr style="background-color: ${isEven ? '#f0f9ff' : '#ffffff'}">
+        <td>${idx + 1}</td>
+        <td>${String(site.division || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
+        <td>${String(site.subDivision || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
+        <td>${String(site.siteCode || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
+        <td>${String(site.hrn || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
+        <td>${String(site.date || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
+        <td>${String(site.presentStatus || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
+        <td>${String(site.remarks || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
+      </tr>`;
+    }).join('');
+
+    w.document.write(`
+      <html>
+        <head>
+          <title>${title}</title>
+          <meta charset="utf-8" />
+          <style>${styles}</style>
+        </head>
+        <body>
+          <div class="header-section">
+            <h3>${title}</h3>
+            <div class="meta">Date: ${downloadTime}</div>
+            <div class="user-info">
+              <strong>Downloaded by:</strong> ${userName} &nbsp;|&nbsp; 
+              <strong>Role:</strong> ${userRole} &nbsp;|&nbsp; 
+              <strong>Designation:</strong> ${userDesignation} &nbsp;|&nbsp; 
+              <strong>Circle:</strong> ${userCircle}
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>${thead}</thead>
+              <tbody>${tbody}</tbody>
+            </table>
+          </div>
+          <div class="footer">
+            Generated on ${downloadTime} | ${userName} (${userRole}, ${userDesignation}, Circle: ${userCircle})
+          </div>
+        </body>
+      </html>
+    `);
+    w.document.close();
+    w.focus();
+    w.print();
+  }
+
+  function handleDownloadSelect(val: string) {
+    if (!val) return;
+    if (val === 'pdf') downloadPDF();
+    if (val === 'xlsx') downloadXLSX();
+    if (val === 'csv') downloadCSV();
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -1450,6 +1705,20 @@ export default function DeviceStatus() {
               <p className="text-xs text-blue-100">
                 {siteStatuses.length > 0 ? `${siteStatuses.length} record(s) found` : 'No records to display'}
               </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-white font-medium">Download:</label>
+              <select
+                className="border border-gray-300 rounded px-3 py-1.5 min-w-[140px] bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                defaultValue=""
+                onChange={(e) => { handleDownloadSelect(e.target.value); e.currentTarget.value = ''; }}
+                disabled={!siteStatuses.length}
+              >
+                <option value="" disabled>Select format</option>
+                <option value="pdf">PDF</option>
+                <option value="xlsx">Excel (XLSX)</option>
+                <option value="csv">CSV</option>
+              </select>
             </div>
           </div>
         </div>

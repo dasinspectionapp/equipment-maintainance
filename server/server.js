@@ -30,6 +30,8 @@ import landingPageRoutes from './routes/landingPageRoutes.js';
 import siteObservationRoutes from './routes/siteObservationRoutes.js';
 import userDataStateRoutes from './routes/userDataStateRoutes.js';
 import equipmentOfflineSitesRoutes from './routes/equipmentOfflineSitesRoutes.js';
+import rtuTrackerSitesRoutes from './routes/rtuTrackerSitesRoutes.js';
+import rtuTrackerApprovalRoutes from './routes/rtuTrackerApprovalRoutes.js';
 import approvalRoutes from './routes/approvalRoutes.js';
 import elibraryRoutes from './routes/elibraryRoutes.js';
 import { getLocationsBySiteCodes } from './controllers/locationController.js';
@@ -140,6 +142,8 @@ app.use('/api/admin', locationRoutes); // Admin-only routes (upload, get all)
 app.use('/api/site-observations', siteObservationRoutes);
 app.use('/api/user-data-state', userDataStateRoutes);
 app.use('/api/equipment-offline-sites', equipmentOfflineSitesRoutes);
+app.use('/api/rtu-tracker-sites', rtuTrackerSitesRoutes);
+app.use('/api/rtu-tracker-approvals', rtuTrackerApprovalRoutes);
 app.use('/api/approvals', approvalRoutes);
 
 // Public location routes - register directly to avoid router conflicts

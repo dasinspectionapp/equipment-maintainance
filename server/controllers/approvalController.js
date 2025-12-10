@@ -1,6 +1,7 @@
 import Approval from '../models/Approval.js';
 import Action from '../models/Action.js';
 import EquipmentOfflineSites from '../models/EquipmentOfflineSites.js';
+import RTUTrackerSites from '../models/RTUTrackerSites.js';
 import User from '../models/User.js';
 import Notification from '../models/Notification.js';
 
@@ -90,7 +91,7 @@ export const createApproval = async (req, res) => {
 export const updateApprovalStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, remarks } = req.body;
+    const { status, remarks, metadata } = req.body;
     const userId = req.user.userId;
     const userRole = req.user.role;
 
@@ -110,10 +111,10 @@ export const updateApprovalStatus = async (req, res) => {
     }
 
     // Verify authorization based on user role
-    // CCR users can update any CCR Resolution Approval (they are not division-specific)
-    if (userRole === 'CCR' && approval.approvalType === 'CCR Resolution Approval') {
-      // CCR users can update any CCR approval - no additional check needed
-      console.log('[ApprovalController] CCR user authorized to update any CCR Resolution Approval');
+    // CCR users can update any CCR Resolution Approval or RTU Tracker Resolution Approval (they are not division-specific)
+    if (userRole === 'CCR' && (approval.approvalType === 'CCR Resolution Approval' || approval.approvalType === 'RTU Tracker Resolution Approval')) {
+      // CCR users can update any CCR or RTU Tracker approval - no additional check needed
+      console.log('[ApprovalController] CCR user authorized to update any CCR/RTU Tracker Resolution Approval');
     } else if (approval.assignedToUserId !== userId) {
       // For other roles, verify the approval is assigned to the current user
       return res.status(403).json({
@@ -141,6 +142,10 @@ export const updateApprovalStatus = async (req, res) => {
     approval.status = newStatus;
     if (remarks !== undefined) {
       approval.approvalRemarks = remarks;
+    }
+    // Update metadata if provided
+    if (metadata !== undefined && typeof metadata === 'object') {
+      approval.metadata = { ...approval.metadata, ...metadata };
     }
 
     // If approved, set approver information
@@ -452,6 +457,108 @@ export const updateApprovalStatus = async (req, res) => {
       }
     }
 
+    // CRITICAL: Update RTUTrackerSites when CCR approves/rejects RTU Tracker Resolution Approval
+    if (approval.approvalType === 'RTU Tracker Resolution Approval') {
+      try {
+        let rtuTrackerSite = null;
+        
+        // First, try to find by rtuTrackerSiteId if available
+        if (approval.rtuTrackerSiteId) {
+          const rtuTrackerSiteId = typeof approval.rtuTrackerSiteId === 'object' ? approval.rtuTrackerSiteId._id : approval.rtuTrackerSiteId;
+          rtuTrackerSite = await RTUTrackerSites.findById(rtuTrackerSiteId);
+        }
+        
+        // If not found, try to find by siteCode
+        if (!rtuTrackerSite && approval.siteCode) {
+          rtuTrackerSite = await RTUTrackerSites.findOne({
+            siteCode: approval.siteCode.trim().toUpperCase(),
+            siteObservations: 'Resolved'
+          })
+          .sort({ createdAt: -1 });
+          
+          // If still not found, try without siteObservations filter
+          if (!rtuTrackerSite) {
+            rtuTrackerSite = await RTUTrackerSites.findOne({
+              siteCode: approval.siteCode.trim().toUpperCase()
+            })
+            .sort({ createdAt: -1 });
+          }
+        }
+        
+        if (rtuTrackerSite) {
+          // Get typeOfIssue and ccrStatus from approval metadata if available
+          const typeOfIssue = approval.metadata?.typeOfIssue || '';
+          const ccrStatus = approval.metadata?.ccrStatus || '';
+          
+          // For RTU Tracker Sites, we can add a status field or update taskStatus
+          // For now, we'll update taskStatus to reflect approval status
+          const updateData = {
+            lastSyncedAt: new Date()
+          };
+          
+          if (typeOfIssue) {
+            updateData.typeOfIssue = typeOfIssue;
+          }
+          
+          if (ccrStatus) {
+            updateData.ccrStatus = ccrStatus;
+          }
+          
+          if (newStatus === 'Approved') {
+            updateData.taskStatus = 'Approved';
+            await RTUTrackerSites.findByIdAndUpdate(
+              rtuTrackerSite._id,
+              { $set: updateData },
+              { new: true }
+            );
+            
+            console.log('[ApprovalController] ✅ Updated RTUTrackerSites taskStatus to Approved:', {
+              rtuTrackerSiteId: rtuTrackerSite._id,
+              siteCode: approval.siteCode,
+              fileId: rtuTrackerSite.fileId,
+              userId: rtuTrackerSite.userId,
+              typeOfIssue: typeOfIssue
+            });
+          } else if (newStatus === 'Kept for Monitoring') {
+            updateData.taskStatus = 'Kept for Monitoring';
+            await RTUTrackerSites.findByIdAndUpdate(
+              rtuTrackerSite._id,
+              { $set: updateData },
+              { new: true }
+            );
+            
+            console.log('[ApprovalController] Updated RTUTrackerSites taskStatus to Kept for Monitoring:', {
+              rtuTrackerSiteId: rtuTrackerSite._id,
+              siteCode: approval.siteCode,
+              typeOfIssue: typeOfIssue
+            });
+          } else if (newStatus === 'Recheck Requested') {
+            updateData.taskStatus = 'Recheck Requested';
+            await RTUTrackerSites.findByIdAndUpdate(
+              rtuTrackerSite._id,
+              { $set: updateData },
+              { new: true }
+            );
+            
+            console.log('[ApprovalController] Updated RTUTrackerSites taskStatus to Recheck Requested:', {
+              rtuTrackerSiteId: rtuTrackerSite._id,
+              siteCode: approval.siteCode,
+              typeOfIssue: typeOfIssue
+            });
+          }
+        } else {
+          console.warn('[ApprovalController] ❌ RTUTrackerSites record not found for RTU Tracker approval:', {
+            approvalId: approval._id,
+            siteCode: approval.siteCode,
+            rtuTrackerSiteId: approval.rtuTrackerSiteId
+          });
+        }
+      } catch (rtuTrackerUpdateError) {
+        console.error('[ApprovalController] Error updating RTUTrackerSites status:', rtuTrackerUpdateError);
+        // Don't fail the approval update if RTUTrackerSites update fails
+      }
+    }
+
     res.status(200).json({
       success: true,
       data: approval,
@@ -489,10 +596,20 @@ export const getMyApprovals = async (req, res) => {
       query.approvalType = 'AMC Resolution Approval';
       query.assignedToUserId = userId;
     } else if (userRole === 'CCR') {
-      // CCR users are NOT division-specific - they can see ALL CCR Resolution Approvals
-      // Don't filter by assignedToUserId - any CCR user can see any CCR approval
-      query.approvalType = 'CCR Resolution Approval';
-      console.log('[ApprovalController] CCR user fetching ALL CCR Resolution Approvals (not filtered by assignedToUserId)');
+      // CCR users can see CCR Resolution Approvals OR RTU Tracker Resolution Approvals
+      // If approvalType query param is provided, filter by it; otherwise show both types
+      if (approvalType === 'RTU Tracker Resolution Approval') {
+        query.approvalType = 'RTU Tracker Resolution Approval';
+        // CCR users are NOT division-specific - they can see ALL RTU Tracker approvals
+        console.log('[ApprovalController] CCR user fetching ALL RTU Tracker Resolution Approvals (not filtered by assignedToUserId)');
+      } else if (approvalType === 'CCR Resolution Approval') {
+        query.approvalType = 'CCR Resolution Approval';
+        console.log('[ApprovalController] CCR user fetching ALL CCR Resolution Approvals (not filtered by assignedToUserId)');
+      } else {
+        // Default: show both CCR Resolution Approvals and RTU Tracker Resolution Approvals
+        query.approvalType = { $in: ['CCR Resolution Approval', 'RTU Tracker Resolution Approval'] };
+        console.log('[ApprovalController] CCR user fetching ALL CCR and RTU Tracker Resolution Approvals (not filtered by assignedToUserId)');
+      }
     } else if (approvalType) {
       query.approvalType = approvalType;
       query.assignedToUserId = userId;
@@ -504,6 +621,7 @@ export const getMyApprovals = async (req, res) => {
     const approvals = await Approval.find(query)
       .populate('actionId', 'status remarks')
       .populate('equipmentOfflineSiteId', 'siteCode ccrStatus')
+      .populate('rtuTrackerSiteId', 'siteCode siteObservations dateOfInspection')
       .sort({ createdAt: -1 })
       .lean();
 
@@ -542,10 +660,10 @@ export const getApprovalById = async (req, res) => {
     }
 
     // Verify authorization based on user role
-    // CCR users can view any CCR Resolution Approval (they are not division-specific)
-    if (req.user.role === 'CCR' && approval.approvalType === 'CCR Resolution Approval') {
-      // CCR users can view any CCR approval - no additional check needed
-      console.log('[ApprovalController] CCR user authorized to view any CCR Resolution Approval');
+    // CCR users can view any CCR Resolution Approval or RTU Tracker Resolution Approval (they are not division-specific)
+    if (req.user.role === 'CCR' && (approval.approvalType === 'CCR Resolution Approval' || approval.approvalType === 'RTU Tracker Resolution Approval')) {
+      // CCR users can view any CCR or RTU Tracker approval - no additional check needed
+      console.log('[ApprovalController] CCR user authorized to view any CCR/RTU Tracker Resolution Approval');
     } else if (approval.assignedToUserId !== userId) {
       // For other roles, verify the approval is assigned to the current user
       return res.status(403).json({

@@ -20,11 +20,16 @@ const approvalSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'EquipmentOfflineSites',
     },
+    // Reference to RTUTrackerSites record
+    rtuTrackerSiteId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'RTUTrackerSites',
+    },
     // Approval type
     approvalType: {
       type: String,
       required: true,
-      enum: ['AMC Resolution Approval', 'CCR Resolution Approval'],
+      enum: ['AMC Resolution Approval', 'CCR Resolution Approval', 'RTU Tracker Resolution Approval'],
       index: true,
     },
     // Current status of the approval

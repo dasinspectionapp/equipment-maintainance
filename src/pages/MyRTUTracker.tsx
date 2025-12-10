@@ -67,12 +67,18 @@ export default function MyRTUTracker() {
   const [selectedFile, setSelectedFile] = useState<string>('');
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<any[]>([]);
+  const rowsRef = useRef<any[]>([]);
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(PAGE_SIZE_OPTIONS[0]);
   const [user, setUser] = useState<any>(getCurrentUser());
   const userRole = user?.role || '';
   const userDivisions = user?.division || [];
+  
+  // Sync rowsRef with rows state
+  useEffect(() => {
+    rowsRef.current = rows;
+  }, [rows]);
   
   // State for the five columns functionality
   const [siteObservations, setSiteObservations] = useState<Record<string, string>>({});
@@ -82,6 +88,7 @@ export default function MyRTUTracker() {
   const [viewPhotos, setViewPhotos] = useState<Record<string, string[]>>({});
   const [photoMetadata, setPhotoMetadata] = useState<Record<string, Array<{ latitude?: number; longitude?: number; timestamp?: string; location?: string }>>>({});
   const [remarks, setRemarks] = useState<Record<string, string>>({});
+  const [dateOfInspection, setDateOfInspection] = useState<Record<string, string>>({});
   // const _dataLoadedRef = useRef<string>(''); // Reserved for future use
   const isLoadingRef = useRef<boolean>(false);
   
@@ -92,11 +99,16 @@ export default function MyRTUTracker() {
   const viewPhotosRef = useRef<Record<string, string[]>>({});
   const remarksRef = useRef<Record<string, string>>({});
   const photoMetadataRef = useRef<Record<string, Array<{ latitude?: number; longitude?: number; timestamp?: string; location?: string }>>>({});
+  const dateOfInspectionRef = useRef<Record<string, string>>({});
   
   // Sync refs with state
   useEffect(() => {
     siteObservationsRef.current = siteObservations;
   }, [siteObservations]);
+  
+  useEffect(() => {
+    dateOfInspectionRef.current = dateOfInspection;
+  }, [dateOfInspection]);
   
   useEffect(() => {
     taskStatusRef.current = taskStatus;
@@ -129,6 +141,8 @@ export default function MyRTUTracker() {
     specifyOther: '',
     typeOfSpare: [] as string[],
     specifySpareOther: '',
+    dateOfInspection: '',
+    previousValue: '', // Store previous value to restore on Cancel
     capturedPhotos: [] as Array<{ data: string; latitude?: number; longitude?: number; timestamp?: string; location?: string }>,
     uploadedPhotos: [] as File[],
     uploadedDocuments: [] as File[]
@@ -142,52 +156,208 @@ export default function MyRTUTracker() {
   // const _siteObservationsCameraStreamRef = useRef<MediaStream | null>(null); // Reserved for future use
   const [_isSubmittingSiteObservations, _setIsSubmittingSiteObservations] = useState(false);
   
-  // Function to save data to localStorage
-  const saveToLocalStorage = useCallback(() => {
+  // Function to save data to RTU Tracker Sites collection in database
+  const saveToRTUTrackerSitesDB = useCallback(async () => {
     if (!selectedFile || isLoadingRef.current) {
       return;
     }
     
-    const storageKey = `myRTUTracker_${selectedFile}`;
+    // Only save for Equipment role users
+    if (userRole !== 'Equipment') {
+      return;
+    }
+
+    // Use refs to get latest values
+    const currentRows = rowsRef.current;
+    const currentHeaders = headers;
+
+    if (!currentRows.length || !currentHeaders.length) {
+      return;
+    }
+
     try {
-      const dataToSave = {
-        siteObservations: siteObservationsRef.current,
-        taskStatus: taskStatusRef.current,
-        typeOfIssue: typeOfIssueRef.current,
-        viewPhotos: viewPhotosRef.current,
-        remarks: remarksRef.current,
-        photoMetadata: photoMetadataRef.current
-      };
-      
-      const hasData = Object.keys(dataToSave.siteObservations).length > 0 || 
-                      Object.keys(dataToSave.taskStatus).length > 0 || 
-                      Object.keys(dataToSave.typeOfIssue).length > 0 || 
-                      Object.keys(dataToSave.viewPhotos).length > 0 || 
-                      Object.keys(dataToSave.remarks).length > 0 || 
-                      Object.keys(dataToSave.photoMetadata).length > 0;
-      
-      if (hasData) {
-        localStorage.setItem(storageKey, JSON.stringify(dataToSave));
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.warn('No token found, cannot save to RTU Tracker Sites database');
+        return;
+      }
+
+      // Prepare sites to save
+      const sitesToSave: any[] = [];
+      const currentSiteObservations = siteObservationsRef.current;
+      const currentTaskStatus = taskStatusRef.current;
+      const currentTypeOfIssue = typeOfIssueRef.current;
+      const currentViewPhotos = viewPhotosRef.current;
+      const currentRemarks = remarksRef.current;
+      const currentPhotoMetadata = photoMetadataRef.current;
+      const currentDateOfInspection = dateOfInspectionRef.current;
+
+      // Get all rowKeys that have data
+      const allRowKeys = new Set<string>();
+      Object.keys(currentSiteObservations).forEach(key => allRowKeys.add(key));
+      Object.keys(currentTaskStatus).forEach(key => allRowKeys.add(key));
+      Object.keys(currentTypeOfIssue).forEach(key => allRowKeys.add(key));
+      Object.keys(currentViewPhotos).forEach(key => allRowKeys.add(key));
+      Object.keys(currentRemarks).forEach(key => allRowKeys.add(key));
+      Object.keys(currentPhotoMetadata).forEach(key => allRowKeys.add(key));
+      Object.keys(currentDateOfInspection).forEach(key => allRowKeys.add(key));
+
+      // Find corresponding rows
+      for (const rowKey of allRowKeys) {
+        const row = currentRows.find((r: any) => {
+          const key = generateRowKey(selectedFile, r, currentHeaders);
+          return key === rowKey;
+        });
+
+        if (row) {
+          // Extract site code
+          const siteCodeHeader = currentHeaders.find((h: string) => {
+            const normalized = h.trim().toLowerCase().replace(/[_\s-]/g, '');
+            return normalized === 'sitecode' || normalized === 'site_code' || normalized === 'site code';
+          });
+          
+          const siteCode = siteCodeHeader ? String(row[siteCodeHeader] || '').trim().toUpperCase() : '';
+          
+          if (siteCode) {
+            sitesToSave.push({
+              fileId: selectedFile,
+              rowKey: rowKey,
+              siteCode: siteCode,
+              originalRowData: row,
+              headers: currentHeaders,
+              siteObservations: currentSiteObservations[rowKey] || '',
+              taskStatus: currentTaskStatus[rowKey] || '',
+              typeOfIssue: currentTypeOfIssue[rowKey] || '',
+              viewPhotos: currentViewPhotos[rowKey] || [],
+              photoMetadata: currentPhotoMetadata[rowKey] || [],
+              remarks: currentRemarks[rowKey] || '',
+              dateOfInspection: currentDateOfInspection[rowKey] || '',
+              savedFrom: 'MY RTU TRACKER'
+            });
+          }
+        }
+      }
+
+      if (sitesToSave.length > 0) {
+        const response = await fetch(`${API_BASE}/api/rtu-tracker-sites/bulk`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ sites: sitesToSave })
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success) {
+            console.log(`[saveToRTUTrackerSitesDB] Successfully saved ${result.saved} sites to database`);
+          } else {
+            console.error('Failed to save to RTU Tracker Sites database:', result.error);
+          }
+        } else {
+          const errorData = await response.json().catch(() => ({}));
+          console.error('Failed to save to RTU Tracker Sites database:', errorData);
+        }
       }
     } catch (error) {
-      console.error('Error saving to localStorage:', error);
+      console.error('Error saving to RTU Tracker Sites database:', error);
     }
-  }, [selectedFile]);
+  }, [selectedFile, rows, headers, userRole]);
   
-  // Save data to localStorage whenever it changes - using debounced save
+  // Function to load data from RTU Tracker Sites database
+  const loadFromRTUTrackerSitesDB = useCallback(async () => {
+    if (!selectedFile || isLoadingRef.current) {
+      return;
+    }
+    
+    // Only load for Equipment role users
+    if (userRole !== 'Equipment') {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.warn('No token found, cannot load from RTU Tracker Sites database');
+        return;
+      }
+
+      isLoadingRef.current = true;
+
+      const response = await fetch(`${API_BASE}/api/rtu-tracker-sites/file/${selectedFile}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.data) {
+          const data = result.data;
+          
+          // Convert map to individual state objects
+          const loadedSiteObservations: Record<string, string> = {};
+          const loadedTaskStatus: Record<string, string> = {};
+          const loadedTypeOfIssue: Record<string, string> = {};
+          const loadedViewPhotos: Record<string, string[]> = {};
+          const loadedRemarks: Record<string, string> = {};
+          const loadedPhotoMetadata: Record<string, any[]> = {};
+          const loadedDateOfInspection: Record<string, string> = {};
+
+          Object.entries(data).forEach(([rowKey, siteData]: [string, any]) => {
+            if (siteData.siteObservations) loadedSiteObservations[rowKey] = siteData.siteObservations;
+            if (siteData.taskStatus) loadedTaskStatus[rowKey] = siteData.taskStatus;
+            if (siteData.typeOfIssue) loadedTypeOfIssue[rowKey] = siteData.typeOfIssue;
+            if (siteData.viewPhotos) loadedViewPhotos[rowKey] = siteData.viewPhotos;
+            if (siteData.remarks) loadedRemarks[rowKey] = siteData.remarks;
+            if (siteData.photoMetadata) loadedPhotoMetadata[rowKey] = siteData.photoMetadata;
+            if (siteData.dateOfInspection) loadedDateOfInspection[rowKey] = siteData.dateOfInspection;
+          });
+
+          setSiteObservations(loadedSiteObservations);
+          setTaskStatus(loadedTaskStatus);
+          setTypeOfIssue(loadedTypeOfIssue);
+          setViewPhotos(loadedViewPhotos);
+          setRemarks(loadedRemarks);
+          setPhotoMetadata(loadedPhotoMetadata);
+          setDateOfInspection(loadedDateOfInspection);
+
+          // Update refs
+          siteObservationsRef.current = loadedSiteObservations;
+          taskStatusRef.current = loadedTaskStatus;
+          typeOfIssueRef.current = loadedTypeOfIssue;
+          viewPhotosRef.current = loadedViewPhotos;
+          remarksRef.current = loadedRemarks;
+          photoMetadataRef.current = loadedPhotoMetadata;
+          dateOfInspectionRef.current = loadedDateOfInspection;
+
+          console.log(`[loadFromRTUTrackerSitesDB] Loaded ${Object.keys(data).length} sites from database`);
+        }
+      } else {
+        console.warn('Failed to load from RTU Tracker Sites database');
+      }
+    } catch (error) {
+      console.error('Error loading from RTU Tracker Sites database:', error);
+    } finally {
+      isLoadingRef.current = false;
+    }
+  }, [selectedFile, userRole]);
+  
+  // Save data to MongoDB whenever it changes - using debounced save
   useEffect(() => {
     if (!selectedFile || isLoadingRef.current) {
       return;
     }
     
     const timeoutId = setTimeout(() => {
-      saveToLocalStorage();
-    }, 100);
+      saveToRTUTrackerSitesDB();
+    }, 500); // Increased debounce time for database saves
     
     return () => clearTimeout(timeoutId);
-  }, [selectedFile, siteObservations, taskStatus, typeOfIssue, viewPhotos, remarks, photoMetadata, saveToLocalStorage]);
+  }, [selectedFile, siteObservations, taskStatus, typeOfIssue, viewPhotos, remarks, photoMetadata, dateOfInspection, saveToRTUTrackerSitesDB]);
   
-  // Load data from localStorage when file changes
+  // Load data from MongoDB when file changes
   useEffect(() => {
     if (!selectedFile) {
       setSiteObservations({});
@@ -196,25 +366,15 @@ export default function MyRTUTracker() {
       setViewPhotos({});
       setRemarks({});
       setPhotoMetadata({});
+      setDateOfInspection({});
       return;
     }
     
-    const storageKey = `myRTUTracker_${selectedFile}`;
-    try {
-      const saved = localStorage.getItem(storageKey);
-      if (saved) {
-        const data = JSON.parse(saved);
-        if (data.siteObservations) setSiteObservations(data.siteObservations);
-        if (data.taskStatus) setTaskStatus(data.taskStatus);
-        if (data.typeOfIssue) setTypeOfIssue(data.typeOfIssue);
-        if (data.viewPhotos) setViewPhotos(data.viewPhotos);
-        if (data.remarks) setRemarks(data.remarks);
-        if (data.photoMetadata) setPhotoMetadata(data.photoMetadata);
-      }
-    } catch (error) {
-      console.error('Error loading from localStorage:', error);
+    // Load from database for Equipment role
+    if (userRole === 'Equipment') {
+      loadFromRTUTrackerSitesDB();
     }
-  }, [selectedFile]);
+  }, [selectedFile, userRole, loadFromRTUTrackerSitesDB]);
 
   // Fetch fresh user data if divisions are missing
   useEffect(() => {
@@ -1230,19 +1390,11 @@ export default function MyRTUTracker() {
                               onChange={(e) => {
                                 if (isResolved) return;
                                 const selectedValue = e.target.value;
-                                setSiteObservations(prev => ({
-                                  ...prev,
-                                  [rowKey]: selectedValue
-                                }));
-                                siteObservationsRef.current = {
-                                  ...siteObservationsRef.current,
-                                  [rowKey]: selectedValue
-                                };
-                                setSiteObservationsLastModified((prev) => ({
-                                  ...prev,
-                                  [rowKey]: Date.now()
-                                }));
+                                
                                 if (selectedValue.toLowerCase() === 'resolved' || selectedValue.toLowerCase() === 'pending') {
+                                  // Don't update state yet - wait for Submit
+                                  // Store the previous value to restore on Cancel
+                                  const previousValue = siteObservations[rowKey] || '';
                                   setSelectedSiteObservationRowKey(rowKey);
                                   setSiteObservationsStatus(selectedValue.toLowerCase());
                                   setSiteObservationsDialogData({
@@ -1251,9 +1403,11 @@ export default function MyRTUTracker() {
                                     specifyOther: '',
                                     typeOfSpare: [],
                                     specifySpareOther: '',
+                                    dateOfInspection: dateOfInspection[rowKey] || '',
                                     capturedPhotos: [],
                                     uploadedPhotos: [],
-                                    uploadedDocuments: []
+                                    uploadedDocuments: [],
+                                    previousValue: previousValue // Store previous value to restore on Cancel
                                   });
                                   setShowSiteObservationsDialog(true);
                                 } else if (selectedValue === '') {
@@ -1290,6 +1444,19 @@ export default function MyRTUTracker() {
                                   delete photoMetadataRef.current[rowKey];
                                   setTimeout(() => saveToLocalStorage(), 50);
                                 } else {
+                                  // For other values, update immediately
+                                  setSiteObservations(prev => ({
+                                    ...prev,
+                                    [rowKey]: selectedValue
+                                  }));
+                                  siteObservationsRef.current = {
+                                    ...siteObservationsRef.current,
+                                    [rowKey]: selectedValue
+                                  };
+                                  setSiteObservationsLastModified((prev) => ({
+                                    ...prev,
+                                    [rowKey]: Date.now()
+                                  }));
                                   setTimeout(() => saveToLocalStorage(), 50);
                                 }
                               }}
@@ -1473,6 +1640,19 @@ export default function MyRTUTracker() {
                 </div>
               )}
               
+              {siteObservationsStatus === 'resolved' && (
+                <div className="mb-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Date of Inspection *</label>
+                  <input
+                    type="date"
+                    value={siteObservationsDialogData.dateOfInspection}
+                    onChange={(e) => setSiteObservationsDialogData(prev => ({ ...prev, dateOfInspection: e.target.value }))}
+                    className="w-full border border-gray-300 rounded px-3 py-2"
+                    required
+                  />
+                </div>
+              )}
+              
               <div className="mb-3">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   {siteObservationsStatus === 'resolved' ? 'Remarks *' : 'Remarks'}
@@ -1531,9 +1711,43 @@ export default function MyRTUTracker() {
                 <button
                   type="button"
                   onClick={() => {
+                    // Restore previous value on Cancel
+                    if (selectedSiteObservationRowKey && siteObservationsDialogData.previousValue !== undefined) {
+                      // Restore to previous value (could be empty string or previous status)
+                      if (siteObservationsDialogData.previousValue) {
+                        setSiteObservations(prev => ({
+                          ...prev,
+                          [selectedSiteObservationRowKey]: siteObservationsDialogData.previousValue
+                        }));
+                        siteObservationsRef.current = {
+                          ...siteObservationsRef.current,
+                          [selectedSiteObservationRowKey]: siteObservationsDialogData.previousValue
+                        };
+                      } else {
+                        // If previous value was empty, remove it
+                        setSiteObservations(prev => {
+                          const updated = { ...prev };
+                          delete updated[selectedSiteObservationRowKey];
+                          return updated;
+                        });
+                        delete siteObservationsRef.current[selectedSiteObservationRowKey];
+                      }
+                    }
                     setShowSiteObservationsDialog(false);
                     setSelectedSiteObservationRowKey('');
                     setSiteObservationsStatus('');
+                    setSiteObservationsDialogData({
+                      remarks: '',
+                      typeOfIssue: '',
+                      specifyOther: '',
+                      typeOfSpare: [],
+                      specifySpareOther: '',
+                      dateOfInspection: '',
+                      previousValue: '',
+                      capturedPhotos: [],
+                      uploadedPhotos: [],
+                      uploadedDocuments: []
+                    });
                   }}
                   className="px-4 py-2 bg-gray-300 rounded"
                 >
@@ -1548,6 +1762,10 @@ export default function MyRTUTracker() {
                     }
                     if (siteObservationsStatus === 'resolved' && !siteObservationsDialogData.remarks.trim()) {
                       alert('Please enter remarks');
+                      return;
+                    }
+                    if (siteObservationsStatus === 'resolved' && !siteObservationsDialogData.dateOfInspection.trim()) {
+                      alert('Please select Date of Inspection');
                       return;
                     }
                     
@@ -1595,10 +1813,70 @@ export default function MyRTUTracker() {
                       [selectedSiteObservationRowKey]: siteObservationsDialogData.remarks
                     }));
                     
+                    if (siteObservationsStatus === 'resolved') {
+                      setDateOfInspection(prev => ({
+                        ...prev,
+                        [selectedSiteObservationRowKey]: siteObservationsDialogData.dateOfInspection
+                      }));
+                    }
+                    
                     setSiteObservations(prev => ({
                       ...prev,
                       [selectedSiteObservationRowKey]: siteObservationsStatus === 'resolved' ? 'Resolved' : 'Pending'
                     }));
+                    
+                    // Save to MongoDB immediately after state update
+                    if (userRole === 'Equipment') {
+                      // Find the row to save
+                      const row = rows.find((r: any) => {
+                        const key = generateRowKey(selectedFile, r, headers);
+                        return key === selectedSiteObservationRowKey;
+                      });
+                      
+                      if (row) {
+                        const siteCodeHeader = headers.find((h: string) => {
+                          const normalized = h.trim().toLowerCase().replace(/[_\s-]/g, '');
+                          return normalized === 'sitecode' || normalized === 'site_code' || normalized === 'site code';
+                        });
+                        
+                        const siteCode = siteCodeHeader ? String(row[siteCodeHeader] || '').trim().toUpperCase() : '';
+                        
+                        if (siteCode) {
+                          const token = localStorage.getItem('token');
+                          if (token) {
+                            fetch(`${API_BASE}/api/rtu-tracker-sites`, {
+                              method: 'POST',
+                              headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json'
+                              },
+                              body: JSON.stringify({
+                                fileId: selectedFile,
+                                rowKey: selectedSiteObservationRowKey,
+                                siteCode: siteCode,
+                                originalRowData: row,
+                                headers: headers,
+                                siteObservations: siteObservationsStatus === 'resolved' ? 'Resolved' : 'Pending',
+                                taskStatus: siteObservationsStatus === 'resolved' ? 'Resolved' : 'Pending',
+                                typeOfIssue: issueDisplay,
+                                viewPhotos: photoData,
+                                photoMetadata: siteObservationsDialogData.capturedPhotos.map(p => ({
+                                  latitude: p.latitude,
+                                  longitude: p.longitude,
+                                  timestamp: p.timestamp,
+                                  location: p.location
+                                })),
+                                remarks: siteObservationsDialogData.remarks,
+                                dateOfInspection: siteObservationsStatus === 'resolved' ? siteObservationsDialogData.dateOfInspection : '',
+                                savedFrom: 'MY RTU TRACKER'
+                              })
+                            }).catch(error => {
+                              console.error('Error saving to RTU Tracker Sites database:', error);
+                            });
+                          }
+                        }
+                      }
+                    }
                     
                     alert(`Site observation marked as ${siteObservationsStatus === 'resolved' ? 'Resolved' : 'Pending'} successfully!`);
                     
@@ -1611,6 +1889,8 @@ export default function MyRTUTracker() {
                       specifyOther: '',
                       typeOfSpare: [],
                       specifySpareOther: '',
+                      dateOfInspection: '',
+                      previousValue: '',
                       capturedPhotos: [],
                       uploadedPhotos: [],
                       uploadedDocuments: []
