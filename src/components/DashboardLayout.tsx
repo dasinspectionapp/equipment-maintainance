@@ -197,8 +197,8 @@ export default function DashboardLayout() {
       return items;
     }
     if (isRTUComm) {
-      // For RTU/Communication role: Remove MY DATA and MY RTU TRACKER tabs, add MY RTU LOCAL tab
-      const items = baseEquipmentMaintenanceItems.filter(item => item.label !== 'MY DATA' && item.label !== 'MY RTU TRACKER');
+      // For RTU/Communication role: Remove MY DATA, MY RTU TRACKER, and SURVEY tabs, add MY RTU LOCAL tab
+      const items = baseEquipmentMaintenanceItems.filter(item => item.label !== 'MY DATA' && item.label !== 'MY RTU TRACKER' && item.label !== 'SURVEY');
       // Add MY RTU LOCAL tab after MY OFFLINE SITES
       const offlineIndex = items.findIndex(item => item.label === 'MY OFFLINE SITES');
       const rtuLocalItem = { label: 'MY RTU LOCAL', path: '/dashboard/my-rtu-local', icon: '🔌' };

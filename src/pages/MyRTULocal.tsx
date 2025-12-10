@@ -1203,6 +1203,18 @@ export default function MyRTULocal() {
                           continue;
                         }
                         
+                        // Skip RTU TRACKER OBSERVATION/OBSERBATION column (not needed in MY RTU LOCAL)
+                        const isRtuTrackerObservation = (normalizedHeader.includes('rtu') && normalizedHeader.includes('tracker') && 
+                                                         (normalizedHeader.includes('observation') || normalizedHeader.includes('obserbation'))) ||
+                                                        normalizedHeader === 'rtu tracker observation' ||
+                                                        normalizedHeader === 'rtu tracker obserbation' ||
+                                                        normalizedHeader === 'rtu_tracker_observation' ||
+                                                        normalizedHeader === 'rtu_tracker_obserbation';
+                        if (isRtuTrackerObservation) {
+                          console.log(`  Skipping RTU TRACKER OBSERVATION/OBSERBATION column at index ${i}: "${header}"`);
+                          continue;
+                        }
+                        
                         // Include this column
                         rtuTrackerColumnsToInsert.push(header);
                         rtuTrackerColumnsList.push(header); // Also track in higher-scope variable
@@ -2325,6 +2337,7 @@ export default function MyRTULocal() {
           console.log('Expected columns count:', onlineOfflineColumnsToPreserve.length);
           
           // Filter rows where RTU L/R SWITCH STATUS = "RTU LOCAL"
+          // NOTE: We do NOT filter by DEVICE STATUS = OFFLINE - all rows are included regardless of DEVICE STATUS
           // Find "RTU L/R SWITCH STATUS" key - handle variations
           const normalize = (str: string): string => str.trim().toLowerCase();
           const rtuSwitchStatusKey = hdrs.find((h: string) => {
@@ -2336,6 +2349,7 @@ export default function MyRTULocal() {
                    norm === 'rtuswitchstatus' || norm === 'rtu_switch_status';
           });
           
+          // Start with all fileRows - do NOT filter by DEVICE STATUS = OFFLINE
           let filteredRows = fileRows;
           if (rtuSwitchStatusKey) {
             const beforeFilterCount = filteredRows.length;
@@ -2418,6 +2432,224 @@ export default function MyRTULocal() {
               hdrs.push(col);
             }
           });
+          
+          // Filter out old date columns, keep only the latest date column
+          const parseDateFromColumnName = (columnName: string): Date | null => {
+            const datePatterns = [
+              /(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/, // DD-MM-YYYY or DD/MM/YYYY
+              /(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/, // YYYY-MM-DD or YYYY/MM/DD
+            ];
+            
+            for (const pattern of datePatterns) {
+              const match = columnName.match(pattern);
+              if (match) {
+                if (pattern.source.includes('\\d{4}') && pattern.source.startsWith('(\\d{4})')) {
+                  const year = parseInt(match[1]);
+                  const month = parseInt(match[2]) - 1;
+                  const day = parseInt(match[3]);
+                  return new Date(year, month, day);
+                } else {
+                  const day = parseInt(match[1]);
+                  const month = parseInt(match[2]) - 1;
+                  const year = parseInt(match[3]);
+                  return new Date(year, month, day);
+                }
+              }
+            }
+            return null;
+          };
+          
+          // Find all date columns in headers
+          const allDateColumns: Array<{ name: string; date: Date; index: number }> = [];
+          hdrs.forEach((h: string, index: number) => {
+            const normalized = h.trim().toLowerCase();
+            const hasDateKeyword = normalized.includes('date') || normalized.includes('time');
+            if (hasDateKeyword) {
+              const date = parseDateFromColumnName(h);
+              if (date && !isNaN(date.getTime())) {
+                allDateColumns.push({ name: h, date, index });
+              }
+            }
+          });
+          
+          // Find the latest date column
+          let latestDateColumnName: string | null = null;
+          if (allDateColumns.length > 0) {
+            allDateColumns.sort((a, b) => b.date.getTime() - a.date.getTime()); // Latest first
+            latestDateColumnName = allDateColumns[0].name;
+            console.log('MY RTU LOCAL - Latest date column found:', latestDateColumnName);
+            console.log('MY RTU LOCAL - All date columns:', allDateColumns.map(d => ({ name: d.name, date: d.date.toLocaleDateString() })));
+            
+            // Remove all date columns except the latest one
+            const dateColumnsToRemove = allDateColumns.filter(d => d.name !== latestDateColumnName);
+            console.log('MY RTU LOCAL - Removing old date columns:', dateColumnsToRemove.map(d => d.name));
+            
+            // Remove old date columns from headers
+            dateColumnsToRemove.forEach(col => {
+              const index = hdrs.indexOf(col.name);
+              if (index !== -1) {
+                hdrs.splice(index, 1);
+              }
+            });
+            
+            // Remove old date columns from rows
+            filteredRows = filteredRows.map((row: any) => {
+              const newRow = { ...row };
+              dateColumnsToRemove.forEach(col => {
+                delete newRow[col.name];
+              });
+              return newRow;
+            });
+            
+            console.log('MY RTU LOCAL - Removed', dateColumnsToRemove.length, 'old date column(s), kept latest:', latestDateColumnName);
+          }
+          
+          // Remove specific columns for RTU/Communication role
+          if (userRole === 'RTU/Communication') {
+            const columnsToRemove = [
+              'CIRCLE',
+              'DEVICE TYPE',
+              'EQUIPMENT MAKE',
+              'ATTRIBUTE',
+              'EQUIPMENT L/R SWITCH STATUS',
+              'NO OF DAYS OFFLINE',
+              'PRODUCTION OBSERVATIONS',
+              'RTU TRACKER OBSERVATION'
+            ];
+            
+            // Normalize function for case-insensitive matching (handles spaces, underscores, hyphens)
+            const normalize = (str: string): string => {
+              return str.trim().toLowerCase()
+                .replace(/[_\-\s]+/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+            };
+            
+            // Find and remove columns (case-insensitive matching with variations)
+            const columnsToRemoveFromHeaders: string[] = [];
+            hdrs.forEach((header: string) => {
+              const normalizedHeader = normalize(header);
+              const shouldRemove = columnsToRemove.some(col => {
+                const normalizedCol = normalize(col);
+                // Exact match after normalization
+                if (normalizedHeader === normalizedCol) {
+                  return true;
+                }
+                // Handle variations for EQUIPMENT L/R SWITCH STATUS
+                if (normalizedCol.includes('equipment') && normalizedCol.includes('l') && normalizedCol.includes('r') && normalizedCol.includes('switch')) {
+                  if (normalizedHeader.includes('equipment') && normalizedHeader.includes('l') && normalizedHeader.includes('r') && normalizedHeader.includes('switch')) {
+                    return true;
+                  }
+                }
+                // Handle variations for DEVICE TYPE
+                if (normalizedCol.includes('device') && normalizedCol.includes('type')) {
+                  if (normalizedHeader.includes('device') && normalizedHeader.includes('type')) {
+                    return true;
+                  }
+                }
+                // Handle variations for EQUIPMENT MAKE
+                if (normalizedCol.includes('equipment') && normalizedCol.includes('make')) {
+                  if (normalizedHeader.includes('equipment') && normalizedHeader.includes('make')) {
+                    return true;
+                  }
+                }
+                // Handle variations for NO OF DAYS OFFLINE
+                if (normalizedCol.includes('no') && normalizedCol.includes('days') && normalizedCol.includes('offline')) {
+                  if (normalizedHeader.includes('no') && normalizedHeader.includes('days') && normalizedHeader.includes('offline')) {
+                    return true;
+                  }
+                }
+                // Handle variations for PRODUCTION OBSERVATIONS
+                if (normalizedCol.includes('production') && normalizedCol.includes('observations')) {
+                  if (normalizedHeader.includes('production') && normalizedHeader.includes('observations')) {
+                    return true;
+                  }
+                }
+                // Handle variations for RTU TRACKER OBSERVATION
+                if (normalizedCol.includes('rtu') && normalizedCol.includes('tracker') && normalizedCol.includes('observation')) {
+                  if (normalizedHeader.includes('rtu') && normalizedHeader.includes('tracker') && normalizedHeader.includes('observation')) {
+                    return true;
+                  }
+                }
+                return false;
+              });
+              
+              if (shouldRemove) {
+                columnsToRemoveFromHeaders.push(header);
+              }
+            });
+            
+            // Remove columns from headers
+            columnsToRemoveFromHeaders.forEach(col => {
+              const index = hdrs.indexOf(col);
+              if (index !== -1) {
+                hdrs.splice(index, 1);
+                console.log('MY RTU LOCAL - Removed column for RTU/Communication role:', col);
+              }
+            });
+            
+            // Remove columns from rows
+            filteredRows = filteredRows.map((row: any) => {
+              const newRow = { ...row };
+              columnsToRemoveFromHeaders.forEach(col => {
+                delete newRow[col];
+              });
+              return newRow;
+            });
+            
+            console.log('MY RTU LOCAL - Removed', columnsToRemoveFromHeaders.length, 'column(s) for RTU/Communication role');
+            console.log('MY RTU LOCAL - Removed columns:', columnsToRemoveFromHeaders);
+          }
+          
+          // Remove RTU TRACKER OBSERVATION/OBSERBATION column for all users in MY RTU LOCAL
+          // Note: Handle both "OBSERVATION" (correct spelling) and "OBSERBATION" (typo in data)
+          const normalizeForRtuTracker = (str: string): string => {
+            return str.trim().toLowerCase()
+              .replace(/[_\-\s]+/g, ' ')
+              .replace(/\s+/g, ' ')
+              .trim();
+          };
+          
+          const rtuTrackerObservationColumns: string[] = [];
+          hdrs.forEach((header: string) => {
+            const normalizedHeader = normalizeForRtuTracker(header);
+            // Check if header matches RTU TRACKER OBSERVATION or OBSERBATION (case-insensitive, handles variations)
+            // Handle both correct spelling "observation" and typo "obserbation"
+            const hasRtuTracker = normalizedHeader.includes('rtu') && normalizedHeader.includes('tracker');
+            const hasObservation = normalizedHeader.includes('observation') || normalizedHeader.includes('obserbation');
+            
+            if (hasRtuTracker && hasObservation) {
+              rtuTrackerObservationColumns.push(header);
+            } else if (normalizedHeader === 'rtu tracker observation' || 
+                       normalizedHeader === 'rtu tracker obserbation' ||
+                       normalizedHeader === 'rtu_tracker_observation' ||
+                       normalizedHeader === 'rtu_tracker_obserbation' ||
+                       normalizedHeader === 'rtutrackerobservation' ||
+                       normalizedHeader === 'rtutrackerobserbation') {
+              rtuTrackerObservationColumns.push(header);
+            }
+          });
+          
+          // Remove RTU TRACKER OBSERVATION columns from headers
+          rtuTrackerObservationColumns.forEach(col => {
+            const index = hdrs.indexOf(col);
+            if (index !== -1) {
+              hdrs.splice(index, 1);
+              console.log('MY RTU LOCAL - Removed RTU TRACKER OBSERVATION column:', col);
+            }
+          });
+          
+          // Remove RTU TRACKER OBSERVATION columns from rows
+          if (rtuTrackerObservationColumns.length > 0) {
+            filteredRows = filteredRows.map((row: any) => {
+              const newRow = { ...row };
+              rtuTrackerObservationColumns.forEach(col => {
+                delete newRow[col];
+              });
+              return newRow;
+            });
+            console.log('MY RTU LOCAL - Removed', rtuTrackerObservationColumns.length, 'RTU TRACKER OBSERVATION column(s) for all users');
+          }
           
           setRows(filteredRows);
           
