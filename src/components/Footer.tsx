@@ -9,15 +9,7 @@ const quickLinks = [
 
 const contactInfo = [
   { title: 'Corporate Office', detail: 'K.R. Circle, Bengaluru – 560001' },
-  { title: 'Helpline', detail: '1912 (24x7) | WhatsApp: +91 87229 84207' },
   { title: 'Email', detail: 'helpdesk@bescom.co.in' },
-]
-
-const resources = [
-  'Renewable Energy Initiatives',
-  'Energy Conservation Awareness',
-  'Investor Relations',
-  'Customer Grievance Redressal',
 ]
 
 export default function Footer() {
@@ -49,16 +41,16 @@ export default function Footer() {
           </div>
 
           <div>
-            <h4 className="text-sm font-semibold uppercase tracking-wide text-white/80">Resources</h4>
-            <ul className="mt-4 space-y-3 text-sm text-white/80">
-              {resources.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
+            <h4 className="text-sm font-bold uppercase tracking-wide text-white/80">Address</h4>
+            <p className="mt-4 text-sm font-semibold text-white">BESCOM INTEGRATED CONTROL CENTER</p>
+            <p className="mt-2 text-sm text-white/80">
+              Parangi Palaya, Sector 2, HSR Layout,<br />
+              Bengaluru, Karnataka 560102
+            </p>
           </div>
         </div>
 
-        <div className="mt-12 grid gap-6 border-t border-white/15 pt-8 md:grid-cols-3">
+        <div className="mt-12 grid gap-6 border-t border-white/15 pt-8 md:grid-cols-2">
           {contactInfo.map((info) => (
             <div key={info.title} className="text-sm text-white/80">
               <p className="font-semibold text-white">{info.title}</p>

@@ -117,31 +117,33 @@ export const uploadFile = async (req, res) => {
       'application/pdf', // .pdf
       'image/jpeg', // .jpeg, .jpg
       'image/png', // .png
+      'image/svg+xml', // .svg
       'application/vnd.google-earth.kml+xml', // .kml
       'application/vnd.google-earth.kmz', // .kmz
       'application/xml', // .kml (alternative MIME type)
       'text/xml' // .kml (alternative MIME type)
     ];
 
-    const allowedExtensions = ['.xlsx', '.xls', '.csv', '.pdf', '.jpeg', '.jpg', '.png', '.kml', '.kmz'];
+    const allowedExtensions = ['.xlsx', '.xls', '.csv', '.pdf', '.jpeg', '.jpg', '.png', '.svg', '.kml', '.kmz'];
 
     const fileExtension = path.extname(file.name).toLowerCase();
     
-    // Special handling for KML/KMZ files - allow if extension matches even if MIME type doesn't
+    // Special handling for KML/KMZ and SVG files - allow if extension matches even if MIME type doesn't
     const isKmlFile = fileExtension === '.kml' || fileExtension === '.kmz';
+    const isSvgFile = fileExtension === '.svg';
     
     if (!allowedExtensions.includes(fileExtension)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid file type. Allowed types: .xlsx, .csv, .pdf, .jpeg, .jpg, .png, .kml, .kmz'
+        error: 'Invalid file type. Allowed types: .xlsx, .csv, .pdf, .jpeg, .jpg, .png, .svg, .kml, .kmz'
       });
     }
     
-    // For non-KML files, check MIME type strictly
-    if (!isKmlFile && !allowedTypes.includes(file.mimetype)) {
+    // For non-KML and non-SVG files, check MIME type strictly
+    if (!isKmlFile && !isSvgFile && !allowedTypes.includes(file.mimetype)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid file type. Allowed types: .xlsx, .csv, .pdf, .jpeg, .jpg, .png, .kml, .kmz'
+        error: 'Invalid file type. Allowed types: .xlsx, .csv, .pdf, .jpeg, .jpg, .png, .svg, .kml, .kmz'
       });
     }
 

@@ -210,14 +210,14 @@ export default function AdminUploads() {
     if (files) {
       const fileArray = Array.from(files);
       // Validate file types
-      const allowedTypes = ['.xlsx', '.xls', '.csv', '.pdf', '.jpeg', '.jpg', '.png'];
+      const allowedTypes = ['.xlsx', '.xls', '.csv', '.pdf', '.jpeg', '.jpg', '.png', '.svg'];
       const validFiles = fileArray.filter(file => {
         const extension = '.' + file.name.split('.').pop()?.toLowerCase();
         return allowedTypes.includes(extension);
       });
 
       if (validFiles.length !== fileArray.length) {
-        setError('Some files were skipped. Only .xlsx, .csv, .pdf, .jpeg, .jpg, .png files are allowed.');
+        setError('Some files were skipped. Only .xlsx, .csv, .pdf, .jpeg, .jpg, .png, .svg files are allowed.');
       }
 
       setSelectedFiles(prev => [...prev, ...validFiles]);
@@ -579,7 +579,7 @@ export default function AdminUploads() {
                         <span>Replace</span>
                         <input
                           type="file"
-                          accept=".xlsx,.csv,.pdf,.jpeg,.jpg,.png"
+                          accept=".xlsx,.csv,.pdf,.jpeg,.jpg,.png,.svg"
                           className="hidden"
                           onChange={(e) => {
                             const file = e.target.files?.[0];
@@ -598,7 +598,7 @@ export default function AdminUploads() {
                       <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors">
                         <input
                           type="file"
-                          accept=".xlsx,.csv,.pdf,.jpeg,.jpg,.png"
+                          accept=".xlsx,.csv,.pdf,.jpeg,.jpg,.png,.svg"
                           className="hidden"
                           onChange={(e) => {
                             const file = e.target.files?.[0];
@@ -616,7 +616,7 @@ export default function AdminUploads() {
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                             </svg>
                             <p className="text-gray-600 font-medium">Click to upload file</p>
-                            <p className="text-gray-500 text-sm mt-1">Supports: .xlsx, .csv, .pdf, .jpeg, .jpg, .png</p>
+                            <p className="text-gray-500 text-sm mt-1">Supports: .xlsx, .csv, .pdf, .jpeg, .jpg, .png, .svg</p>
                           </>
                         )}
                       </div>
@@ -669,7 +669,7 @@ export default function AdminUploads() {
                 <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-blue-400 hover:bg-blue-50 transition-colors">
                   <input
                     type="file"
-                    accept=".xlsx,.csv,.pdf,.jpeg,.jpg,.png"
+                    accept=".xlsx,.csv,.pdf,.jpeg,.jpg,.png,.svg"
                     multiple
                     onChange={handleFileSelect}
                     className="hidden"
@@ -684,7 +684,7 @@ export default function AdminUploads() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                     </svg>
                     <p className="text-sm text-gray-600 font-medium">Click to select files</p>
-                    <p className="text-xs text-gray-500 mt-1">Supports: .xlsx, .csv, .pdf, .jpeg, .jpg, .png</p>
+                    <p className="text-xs text-gray-500 mt-1">Supports: .xlsx, .csv, .pdf, .jpeg, .jpg, .png, .svg</p>
                     <p className="text-xs text-gray-400 mt-1">You can select multiple files</p>
                   </label>
                 </div>
