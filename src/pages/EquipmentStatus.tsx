@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import AutocompleteInput from '../components/AutocompleteInput';
+import { API_BASE } from '../utils/api';
 
 interface VideoModalProps {
   videoUrl: string;
@@ -121,7 +122,7 @@ export default function EquipmentStatus() {
         throw new Error('Authentication required. Please login again.');
       }
 
-      const response = await fetch(`http://localhost:5000/api/inspection/sitecode/${encodeURIComponent(siteCode)}`, {
+      const response = await fetch(`${API_BASE}/api/inspection/sitecode/${encodeURIComponent(siteCode)}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`
