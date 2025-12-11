@@ -564,9 +564,14 @@ export default function EquipmentDashboard() {
             if (latestDateValue === null) {
               latestDateValue = date20Nov;
               console.log('CCR Dashboard - Set latestDateValue to 20-11-2025');
-            } else if (latestDateValue instanceof Date && date20Nov.getTime() > latestDateValue.getTime()) {
-              latestDateValue = date20Nov;
-              console.log('CCR Dashboard - Set latestDateValue to 20-11-2025');
+            } else {
+              // latestDateValue is not null, so it must be a Date (from type Date | null)
+              // Use type assertion since we know it's a Date at this point
+              const currentDate: Date = latestDateValue as Date;
+              if (date20Nov.getTime() > currentDate.getTime()) {
+                latestDateValue = date20Nov;
+                console.log('CCR Dashboard - Set latestDateValue to 20-11-2025');
+              }
             }
           }
         }
