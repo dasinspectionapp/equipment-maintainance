@@ -586,49 +586,76 @@ export default function EquipmentStatus() {
               </div>
             )}
 
-            {/* Terminal Details */}
+            {/* Terminal Details - Table Format (Fields 21-61) */}
             {inspectionData.terminals && Object.keys(inspectionData.terminals).length > 0 && (
               <div className="mb-6">
-                {['od1', 'od2', 'vl1', 'vl2', 'vl3'].map(prefix => {
-                  const terminalData = inspectionData.terminals[prefix];
-                  if (!terminalData) return null;
-                  
-                  // Filter out empty values
-                  const validEntries = Object.entries(terminalData).filter(([, entryValue]: [string, any]) => 
-                    entryValue && entryValue.toString().trim() !== '' && entryValue !== 'N/A'
-                  );
-                  
-                  if (validEntries.length === 0) return null;
-                  
-                  return (
-                    <div key={prefix} className="mb-6">
-                      {Object.keys(inspectionData.terminals).indexOf(prefix) === 0 && (
-                        <h3 className="text-xl font-semibold text-blue-700 mb-4 pb-2 border-b-2 border-blue-700">
-                          4. Terminal Details
-                        </h3>
-                      )}
-                      <h4 className="text-lg font-semibold text-gray-700 mb-3">{prefix.toUpperCase()} Terminal</h4>
-                      <div className="overflow-x-auto">
-                        <table className="w-full border-collapse bg-white shadow-sm">
-                          <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
-                            <tr className="bg-blue-50">
-                              <th className="border border-gray-300 px-4 py-2 text-left font-semibold" style={{ position: 'sticky', top: 0, background: '#dbeafe' }}>Field</th>
-                              <th className="border border-gray-300 px-4 py-2 text-left font-semibold" style={{ position: 'sticky', top: 0, background: '#dbeafe' }}>Value</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {validEntries.map(([key, value]: [string, any]) => (
-                              <tr key={key} className="hover:bg-gray-50">
-                                <td className="border border-gray-300 px-4 py-2 font-medium">{key}</td>
-                                <td className="border border-gray-300 px-4 py-2">{value}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  );
-                })}
+                <h3 className="text-xl font-semibold text-blue-700 mb-4 pb-2 border-b-2 border-blue-700">
+                  4. Terminal Details (Fields 21-61)
+                </h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse bg-white shadow-sm border-2 border-gray-400">
+                    <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+                      <tr className="bg-gray-100">
+                        <th className="border-2 border-gray-400 px-4 py-3 text-left font-semibold text-sm" style={{ position: 'sticky', top: 0, background: '#f3f4f6' }}>Parameter</th>
+                        <th className="border-2 border-gray-400 px-4 py-3 text-center font-semibold text-sm" style={{ position: 'sticky', top: 0, background: '#f3f4f6' }}>OD1</th>
+                        <th className="border-2 border-gray-400 px-4 py-3 text-center font-semibold text-sm" style={{ position: 'sticky', top: 0, background: '#f3f4f6' }}>OD2</th>
+                        <th className="border-2 border-gray-400 px-4 py-3 text-center font-semibold text-sm" style={{ position: 'sticky', top: 0, background: '#f3f4f6' }}>VL1</th>
+                        <th className="border-2 border-gray-400 px-4 py-3 text-center font-semibold text-sm" style={{ position: 'sticky', top: 0, background: '#f3f4f6' }}>VL2</th>
+                        <th className="border-2 border-gray-400 px-4 py-3 text-center font-semibold text-sm" style={{ position: 'sticky', top: 0, background: '#f3f4f6' }}>VL3</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[
+                        { label: 'Cables Connected', key: 'cablesConnected' },
+                        { label: 'Connected To', key: 'connectedTo' },
+                        { label: 'Load Amps (R)', key: 'loadAmpsR' },
+                        { label: 'Load Amps (Y)', key: 'loadAmpsY' },
+                        { label: 'Load Amps (B)', key: 'loadAmpsB' },
+                        { label: 'Switch Position', key: 'switchPosition' },
+                        { label: 'ON/OFF Motors', key: 'onOffMotors' },
+                        { label: 'Healthiness Switch', key: 'healthinessSwitch' },
+                        { label: 'Breaker Status', key: 'breakerStatus' },
+                        { label: 'Cable Entry Doors', key: 'cableEntryDoors' },
+                        { label: 'Cable Clamped', key: 'cableClamped' },
+                        { label: 'Local/Remote Switch', key: 'localRemoteSwitch' },
+                        { label: 'VPIS Indication', key: 'vpisIndication' },
+                        { label: 'MFM Working', key: 'mfmWorking' },
+                        { label: 'Relay Working', key: 'relayWorking' },
+                        { label: 'RMU Side 24 Pin', key: 'rmuSide24Pin' },
+                        { label: 'Cable Size', key: 'cableSize' },
+                        { label: 'Electrical Operation', key: 'electricalOperation' },
+                        { label: 'Remote Operation', key: 'remoteOperation' },
+                        { label: 'Cable IC From or OG To', key: 'cableICFromOrOGTo' }
+                      ].map((field) => {
+                        const terminalKeys = ['od1', 'od2', 'vl1', 'vl2', 'vl3'];
+                        const hasAnyValue = terminalKeys.some(prefix => {
+                          const terminalData = inspectionData.terminals[prefix];
+                          const value = terminalData?.[field.key];
+                          return value && value.toString().trim() !== '' && value !== 'N/A';
+                        });
+
+                        // Only show rows that have at least one value
+                        if (!hasAnyValue) return null;
+
+                        return (
+                          <tr key={field.key} className="hover:bg-gray-50">
+                            <td className="border-2 border-gray-400 px-4 py-2 font-medium text-sm bg-gray-50">{field.label}</td>
+                            {terminalKeys.map(prefix => {
+                              const terminalData = inspectionData.terminals[prefix];
+                              const value = terminalData?.[field.key];
+                              const displayValue = value && value.toString().trim() !== '' && value !== 'N/A' ? value : '';
+                              return (
+                                <td key={prefix} className="border-2 border-gray-400 px-4 py-2 text-center text-sm">
+                                  {displayValue}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
 
