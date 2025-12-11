@@ -560,9 +560,11 @@ export default function EquipmentDashboard() {
           console.log('CCR Dashboard - Found 20-11-2025 header:', header20Nov);
           // Ensure latestDateValue is set to 20-11-2025 if it's the latest
           const date20Nov = dateHeaderMap.get(header20Nov);
-          if (date20Nov instanceof Date && (!latestDateValue || date20Nov.getTime() > latestDateValue.getTime())) {
-            latestDateValue = date20Nov;
-            console.log('CCR Dashboard - Set latestDateValue to 20-11-2025');
+          if (date20Nov instanceof Date) {
+            if (!latestDateValue || (latestDateValue instanceof Date && date20Nov.getTime() > latestDateValue.getTime())) {
+              latestDateValue = date20Nov;
+              console.log('CCR Dashboard - Set latestDateValue to 20-11-2025');
+            }
           }
         }
         
