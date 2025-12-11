@@ -564,7 +564,7 @@ export default function EquipmentDashboard() {
             if (latestDateValue === null) {
               latestDateValue = date20Nov;
               console.log('CCR Dashboard - Set latestDateValue to 20-11-2025');
-            } else if (date20Nov.getTime() > latestDateValue.getTime()) {
+            } else if (latestDateValue instanceof Date && date20Nov.getTime() > latestDateValue.getTime()) {
               latestDateValue = date20Nov;
               console.log('CCR Dashboard - Set latestDateValue to 20-11-2025');
             }
