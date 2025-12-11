@@ -93,7 +93,9 @@ export default function Dashboard() {
     online: 0,
     offline: 0,
     local: 0,
-    remote: 0
+    remote: 0,
+    switchIssue: 0,
+    rtuLocal: 0
   });
   const [selectedDeviceStatusDate, setSelectedDeviceStatusDate] = useState<string>('');
   const [latestDeviceStatusDate, setLatestDeviceStatusDate] = useState<string>('');
@@ -143,6 +145,12 @@ export default function Dashboard() {
       console.log('Dashboard - User role:', userData.role);
       console.log('Dashboard - Selected application:', selectedApplication);
       
+      // Redirect CCR role to Equipment Dashboard
+      if (userData.role === 'CCR' || userData.role?.toLowerCase() === 'ccr') {
+        navigate('/dashboard/equipment-dashboard', { replace: true });
+        return;
+      }
+      
       // Redirect Equipment Survey users to Survey Form
       if (selectedApplication === 'equipment-survey' && userData.role !== 'Admin') {
         navigate('/dashboard/survey-form', { replace: true });
@@ -171,14 +179,18 @@ export default function Dashboard() {
         if (!user) return;
 
         const userData = JSON.parse(user);
+        const userRole = userData.role || '';
         const userDivisions = userData.division || [];
+        const isCCR = userRole === 'CCR' || userRole.toLowerCase() === 'ccr';
 
         // Fetch from local-remote endpoint
         const params = new URLSearchParams();
         if (selectedDeviceStatusDate) {
           params.append('date', selectedDeviceStatusDate);
         }
-        if (userDivisions.length > 0) {
+        // For CCR role, don't filter by divisions (show all data)
+        // For Equipment role, filter by user's divisions
+        if (!isCCR && userDivisions.length > 0) {
           userDivisions.forEach((div: string) => params.append('divisions', div));
         }
 
@@ -203,30 +215,42 @@ export default function Dashboard() {
             let totalOffline = 0;
             let totalLocal = 0;
             let totalRemote = 0;
+            let totalSwitchIssue = 0;
+            let totalRTULocal = 0;
 
             if (Array.isArray(data.data)) {
               // If data is an array of divisions, sum up the counts
+              console.log('Dashboard - Received array of divisions:', data.data.length);
               data.data.forEach((division: any) => {
                 totalOnline += division.online || 0;
                 totalOffline += division.offline || 0;
                 totalLocal += division.local || 0;
                 totalRemote += division.remote || 0;
+                totalSwitchIssue += division.switchIssue || 0;
+                totalRTULocal += division.rtuLocal || 0;
               });
             } else if (data.data.online !== undefined) {
               // If data is a single aggregated object
+              console.log('Dashboard - Received single aggregated object');
               totalOnline = data.data.online || 0;
               totalOffline = data.data.offline || 0;
               totalLocal = data.data.local || 0;
               totalRemote = data.data.remote || 0;
+              totalSwitchIssue = data.data.switchIssue || 0;
+              totalRTULocal = data.data.rtuLocal || 0;
+            } else {
+              console.warn('Dashboard - Unexpected data format:', data.data);
             }
 
-            console.log('Aggregated counts:', { totalOnline, totalOffline, totalLocal, totalRemote });
+            console.log('Dashboard - Aggregated counts:', { totalOnline, totalOffline, totalLocal, totalRemote, totalSwitchIssue, totalRTULocal });
 
             setDeviceStatusCounts({
               online: totalOnline,
               offline: totalOffline,
               local: totalLocal,
-              remote: totalRemote
+              remote: totalRemote,
+              switchIssue: totalSwitchIssue,
+              rtuLocal: totalRTULocal
             });
             
             // Set latest date if available and no date is selected
@@ -241,7 +265,9 @@ export default function Dashboard() {
               online: 0,
               offline: 0,
               local: 0,
-              remote: 0
+              remote: 0,
+              switchIssue: 0,
+              rtuLocal: 0
             });
           }
         } else {
@@ -252,7 +278,9 @@ export default function Dashboard() {
             online: 0,
             offline: 0,
             local: 0,
-            remote: 0
+            remote: 0,
+            switchIssue: 0,
+            rtuLocal: 0
           });
         }
       } catch (error) {
@@ -262,13 +290,16 @@ export default function Dashboard() {
           online: 0,
           offline: 0,
           local: 0,
-          remote: 0
+          remote: 0,
+          switchIssue: 0,
+          rtuLocal: 0
         });
       }
     };
 
     const userRole = user?.role || '';
-    if (userRole === 'Equipment' || userRole.toLowerCase() === 'equipment') {
+    if (userRole === 'Equipment' || userRole.toLowerCase() === 'equipment' || 
+        userRole === 'CCR' || userRole.toLowerCase() === 'ccr') {
       fetchDeviceStatusCounts();
     }
   }, [user, selectedDeviceStatusDate]);
@@ -3964,7 +3995,17 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Device Status Section */}
+          {/* Device Status Section - Show for Equipment and CCR roles */}
+          {(() => {
+            const user = localStorage.getItem('user');
+            const userData = user ? JSON.parse(user) : null;
+            const userRole = userData?.role || '';
+            const isEquipment = userRole === 'Equipment' || userRole.toLowerCase() === 'equipment';
+            const isCCR = userRole === 'CCR' || userRole.toLowerCase() === 'ccr';
+            
+            if (!isEquipment && !isCCR) return null;
+            
+            return (
           <div className="bg-white rounded-xl shadow-lg p-6">
             {/* Header with Date Picker */}
             <div className="flex justify-between items-center mb-6">
@@ -3985,72 +4026,120 @@ export default function Dashboard() {
             </div>
 
             {/* Device Status Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {/* ONLINE Card */}
-              <button
-                onClick={() => navigate(`/dashboard/device-status-table?status=ONLINE&date=${selectedDeviceStatusDate || latestDeviceStatusDate}`)}
-                className="group bg-gradient-to-br from-green-50 via-emerald-100 to-teal-50 border-2 border-green-200 rounded-xl p-4 shadow-md hover:shadow-xl transition-all duration-300 hover:border-green-400 hover:-translate-y-1 text-left hover:from-green-100 hover:via-emerald-200 hover:to-teal-100"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="text-lg font-semibold text-gray-800 group-hover:text-green-700 transition-colors duration-300">ONLINE</h4>
-                    <p className="text-3xl font-bold text-green-600 mt-2">{deviceStatusCounts.online}</p>
-                  </div>
-                  <svg className="w-8 h-8 text-green-600 group-hover:text-green-800 group-hover:scale-110 transition-all duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-              </button>
+            {(() => {
+              const user = localStorage.getItem('user');
+              const userData = user ? JSON.parse(user) : null;
+              const userRole = userData?.role || '';
+              const isCCR = userRole === 'CCR' || userRole.toLowerCase() === 'ccr';
+              const isEquipment = userRole === 'Equipment' || userRole.toLowerCase() === 'equipment';
+              
+              return (
+                <div className={`grid grid-cols-1 ${isCCR ? 'md:grid-cols-3 lg:grid-cols-6' : 'md:grid-cols-4'} gap-4`}>
+                  {/* ONLINE Card */}
+                  <button
+                    onClick={() => navigate(`/dashboard/device-status-table?status=ONLINE&date=${selectedDeviceStatusDate || latestDeviceStatusDate}`)}
+                    className="group bg-gradient-to-br from-green-50 via-emerald-100 to-teal-50 border-2 border-green-200 rounded-xl p-4 shadow-md hover:shadow-xl transition-all duration-300 hover:border-green-400 hover:-translate-y-1 text-left hover:from-green-100 hover:via-emerald-200 hover:to-teal-100"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-lg font-semibold text-gray-800 group-hover:text-green-700 transition-colors duration-300">ONLINE</h4>
+                        <p className="text-3xl font-bold text-green-600 mt-2">{deviceStatusCounts.online}</p>
+                      </div>
+                      <svg className="w-8 h-8 text-green-600 group-hover:text-green-800 group-hover:scale-110 transition-all duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                  </button>
 
-              {/* OFFLINE Card */}
-              <button
-                onClick={() => navigate(`/dashboard/device-status-table?status=OFFLINE&date=${selectedDeviceStatusDate || latestDeviceStatusDate}`)}
-                className="group bg-gradient-to-br from-red-50 via-rose-100 to-pink-50 border-2 border-red-200 rounded-xl p-4 shadow-md hover:shadow-xl transition-all duration-300 hover:border-red-400 hover:-translate-y-1 text-left hover:from-red-100 hover:via-rose-200 hover:to-pink-100"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="text-lg font-semibold text-gray-800 group-hover:text-red-700 transition-colors duration-300">OFFLINE</h4>
-                    <p className="text-3xl font-bold text-red-600 mt-2">{deviceStatusCounts.offline}</p>
-                  </div>
-                  <svg className="w-8 h-8 text-red-600 group-hover:text-red-800 group-hover:scale-110 transition-all duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-              </button>
+                  {/* OFFLINE Card */}
+                  <button
+                    onClick={() => navigate(`/dashboard/device-status-table?status=OFFLINE&date=${selectedDeviceStatusDate || latestDeviceStatusDate}`)}
+                    className="group bg-gradient-to-br from-red-50 via-rose-100 to-pink-50 border-2 border-red-200 rounded-xl p-4 shadow-md hover:shadow-xl transition-all duration-300 hover:border-red-400 hover:-translate-y-1 text-left hover:from-red-100 hover:via-rose-200 hover:to-pink-100"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-lg font-semibold text-gray-800 group-hover:text-red-700 transition-colors duration-300">OFFLINE</h4>
+                        <p className="text-3xl font-bold text-red-600 mt-2">{deviceStatusCounts.offline}</p>
+                      </div>
+                      <svg className="w-8 h-8 text-red-600 group-hover:text-red-800 group-hover:scale-110 transition-all duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                  </button>
 
-              {/* LOCAL Card */}
-              <button
-                onClick={() => navigate(`/dashboard/device-status-table?status=LOCAL&date=${selectedDeviceStatusDate || latestDeviceStatusDate}`)}
-                className="group bg-gradient-to-br from-blue-50 via-indigo-100 to-purple-50 border-2 border-blue-200 rounded-xl p-4 shadow-md hover:shadow-xl transition-all duration-300 hover:border-blue-400 hover:-translate-y-1 text-left hover:from-blue-100 hover:via-indigo-200 hover:to-purple-100"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="text-lg font-semibold text-gray-800 group-hover:text-blue-700 transition-colors duration-300">LOCAL</h4>
-                    <p className="text-3xl font-bold text-blue-600 mt-2">{deviceStatusCounts.local}</p>
-                  </div>
-                  <svg className="w-8 h-8 text-blue-600 group-hover:text-blue-800 group-hover:scale-110 transition-all duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                  </svg>
-                </div>
-              </button>
+                  {/* LOCAL Card */}
+                  <button
+                    onClick={() => navigate(`/dashboard/device-status-table?status=LOCAL&date=${selectedDeviceStatusDate || latestDeviceStatusDate}`)}
+                    className="group bg-gradient-to-br from-blue-50 via-indigo-100 to-purple-50 border-2 border-blue-200 rounded-xl p-4 shadow-md hover:shadow-xl transition-all duration-300 hover:border-blue-400 hover:-translate-y-1 text-left hover:from-blue-100 hover:via-indigo-200 hover:to-purple-100"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-lg font-semibold text-gray-800 group-hover:text-blue-700 transition-colors duration-300">LOCAL</h4>
+                        <p className="text-3xl font-bold text-blue-600 mt-2">{deviceStatusCounts.local}</p>
+                      </div>
+                      <svg className="w-8 h-8 text-blue-600 group-hover:text-blue-800 group-hover:scale-110 transition-all duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                      </svg>
+                    </div>
+                  </button>
 
-              {/* REMOTE Card */}
-              <button
-                onClick={() => navigate(`/dashboard/device-status-table?status=REMOTE&date=${selectedDeviceStatusDate || latestDeviceStatusDate}`)}
-                className="group bg-gradient-to-br from-yellow-50 via-amber-100 to-orange-50 border-2 border-yellow-200 rounded-xl p-4 shadow-md hover:shadow-xl transition-all duration-300 hover:border-yellow-400 hover:-translate-y-1 text-left hover:from-yellow-100 hover:via-amber-200 hover:to-orange-100"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="text-lg font-semibold text-gray-800 group-hover:text-yellow-700 transition-colors duration-300">REMOTE</h4>
-                    <p className="text-3xl font-bold text-yellow-600 mt-2">{deviceStatusCounts.remote}</p>
-                  </div>
-                  <svg className="w-8 h-8 text-yellow-600 group-hover:text-yellow-800 group-hover:scale-110 transition-all duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-                  </svg>
+                  {/* REMOTE Card */}
+                  <button
+                    onClick={() => navigate(`/dashboard/device-status-table?status=REMOTE&date=${selectedDeviceStatusDate || latestDeviceStatusDate}`)}
+                    className="group bg-gradient-to-br from-yellow-50 via-amber-100 to-orange-50 border-2 border-yellow-200 rounded-xl p-4 shadow-md hover:shadow-xl transition-all duration-300 hover:border-yellow-400 hover:-translate-y-1 text-left hover:from-yellow-100 hover:via-amber-200 hover:to-orange-100"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-lg font-semibold text-gray-800 group-hover:text-yellow-700 transition-colors duration-300">REMOTE</h4>
+                        <p className="text-3xl font-bold text-yellow-600 mt-2">{deviceStatusCounts.remote}</p>
+                      </div>
+                      <svg className="w-8 h-8 text-yellow-600 group-hover:text-yellow-800 group-hover:scale-110 transition-all duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                      </svg>
+                    </div>
+                  </button>
+
+                  {/* SWITCH ISSUE Card - Only for CCR role */}
+                  {isCCR && (
+                    <button
+                      onClick={() => navigate(`/dashboard/device-status-table?status=SWITCH ISSUE&date=${selectedDeviceStatusDate || latestDeviceStatusDate}`)}
+                      className="group bg-gradient-to-br from-orange-50 via-amber-100 to-yellow-50 border-2 border-orange-200 rounded-xl p-4 shadow-md hover:shadow-xl transition-all duration-300 hover:border-orange-400 hover:-translate-y-1 text-left hover:from-orange-100 hover:via-amber-200 hover:to-yellow-100"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-lg font-semibold text-gray-800 group-hover:text-orange-700 transition-colors duration-300">SWITCH ISSUE</h4>
+                          <p className="text-3xl font-bold text-orange-600 mt-2">{deviceStatusCounts.switchIssue}</p>
+                        </div>
+                        <svg className="w-8 h-8 text-orange-600 group-hover:text-orange-800 group-hover:scale-110 transition-all duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                      </div>
+                    </button>
+                  )}
+
+                  {/* RTU LOCAL Card - Only for CCR role */}
+                  {isCCR && (
+                    <button
+                      onClick={() => navigate(`/dashboard/device-status-table?status=RTU LOCAL&date=${selectedDeviceStatusDate || latestDeviceStatusDate}`)}
+                      className="group bg-gradient-to-br from-purple-50 via-violet-100 to-indigo-50 border-2 border-purple-200 rounded-xl p-4 shadow-md hover:shadow-xl transition-all duration-300 hover:border-purple-400 hover:-translate-y-1 text-left hover:from-purple-100 hover:via-violet-200 hover:to-indigo-100"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-lg font-semibold text-gray-800 group-hover:text-purple-700 transition-colors duration-300">RTU LOCAL</h4>
+                          <p className="text-3xl font-bold text-purple-600 mt-2">{deviceStatusCounts.rtuLocal}</p>
+                        </div>
+                        <svg className="w-8 h-8 text-purple-600 group-hover:text-purple-800 group-hover:scale-110 transition-all duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                        </svg>
+                      </div>
+                    </button>
+                  )}
                 </div>
-              </button>
-            </div>
+              );
+            })()}
           </div>
+            );
+          })()}
 
           {/* My Directions Modal */}
           {showMyDirectionsModal && (

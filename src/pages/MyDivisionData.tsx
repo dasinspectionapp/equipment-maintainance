@@ -215,6 +215,25 @@ export default function MyDivisionData() {
     })();
   }, [userDivisions]);
 
+  // Listen for ViewData updates to refresh data
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  
+  useEffect(() => {
+    const handleViewDataUpdate = (event: any) => {
+      const { fileId } = event.detail || {};
+      // Only refresh if the updated file matches the currently selected file
+      if (fileId === selectedFile) {
+        console.log('MyDivisionData: ViewData updated, refreshing data...');
+        setRefreshTrigger(prev => prev + 1);
+      }
+    };
+
+    window.addEventListener('viewDataUpdated', handleViewDataUpdate as EventListener);
+    return () => {
+      window.removeEventListener('viewDataUpdated', handleViewDataUpdate as EventListener);
+    };
+  }, [selectedFile]);
+
   useEffect(() => {
     if (!selectedFile) {
       setRows([]);
@@ -1157,7 +1176,7 @@ export default function MyDivisionData() {
         setHeaders([]);
       }
     })();
-  }, [selectedFile, userDivisions]);
+  }, [selectedFile, userDivisions, refreshTrigger]);
 
   // Build filter lists
   // Resolve which actual header key exists for each filter

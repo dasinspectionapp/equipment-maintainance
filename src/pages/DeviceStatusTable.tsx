@@ -35,6 +35,8 @@ export default function DeviceStatusTable() {
   const [isDownloadDropdownOpen, setIsDownloadDropdownOpen] = useState(false);
 
   const isLocalOrRemote = normalize(deviceStatus) === 'local' || normalize(deviceStatus) === 'remote';
+  const isSwitchIssue = normalize(deviceStatus) === 'switch issue' || normalize(deviceStatus) === 'switchissue';
+  const isRtuLocal = normalize(deviceStatus) === 'rtu local';
 
   useEffect(() => {
     const fetchData = async () => {
@@ -140,6 +142,7 @@ export default function DeviceStatusTable() {
         let targetDateColumn: { name: string; date: Date; index: number } | null = null;
         let deviceStatusHeader: string | undefined = undefined;
         let equipLRSwitchStatusHeader: string | undefined = undefined;
+        let rtuLRSwitchStatusHeader: string | undefined = undefined;
 
         if (selectedDate) {
           // Parse the provided date (format: YYYY-MM-DD)
@@ -178,15 +181,27 @@ export default function DeviceStatusTable() {
               deviceStatusHeader = nextCol;
             }
             
-            // Find EQUIPMENT L/R SWITCH STATUS
-            if (!equipLRSwitchStatusHeader && ((normalized.includes('equipment') && normalized.includes('switch')) || 
-                (normalized.includes('l/r') && normalized.includes('switch')))) {
-              equipLRSwitchStatusHeader = nextCol;
+            // Find EQUIPMENT L/R SWITCH STATUS (handle typo "EQUIPEMNT" and suffix "_3")
+            if (!equipLRSwitchStatusHeader) {
+              const hasEquip = normalized.includes('equipment') || normalized.includes('equipemnt') || normalized.includes('equip');
+              const hasLR = normalized.includes('l/r') || normalized.includes('lr') || normalized.includes('l r');
+              const hasSwitch = normalized.includes('switch') || normalized.includes('status');
+              if ((hasEquip && hasSwitch) || (hasLR && hasSwitch)) {
+                equipLRSwitchStatusHeader = nextCol;
+              }
             }
             
-            // Stop after finding both or hitting RTU column
-            if (deviceStatusHeader && equipLRSwitchStatusHeader) break;
-            if (normalized.includes('rtu') && normalized.includes('switch')) break;
+            // Find RTU L/R SWITCH STATUS
+            if (!rtuLRSwitchStatusHeader && normalized.includes('rtu') && normalized.includes('switch')) {
+              rtuLRSwitchStatusHeader = nextCol;
+            }
+            
+            // Stop after finding all needed columns or hitting next date column
+            if (deviceStatusHeader && equipLRSwitchStatusHeader && rtuLRSwitchStatusHeader) break;
+            if (normalized.includes('rtu') && normalized.includes('switch') && rtuLRSwitchStatusHeader) {
+              // Don't break if we haven't found RTU header yet, but if we have, we can stop
+              if (deviceStatusHeader && equipLRSwitchStatusHeader) break;
+            }
           }
         } else {
           // Fallback: find first occurrence if no date columns found
@@ -197,8 +212,15 @@ export default function DeviceStatusTable() {
           
           equipLRSwitchStatusHeader = headers.find((h: string) => {
             const n = normalize(h);
-            return (n.includes('equipment') && n.includes('switch')) ||
-                   (n.includes('l/r') && n.includes('switch'));
+            const hasEquip = n.includes('equipment') || n.includes('equipemnt') || n.includes('equip');
+            const hasLR = n.includes('l/r') || n.includes('lr') || n.includes('l r');
+            const hasSwitch = n.includes('switch') || n.includes('status');
+            return (hasEquip && hasSwitch) || (hasLR && hasSwitch);
+          });
+          
+          rtuLRSwitchStatusHeader = headers.find((h: string) => {
+            const n = normalize(h);
+            return n.includes('rtu') && (n.includes('l/r') || n.includes('lr') || n.includes('l r')) && n.includes('switch');
           });
         }
 
@@ -252,6 +274,7 @@ export default function DeviceStatusTable() {
           })[0];
 
         let hrnMap: { [key: string]: string } = {};
+        let deviceStatusDataMap: { [key: string]: any } = {};
         if (deviceStatusUploadFile) {
           const deviceStatusRes = await fetch(`${API_BASE}/api/uploads/${deviceStatusUploadFile.fileId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
@@ -271,21 +294,80 @@ export default function DeviceStatusTable() {
               const n = normalize(h);
               return n === 'hrn';
             });
+            
+            // Find EQUIPMENT L/R SWITCH STATUS column in Device Status Upload file
+            const dsEquipLRSwitchHeader = deviceStatusHeaders.find((h: string) => {
+              const n = normalizeHeader(h);
+              return n === 'equipment l/r switch status' ||
+                     n === 'equipment_l/r_switch_status' ||
+                     n === 'equipmentl/rswitchstatus' ||
+                     n === 'equipemnt l/r switch status' ||
+                     n === 'equipemnt_l/r_switch_status' ||
+                     n.startsWith('equipment l/r switch status') ||
+                     n.startsWith('equipemnt l/r switch status') ||
+                     ((n.includes('equipment') || n.includes('equipemnt') || n.includes('equip')) &&
+                      (n.includes('l/r') || n.includes('lr') || n.includes('l r')) &&
+                      (n.includes('switch') || n.includes('status')));
+            });
+            
+            // Find DEVICE STATUS column in Device Status Upload file
+            const dsDeviceStatusHeader = deviceStatusHeaders.find((h: string) => {
+              const n = normalizeHeader(h);
+              return n === 'device status' || n === 'device_status' || n === 'devicestatus' ||
+                     (n.includes('device') && n.includes('status'));
+            });
 
-            if (deviceStatusSiteCodeHeader && hrnHeader) {
+            if (deviceStatusSiteCodeHeader) {
               deviceStatusRows.forEach((row: any) => {
-                const siteCode = String(row[deviceStatusSiteCodeHeader] || '').trim().toUpperCase();
-                const hrn = String(row[hrnHeader] || '').trim();
+                const siteCode = String(row[deviceStatusSiteCodeHeader] || '').trim();
+                const normalizedSiteCode = normalize(siteCode);
+                
                 if (siteCode) {
-                  hrnMap[normalize(siteCode)] = hrn;
+                  // Store HRN
+                  if (hrnHeader) {
+                    const hrn = String(row[hrnHeader] || '').trim();
+                    hrnMap[normalizedSiteCode] = hrn;
+                  }
+                  
+                  // Store entire row for merging (preserves user edits)
+                  deviceStatusDataMap[normalizedSiteCode] = {
+                    row: row,
+                    equipLRSwitch: dsEquipLRSwitchHeader ? String(row[dsEquipLRSwitchHeader] || '').trim() : '',
+                    deviceStatus: dsDeviceStatusHeader ? String(row[dsDeviceStatusHeader] || '').trim() : ''
+                  };
                 }
               });
             }
           }
         }
+        
+        // Merge Device Status Upload data into ONLINE-OFFLINE rows (preserve user edits)
+        const mergedRows = rows.map((row: any) => {
+          const siteCode = String(row[siteCodeHeader] || '').trim();
+          const normalizedSiteCode = normalize(siteCode);
+          const deviceStatusRow = deviceStatusDataMap[normalizedSiteCode];
+          
+          if (deviceStatusRow) {
+            const mergedRow = { ...row };
+            
+            // Merge EQUIPMENT L/R SWITCH STATUS from Device Status Upload (preserves user edits)
+            if (deviceStatusRow.equipLRSwitch && equipLRSwitchStatusHeader) {
+              mergedRow[equipLRSwitchStatusHeader] = deviceStatusRow.equipLRSwitch;
+            }
+            
+            // Merge DEVICE STATUS from Device Status Upload (preserves user edits)
+            if (deviceStatusRow.deviceStatus && deviceStatusHeader) {
+              mergedRow[deviceStatusHeader] = deviceStatusRow.deviceStatus;
+            }
+            
+            return mergedRow;
+          }
+          
+          return row;
+        });
 
-        // Filter rows based on device status and user divisions
-        let filteredRows = rows.filter((row: any) => {
+        // Filter rows based on device status and user divisions (use merged rows)
+        let filteredRows = mergedRows.filter((row: any) => {
           // Filter by division
           if (divisionHeader && userDivisions.length > 0) {
             const rowDivision = String(row[divisionHeader] || '').trim();
@@ -301,6 +383,7 @@ export default function DeviceStatusTable() {
 
           // Filter by device status
           if (isLocalOrRemote && equipLRSwitchStatusHeader) {
+            // LOCAL or REMOTE - filter by EQUIPMENT L/R SWITCH STATUS
             const status = String(row[equipLRSwitchStatusHeader] || '').trim();
             const normalizedStatus = normalize(status);
             const normalizedDeviceStatus = normalize(deviceStatus);
@@ -308,7 +391,21 @@ export default function DeviceStatusTable() {
             return normalizedStatus === normalizedDeviceStatus || 
                    normalizedStatus.includes(normalizedDeviceStatus) ||
                    normalizedDeviceStatus.includes(normalizedStatus);
+          } else if (isSwitchIssue && equipLRSwitchStatusHeader) {
+            // SWITCH ISSUE - filter by EQUIPMENT L/R SWITCH STATUS
+            const status = String(row[equipLRSwitchStatusHeader] || '').trim();
+            const normalizedStatus = normalize(status);
+            // Match if status contains both "switch" and "issue" or is exactly "switchissue"
+            return normalizedStatus === 'switchissue' ||
+                   (normalizedStatus.includes('switch') && normalizedStatus.includes('issue'));
+          } else if (isRtuLocal && rtuLRSwitchStatusHeader) {
+            // RTU LOCAL - filter by RTU L/R SWITCH STATUS
+            const status = String(row[rtuLRSwitchStatusHeader] || '').trim();
+            const normalizedStatus = normalize(status);
+            // Match if status contains "local"
+            return normalizedStatus.includes('local');
           } else if (deviceStatusHeader) {
+            // ONLINE or OFFLINE - filter by DEVICE STATUS
             const status = String(row[deviceStatusHeader] || '').trim();
             return normalize(status) === normalize(deviceStatus);
           }
@@ -328,8 +425,10 @@ export default function DeviceStatusTable() {
             division: divisionHeader ? String(row[divisionHeader] || '').trim() : '',
             subDivision: subDivisionHeader ? String(row[subDivisionHeader] || '').trim() : '',
             hrn: hrn,
-            deviceStatus: isLocalOrRemote && equipLRSwitchStatusHeader
+            deviceStatus: (isLocalOrRemote || isSwitchIssue) && equipLRSwitchStatusHeader
               ? String(row[equipLRSwitchStatusHeader] || '').trim()
+              : isRtuLocal && rtuLRSwitchStatusHeader
+              ? String(row[rtuLRSwitchStatusHeader] || '').trim()
               : deviceStatusHeader
               ? String(row[deviceStatusHeader] || '').trim()
               : ''

@@ -161,10 +161,51 @@ export async function updateUploadRows(req, res, next) {
     if (!Array.isArray(rows)) {
       return res.status(400).json({ success: false, message: 'rows must be an array' });
     }
-    const updated = await Upload.findOneAndUpdate({ fileId: id }, { $set: { rows } }, { new: true }).lean();
-    if (!updated) return res.status(404).json({ success: false, message: 'Not found' });
-    res.json({ success: true, file: updated });
+    
+    console.log(`[UPDATE UPLOAD ROWS] Updating fileId: ${id}, rows count: ${rows.length}`);
+    
+    // Extract all unique column names from the rows to update headers
+    const allHeaders = new Set();
+    rows.forEach(row => {
+      if (row && typeof row === 'object') {
+        Object.keys(row).forEach(key => {
+          // Skip MongoDB _id field and frontend id field
+          if (key !== '_id' && key !== 'id') {
+            allHeaders.add(key);
+          }
+        });
+      }
+    });
+    
+    const updatedHeaders = Array.from(allHeaders);
+    console.log(`[UPDATE UPLOAD ROWS] Extracted ${updatedHeaders.length} unique headers from rows`);
+    console.log(`[UPDATE UPLOAD ROWS] Headers include EQUIPMENT L/R SWITCH STATUS:`, updatedHeaders.some(h => {
+      const n = String(h || '').toLowerCase();
+      return n.includes('equipment') || n.includes('equipemnt') || n.includes('equip');
+    }));
+    
+    // Use findOneAndUpdate with runValidators to ensure proper update
+    // Update both rows and headers to reflect all columns in the saved data
+    const updated = await Upload.findOneAndUpdate(
+      { fileId: id }, 
+      { $set: { rows, headers: updatedHeaders, updatedAt: new Date() } }, 
+      { new: true, runValidators: true }
+    );
+    
+    if (!updated) {
+      console.error(`[UPDATE UPLOAD ROWS] File not found: ${id}`);
+      return res.status(404).json({ success: false, message: 'File not found' });
+    }
+    
+    console.log(`[UPDATE UPLOAD ROWS] Successfully updated file: ${id}, saved ${updated.rows?.length || 0} rows, ${updated.headers?.length || 0} headers`);
+    
+    // Return file without rows to reduce response size (rows are large)
+    const fileResponse = updated.toObject ? updated.toObject() : updated;
+    delete fileResponse.rows;
+    
+    res.json({ success: true, file: fileResponse, message: `Successfully updated ${rows.length} rows` });
   } catch (err) {
+    console.error('[UPDATE UPLOAD ROWS] Error:', err);
     next(err);
   }
 }

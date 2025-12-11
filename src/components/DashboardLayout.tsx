@@ -249,6 +249,7 @@ export default function DashboardLayout() {
     ? // CCR role sees Uploads tab for Equipment Maintenance, Upload tab otherwise, and Approvals tab
       ((isEquipmentMaintenance
         ? [
+            { label: 'Dashboard', path: '/dashboard/equipment-dashboard', icon: '📊' },
             { label: 'Uploads', path: '/dashboard/uploads', icon: '📤' },
             { label: 'View Data', path: '/dashboard/view-data', icon: '👁️' },
             { label: 'Device Status', path: '/dashboard/device-status', icon: '📊' },

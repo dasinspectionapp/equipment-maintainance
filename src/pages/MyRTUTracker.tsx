@@ -485,6 +485,25 @@ export default function MyRTUTracker() {
     })();
   }, []);
 
+  // Listen for ViewData updates to refresh data
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  
+  useEffect(() => {
+    const handleViewDataUpdate = (event: any) => {
+      const { fileId } = event.detail || {};
+      // Only refresh if the updated file matches the currently selected file
+      if (fileId === selectedFile) {
+        console.log('MyRTUTracker: ViewData updated, refreshing data...');
+        setRefreshTrigger(prev => prev + 1);
+      }
+    };
+
+    window.addEventListener('viewDataUpdated', handleViewDataUpdate as EventListener);
+    return () => {
+      window.removeEventListener('viewDataUpdated', handleViewDataUpdate as EventListener);
+    };
+  }, [selectedFile]);
+
   // Fetch and filter data - same as View Data (merge from all sources) but with PRODUCTION OBSERVATIONS = YES filter
   useEffect(() => {
     (async () => {
@@ -1145,7 +1164,7 @@ export default function MyRTUTracker() {
         setHeaders([]);
       }
     })();
-  }, [selectedFile, userRole, userDivisions]);
+  }, [selectedFile, userRole, userDivisions, refreshTrigger]);
 
   // Search and pagination
   const filteredRows = rows.filter((row) => {

@@ -2360,9 +2360,9 @@ export const getLocalRemoteReports = async (req, res) => {
 
     // Get the latest ONLINE-OFFLINE file
     const latestFile = onlineOfflineFiles[0];
-    console.log('LOCAL-REMOTE Reports - Using file:', latestFile.name, 'FileId:', latestFile.fileId);
+    console.log('LOCAL-REMOTE Reports - Using ONLINE-OFFLINE file:', latestFile.name, 'FileId:', latestFile.fileId);
 
-    // Fetch the full file data
+    // Fetch the full ONLINE-OFFLINE file data
     const fullFile = await Upload.findOne({ fileId: latestFile.fileId }).lean();
     if (!fullFile || !fullFile.rows || fullFile.rows.length === 0) {
       return res.status(404).json({
@@ -2371,8 +2371,188 @@ export const getLocalRemoteReports = async (req, res) => {
       });
     }
 
-    const rows = fullFile.rows;
-    const headers = fullFile.headers || (rows[0] ? Object.keys(rows[0]) : []);
+    let rows = fullFile.rows;
+    let headers = fullFile.headers || (rows[0] ? Object.keys(rows[0]) : []);
+
+    // Also fetch Device Status Upload file (where user edits are saved) and merge
+    const deviceStatusFiles = await Upload.find({
+      uploadType: 'device-status-upload'
+    })
+    .sort({ uploadedAt: -1, createdAt: -1 })
+    .lean();
+
+    if (deviceStatusFiles && deviceStatusFiles.length > 0) {
+      const deviceStatusFile = deviceStatusFiles[0];
+      console.log('LOCAL-REMOTE Reports - Found Device Status Upload file:', deviceStatusFile.name, 'FileId:', deviceStatusFile.fileId);
+      
+      const deviceStatusFileData = await Upload.findOne({ fileId: deviceStatusFile.fileId }).lean();
+        if (deviceStatusFileData && deviceStatusFileData.rows && deviceStatusFileData.rows.length > 0) {
+          const deviceStatusRows = deviceStatusFileData.rows;
+          const deviceStatusHeaders = deviceStatusFileData.headers || (deviceStatusRows[0] ? Object.keys(deviceStatusRows[0]) : []);
+          
+          console.log('LOCAL-REMOTE Reports - Device Status Upload headers:', deviceStatusHeaders);
+          console.log('LOCAL-REMOTE Reports - Device Status Upload headers count:', deviceStatusHeaders.length);
+          console.log('LOCAL-REMOTE Reports - Device Status Upload rows count:', deviceStatusRows.length);
+          
+          // Find SITE CODE header in both files
+          const normalizeHeader = (h) => String(h || '').trim().toLowerCase();
+          const siteCodeHeader = headers.find(h => {
+            const n = normalizeHeader(h);
+            return n === 'site code' || n === 'sitecode' || n === 'site_code';
+          }) || deviceStatusHeaders.find(h => {
+            const n = normalizeHeader(h);
+            return n === 'site code' || n === 'sitecode' || n === 'site_code';
+          }) || '';
+          
+          console.log('LOCAL-REMOTE Reports - SITE CODE header:', siteCodeHeader);
+
+        if (siteCodeHeader) {
+          // Create a map of Device Status Upload data by SITE CODE
+          const deviceStatusMap = new Map();
+          deviceStatusRows.forEach(row => {
+            const siteCode = String(row[siteCodeHeader] || '').trim();
+            if (siteCode) {
+              deviceStatusMap.set(siteCode, row);
+            }
+          });
+          
+          console.log('LOCAL-REMOTE Reports - Created Device Status Upload map with', deviceStatusMap.size, 'site codes');
+          
+          // Log Device Status Upload headers for debugging
+          console.log('LOCAL-REMOTE Reports - Device Status Upload headers:', deviceStatusHeaders);
+          const equipHeadersInDS = deviceStatusHeaders.filter(h => {
+            const n = normalizeHeader(h);
+            return n.includes('equip') || n.includes('switch') || n.includes('l/r');
+          });
+          console.log('LOCAL-REMOTE Reports - Device Status Upload headers with "equip", "switch", or "l/r":', equipHeadersInDS);
+          
+          // Merge Device Status Upload data into rows (preserve user edits)
+          let mergeCount = 0;
+          let equipMergeCount = 0;
+          rows = rows.map(row => {
+            const siteCode = String(row[siteCodeHeader] || '').trim();
+            const deviceStatusRow = deviceStatusMap.get(siteCode);
+            
+            if (deviceStatusRow) {
+              mergeCount++;
+              
+              // Find EQUIPMENT L/R SWITCH STATUS column in Device Status Upload file
+              const dsEquipLRSwitchHeader = deviceStatusHeaders.find(h => {
+                const n = normalizeHeader(h);
+                const matches = n === 'equipment l/r switch status' ||
+                       n === 'equipment_l/r_switch_status' ||
+                       n === 'equipmentl/rswitchstatus' ||
+                       n === 'equipemnt l/r switch status' ||
+                       n === 'equipemnt_l/r_switch_status' ||
+                       n.startsWith('equipment l/r switch status') ||
+                       n.startsWith('equipemnt l/r switch status') ||
+                       ((n.includes('equipment') || n.includes('equipemnt') || n.includes('equip')) &&
+                        (n.includes('l/r') || n.includes('lr') || n.includes('l r')) &&
+                        (n.includes('switch') || n.includes('status')));
+                if (matches && (siteCode === '5W2932' || siteCode === '%W2932' || equipMergeCount < 3)) {
+                  console.log(`LOCAL-REMOTE Reports - Matched EQUIPMENT L/R SWITCH STATUS column in Device Status Upload: "${h}" (normalized: "${n}")`);
+                }
+                return matches;
+              });
+              
+              if (!dsEquipLRSwitchHeader && (siteCode === '5W2932' || siteCode === '%W2932')) {
+                console.log(`LOCAL-REMOTE Reports - EQUIPMENT L/R SWITCH STATUS column not found in Device Status Upload for ${siteCode}`);
+                console.log(`LOCAL-REMOTE Reports - Device Status Upload headers with "equip", "switch", or "l/r":`, deviceStatusHeaders.filter(h => {
+                  const n = normalizeHeader(h);
+                  return n.includes('equip') || n.includes('switch') || n.includes('l/r');
+                }));
+              }
+              
+              // Find DEVICE STATUS column in Device Status Upload file
+              const dsDeviceStatusHeader = deviceStatusHeaders.find(h => {
+                const n = normalizeHeader(h);
+                return n === 'device status' || n === 'device_status' || n === 'devicestatus' ||
+                       (n.includes('device') && n.includes('status'));
+              });
+              
+              // Merge EQUIPMENT L/R SWITCH STATUS from Device Status Upload (preserves user edits)
+              if (dsEquipLRSwitchHeader) {
+                const dsEquipLRSwitch = String(deviceStatusRow[dsEquipLRSwitchHeader] || '').trim();
+                console.log(`LOCAL-REMOTE Reports - Device Status Upload has EQUIPMENT L/R SWITCH STATUS for ${siteCode}: "${dsEquipLRSwitch}" (from column "${dsEquipLRSwitchHeader}")`);
+                
+                if (dsEquipLRSwitch) {
+                  // Find the corresponding column in main rows and update it
+                  // Try to match by exact name first, then by pattern
+                  let mainEquipLRSwitchHeader = headers.find(h => h === dsEquipLRSwitchHeader);
+                  
+                  if (!mainEquipLRSwitchHeader) {
+                    // Try to find by normalized pattern matching
+                    mainEquipLRSwitchHeader = headers.find(h => {
+                      const n = normalizeHeader(h);
+                      const dsNormalized = normalizeHeader(dsEquipLRSwitchHeader);
+                      
+                      // Exact match after normalization
+                      if (n === dsNormalized) {
+                        return true;
+                      }
+                      
+                      // Pattern match: must have equipment/equipemnt, l/r, and switch/status
+                      const hasEquip = n.includes('equipment') || n.includes('equipemnt') || n.includes('equip');
+                      const hasLR = n.includes('l/r') || n.includes('lr') || n.includes('l r');
+                      const hasSwitch = n.includes('switch') || n.includes('status');
+                      return hasEquip && hasLR && hasSwitch;
+                    });
+                  }
+                  
+                  if (mainEquipLRSwitchHeader) {
+                    equipMergeCount++;
+                    const oldValue = String(row[mainEquipLRSwitchHeader] || '').trim();
+                    row[mainEquipLRSwitchHeader] = dsEquipLRSwitch;
+                    if (siteCode === '5W2932' || siteCode === '%W2932' || equipMergeCount <= 3) {
+                      console.log(`LOCAL-REMOTE Reports - ✓ Merged EQUIPMENT L/R SWITCH STATUS for ${siteCode}: "${oldValue}" -> "${dsEquipLRSwitch}" (column: "${mainEquipLRSwitchHeader}")`);
+                    }
+                  } else {
+                    console.warn(`LOCAL-REMOTE Reports - ✗ Could not find main EQUIPMENT L/R SWITCH STATUS column for ${siteCode}.`);
+                    console.warn(`LOCAL-REMOTE Reports - Device Status Upload column: "${dsEquipLRSwitchHeader}"`);
+                    console.warn(`LOCAL-REMOTE Reports - Available headers with "equip" or "switch":`, headers.filter(h => {
+                      const n = normalizeHeader(h);
+                      return n.includes('equip') || n.includes('switch') || n.includes('l/r');
+                    }));
+                  }
+                } else {
+                  console.log(`LOCAL-REMOTE Reports - Device Status Upload EQUIPMENT L/R SWITCH STATUS is empty for ${siteCode}`);
+                }
+              } else {
+                console.log(`LOCAL-REMOTE Reports - EQUIPMENT L/R SWITCH STATUS column not found in Device Status Upload file for ${siteCode}`);
+                console.log(`LOCAL-REMOTE Reports - Device Status Upload headers:`, deviceStatusHeaders);
+              }
+              
+              // Merge DEVICE STATUS from Device Status Upload (preserves user edits)
+              if (dsDeviceStatusHeader) {
+                const dsDeviceStatus = String(deviceStatusRow[dsDeviceStatusHeader] || '').trim();
+                if (dsDeviceStatus) {
+                  const mainDeviceStatusHeader = headers.find(h => {
+                    const n = normalizeHeader(h);
+                    return n.includes('device') && n.includes('status') && !n.includes('rtu');
+                  });
+                  
+                  if (mainDeviceStatusHeader) {
+                    row[mainDeviceStatusHeader] = dsDeviceStatus;
+                    console.log(`LOCAL-REMOTE Reports - Merged DEVICE STATUS for ${siteCode}: ${dsDeviceStatus}`);
+                  }
+                }
+              }
+            }
+            
+            return row;
+          });
+          
+          console.log('LOCAL-REMOTE Reports - Merged Device Status Upload data into', rows.length, 'rows');
+          console.log('LOCAL-REMOTE Reports - Total rows processed:', mergeCount, 'EQUIPMENT L/R SWITCH STATUS merges:', equipMergeCount);
+        } else {
+          console.warn('LOCAL-REMOTE Reports - SITE CODE header not found, skipping Device Status Upload merge');
+        }
+      } else {
+        console.warn('LOCAL-REMOTE Reports - Device Status Upload file has no data');
+      }
+    } else {
+      console.log('LOCAL-REMOTE Reports - No Device Status Upload file found, using ONLINE-OFFLINE only');
+    }
 
     console.log('LOCAL-REMOTE Reports - Total rows:', rows.length);
     console.log('LOCAL-REMOTE Reports - Headers:', headers);
@@ -2428,6 +2608,7 @@ export const getLocalRemoteReports = async (req, res) => {
     let targetDateColumn = null;
     let deviceStatusHeader = null;
     let equipmentLRSwitchStatusHeader = null;
+    let rtuLRSwitchStatusHeader = null;
 
     if (date) {
       // Parse the provided date (format: YYYY-MM-DD)
@@ -2472,15 +2653,30 @@ export const getLocalRemoteReports = async (req, res) => {
           deviceStatusHeader = nextCol;
         }
         
-        // Find EQUIPMENT L/R SWITCH STATUS
-        if (!equipmentLRSwitchStatusHeader && ((normalized.includes('equipment') && normalized.includes('switch')) || 
-            (normalized.includes('l/r') && normalized.includes('switch')))) {
-          equipmentLRSwitchStatusHeader = nextCol;
+        // Find EQUIPMENT L/R SWITCH STATUS (handle typo "EQUIPEMNT" and suffix "_3")
+        if (!equipmentLRSwitchStatusHeader) {
+          const hasEquip = normalized.includes('equipment') || normalized.includes('equipemnt') || normalized.includes('equip');
+          const hasLR = normalized.includes('l/r') || normalized.includes('lr') || normalized.includes('l r');
+          const hasSwitch = normalized.includes('switch') || normalized.includes('status');
+          if ((hasEquip && hasSwitch) || (hasLR && hasSwitch)) {
+            equipmentLRSwitchStatusHeader = nextCol;
+            console.log(`LOCAL-REMOTE Reports - Found EQUIPMENT L/R SWITCH STATUS column: "${nextCol}" (normalized: "${normalized}")`);
+          }
         }
         
-        // Stop after finding both or hitting RTU column
-        if (deviceStatusHeader && equipmentLRSwitchStatusHeader) break;
-        if (normalized.includes('rtu') && normalized.includes('switch')) break;
+        // Find RTU L/R SWITCH STATUS
+        if (!rtuLRSwitchStatusHeader) {
+          const hasRTU = normalized.includes('rtu');
+          const hasLR = normalized.includes('l/r') || normalized.includes('lr') || normalized.includes('l r');
+          const hasSwitch = normalized.includes('switch') || normalized.includes('status');
+          if (hasRTU && (hasLR || hasSwitch)) {
+            rtuLRSwitchStatusHeader = nextCol;
+            console.log(`LOCAL-REMOTE Reports - Found RTU L/R SWITCH STATUS column: "${nextCol}" (normalized: "${normalized}")`);
+          }
+        }
+        
+        // Stop after finding all required columns
+        if (deviceStatusHeader && equipmentLRSwitchStatusHeader && rtuLRSwitchStatusHeader) break;
       }
     } else {
       // Fallback: find first occurrence if no date columns found
@@ -2491,14 +2687,33 @@ export const getLocalRemoteReports = async (req, res) => {
       
       equipmentLRSwitchStatusHeader = headers.find(h => {
         const normalized = normalizeHeader(h);
-        return (normalized.includes('equipment') && normalized.includes('switch')) ||
-               (normalized.includes('l/r') && normalized.includes('switch'));
+        const hasEquip = normalized.includes('equipment') || normalized.includes('equipemnt') || normalized.includes('equip');
+        const hasLR = normalized.includes('l/r') || normalized.includes('lr') || normalized.includes('l r');
+        const hasSwitch = normalized.includes('switch') || normalized.includes('status');
+        const matches = (hasEquip && hasSwitch) || (hasLR && hasSwitch);
+        if (matches) {
+          console.log(`LOCAL-REMOTE Reports - Found EQUIPMENT L/R SWITCH STATUS column (fallback): "${h}" (normalized: "${normalized}")`);
+        }
+        return matches;
+      });
+      
+      rtuLRSwitchStatusHeader = headers.find(h => {
+        const normalized = normalizeHeader(h);
+        const hasRTU = normalized.includes('rtu');
+        const hasLR = normalized.includes('l/r') || normalized.includes('lr') || normalized.includes('l r');
+        const hasSwitch = normalized.includes('switch') || normalized.includes('status');
+        const matches = hasRTU && (hasLR || hasSwitch);
+        if (matches) {
+          console.log(`LOCAL-REMOTE Reports - Found RTU L/R SWITCH STATUS column (fallback): "${h}" (normalized: "${normalized}")`);
+        }
+        return matches;
       });
     }
 
     console.log('LOCAL-REMOTE Reports - Division header:', divisionHeader);
     console.log('LOCAL-REMOTE Reports - Device Status header:', deviceStatusHeader);
     console.log('LOCAL-REMOTE Reports - Equipment L/R Switch Status header:', equipmentLRSwitchStatusHeader);
+    console.log('LOCAL-REMOTE Reports - RTU L/R Switch Status header:', rtuLRSwitchStatusHeader);
     if (targetDateColumn) {
       console.log('LOCAL-REMOTE Reports - Using date column:', targetDateColumn.name, 'Date:', targetDateColumn.date.toISOString().split('T')[0]);
     } else {
@@ -2543,7 +2758,9 @@ export const getLocalRemoteReports = async (req, res) => {
           online: 0,
           offline: 0,
           local: 0,
-          remote: 0
+          remote: 0,
+          switchIssue: 0,
+          rtuLocal: 0
         });
       }
 
@@ -2559,10 +2776,45 @@ export const getLocalRemoteReports = async (req, res) => {
 
       // Count EQUIPMENT L/R SWITCH STATUS
       const equipmentStatus = String(row[equipmentLRSwitchStatusHeader] || '').trim().toUpperCase();
+      
+      // Get site code for debugging (try multiple possible column names)
+      const siteCode = String(row['SITE CODE'] || row['Site Code'] || row['site code'] || row['SITE_CODE'] || '').trim();
+      
+      // Debug: Log first few rows to verify values (especially for site code 5W2932 or %W2932)
+      if (stats.local + stats.remote < 5 || siteCode === '5W2932' || siteCode === '%W2932') {
+        console.log(`LOCAL-REMOTE Reports - Counting for ${siteCode}: EQUIPMENT L/R SWITCH STATUS="${equipmentStatus}" (from column "${equipmentLRSwitchStatusHeader}")`);
+      }
+      
       if (equipmentStatus === 'LOCAL') {
         stats.local++;
+        if (siteCode === '5W2932' || siteCode === '%W2932' || stats.local <= 3) {
+          console.log(`LOCAL-REMOTE Reports - Counting LOCAL for ${siteCode}: "${equipmentStatus}"`);
+        }
       } else if (equipmentStatus === 'REMOTE') {
         stats.remote++;
+        if (siteCode === '5W2932' || siteCode === '%W2932') {
+          console.log(`LOCAL-REMOTE Reports - Counting REMOTE for ${siteCode}: "${equipmentStatus}"`);
+        }
+      } else if (equipmentStatus && (equipmentStatus.includes('SWITCH ISSUE') || equipmentStatus === 'SWITCH ISSUE')) {
+        stats.switchIssue++;
+      } else if (equipmentStatus && equipmentStatus !== '') {
+        // Log any other values for debugging
+        if (siteCode === '5W2932' || siteCode === '%W2932') {
+          console.log(`LOCAL-REMOTE Reports - EQUIPMENT L/R SWITCH STATUS for ${siteCode} is "${equipmentStatus}" (not LOCAL or REMOTE)`);
+        }
+      } else {
+        // Log empty values for debugging
+        if (siteCode === '5W2932' || siteCode === '%W2932') {
+          console.log(`LOCAL-REMOTE Reports - EQUIPMENT L/R SWITCH STATUS for ${siteCode} is EMPTY`);
+        }
+      }
+      
+      // Count RTU L/R SWITCH STATUS
+      if (rtuLRSwitchStatusHeader) {
+        const rtuStatus = String(row[rtuLRSwitchStatusHeader] || '').trim().toUpperCase();
+        if (rtuStatus.includes('RTU LOCAL') || rtuStatus.includes('LOCAL')) {
+          stats.rtuLocal++;
+        }
       }
     });
 

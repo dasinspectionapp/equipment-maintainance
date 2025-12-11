@@ -117,8 +117,15 @@ export default function LoginForm() {
       // Set login error to empty
       setLoginError('');
       
-      // Redirect to dashboard
-      window.location.href = '/dashboard';
+      // Redirect based on role
+      const userRole = data.user?.role || '';
+      if (userRole === 'CCR' || userRole.toLowerCase() === 'ccr') {
+        // Redirect CCR role directly to Equipment Dashboard
+        window.location.href = '/dashboard/equipment-dashboard';
+      } else {
+        // Redirect other roles to default dashboard
+        window.location.href = '/dashboard';
+      }
     } catch (error: any) {
       console.error('Login error:', error);
       setLoginError(error.message || 'Invalid credentials. Please try again.');

@@ -50,6 +50,8 @@ export default function ViewData() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [edits, setEdits] = useState<Record<string, any>>({});
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [saveStatus, setSaveStatus] = useState<{ message: string; type: 'success' | 'error' | null }>({ message: '', type: null });
+  const [savingRowId, setSavingRowId] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -356,6 +358,7 @@ export default function ViewData() {
           let columnsToInsert: string[] = []; // Columns to insert from ONLINE-OFFLINE and RTU-TRACKER files
           let onlineOfflineColumnsList: string[] = []; // Track ONLINE-OFFLINE columns separately for verification
           let rtuTrackerColumnsList: string[] = []; // Track RTU-TRACKER columns separately for verification (declared at higher scope)
+          let equipmentLRSwitchStatusHeader: string | undefined; // Track EQUIPMENT L/R SWITCH STATUS header for deduplication
           
           // Find SITE CODE column in main file (used by ONLINE-OFFLINE and RTU-TRACKER)
           const normalizeHeader = (h: string) => h.trim().toLowerCase();
@@ -364,7 +367,20 @@ export default function ViewData() {
             return normalized === 'site code' || normalized === 'sitecode' || normalized === 'site_code';
           });
           
+          // Also try to find EQUIPMENT L/R SWITCH STATUS in main file headers as fallback
+          if (!equipmentLRSwitchStatusHeader) {
+            equipmentLRSwitchStatusHeader = hdrs.find((h: string) => {
+              const normalized = normalizeHeader(h);
+              return normalized === 'equipment l/r switch status' ||
+                     normalized === 'equipment_l/r_switch_status' ||
+                     normalized === 'equipmentl/rswitchstatus' ||
+                     (normalized.includes('equipment') && normalized.includes('switch') && normalized.includes('status')) ||
+                     (normalized.includes('l/r') && normalized.includes('switch'));
+            });
+          }
+          
           console.log('Main SITE CODE header:', mainSiteCodeHeader);
+          console.log('EQUIPMENT L/R SWITCH STATUS header (from main file or ONLINE-OFFLINE):', equipmentLRSwitchStatusHeader);
           
           // Fetch ONLINE-OFFLINE DATA files
           try {
@@ -548,7 +564,7 @@ export default function ViewData() {
                            normalized.includes('device') && normalized.includes('status');
                   });
                   
-                  const equipmentLRSwitchStatusHeader = onlineOfflineHeaders.find((h: string) => {
+                  equipmentLRSwitchStatusHeader = onlineOfflineHeaders.find((h: string) => {
                     const normalized = normalizeHeader(h);
                     return normalized === 'equipment l/r switch status' ||
                            normalized === 'equipment_l/r_switch_status' ||
@@ -620,7 +636,20 @@ export default function ViewData() {
                         // Add columns that match our expected pattern
                         if (normalizedNext.includes('device') && normalizedNext.includes('status') && !normalizedNext.includes('rtu')) {
                           columnsAfterLatestDate.push(nextCol);
-                        } else if (normalizedNext.includes('equipment') && normalizedNext.includes('switch')) {
+                        } else if (
+                          // Match EQUIPMENT L/R SWITCH STATUS using same logic as header detection
+                          normalizedNext === 'equipment l/r switch status' ||
+                          normalizedNext === 'equipment_l/r_switch_status' ||
+                          normalizedNext === 'equipmentl/rswitchstatus' ||
+                          ((normalizedNext.includes('equipment') || normalizedNext.includes('equip') || normalizedNext.includes('eqpt')) &&
+                           (normalizedNext.includes('l/r') || normalizedNext.includes('lr') || normalizedNext.includes('l r')) &&
+                           (normalizedNext.includes('switch') || normalizedNext.includes('status'))) ||
+                          // Fallback: any column that looks like "L/R switch status" without equipment prefix
+                          ((normalizedNext.includes('l/r') || normalizedNext.includes('lr') || normalizedNext.includes('l r')) &&
+                           normalizedNext.includes('switch') &&
+                           normalizedNext.includes('status') &&
+                           !normalizedNext.includes('rtu'))
+                        ) {
                           columnsAfterLatestDate.push(nextCol);
                         } else if ((normalizedNext.includes('days') && normalizedNext.includes('offline')) || 
                                    normalizedNext === 'noofdaysoffline' || normalizedNext === 'no_of_days_offline') {
@@ -638,6 +667,27 @@ export default function ViewData() {
                           console.log('Added column from latest date group:', col);
                         }
                       });
+                      
+                      // Safety check: Ensure EQUIPMENT L/R SWITCH STATUS is included if header was detected
+                      if (equipmentLRSwitchStatusHeader && !onlineOfflineColumns.includes(equipmentLRSwitchStatusHeader)) {
+                        // Find the position to insert it (should be after DEVICE STATUS, before NO OF DAYS OFFLINE)
+                        const deviceStatusIdx = onlineOfflineColumns.findIndex(col => col === deviceStatusHeader);
+                        const noOfDaysIdx = onlineOfflineColumns.findIndex(col => col === noOfDaysOfflineHeader);
+                        
+                        if (deviceStatusIdx !== -1) {
+                          // Insert after DEVICE STATUS
+                          onlineOfflineColumns.splice(deviceStatusIdx + 1, 0, equipmentLRSwitchStatusHeader);
+                          console.log('Added missing EQUIPMENT L/R SWITCH STATUS column after DEVICE STATUS');
+                        } else if (noOfDaysIdx !== -1) {
+                          // Insert before NO OF DAYS OFFLINE
+                          onlineOfflineColumns.splice(noOfDaysIdx, 0, equipmentLRSwitchStatusHeader);
+                          console.log('Added missing EQUIPMENT L/R SWITCH STATUS column before NO OF DAYS OFFLINE');
+                        } else {
+                          // Add at the end if we can't find the reference columns
+                          onlineOfflineColumns.push(equipmentLRSwitchStatusHeader);
+                          console.log('Added missing EQUIPMENT L/R SWITCH STATUS column at the end');
+                        }
+                      }
                       
                       console.log(`Found ${dateColumns.length} date columns total, showing only latest date group: ${latestDateCol.name}`);
                       console.log('Latest date group columns:', onlineOfflineColumns);
@@ -710,6 +760,7 @@ export default function ViewData() {
                     console.log('Mapped ONLINE-OFFLINE data for', onlineOfflineMap.size, 'unique SITE CODEs');
                     
                     // Merge data into main rows - only latest date column data is merged for display
+                    // CRITICAL: Don't overwrite columns that already exist in main file (preserve saved changes)
                     let mergedCount = 0;
                     fileRows = fileRows.map((row: any) => {
                       const siteCode = String(row[mainSiteCodeHeader] || '').trim();
@@ -718,17 +769,37 @@ export default function ViewData() {
                       if (onlineOfflineRow) {
                         mergedCount++;
                         // Add the ONLINE-OFFLINE columns from ONLINE-OFFLINE data
-                        // Only latest date column's data is included (onlineOfflineColumns contains only latest)
+                        // CRITICAL: Preserve values from main file if they exist (user edits/saved changes)
+                        // Only use ONLINE-OFFLINE data if the main file doesn't have a value for that column
                         const mergedRow = { ...row };
                         onlineOfflineColumns.forEach((col: string) => {
-                          mergedRow[col] = onlineOfflineRow[col] ?? '';
+                          const mainFileValue = row[col];
+                          const onlineOfflineValue = onlineOfflineRow[col] ?? '';
+                          
+                          // If main file has a non-empty value, preserve it (this includes saved user edits)
+                          // Only use ONLINE-OFFLINE value if main file value is missing, empty, null, or undefined
+                          if (mainFileValue !== undefined && mainFileValue !== null && String(mainFileValue).trim() !== '') {
+                            // Keep the value from main file (preserves saved changes)
+                            mergedRow[col] = mainFileValue;
+                            if (col.toLowerCase().includes('device') && col.toLowerCase().includes('status')) {
+                              console.log(`[MERGE] Preserving main file DEVICE STATUS for ${siteCode}: ${mainFileValue} (not using ONLINE-OFFLINE value: ${onlineOfflineValue})`);
+                            }
+                          } else {
+                            // Use ONLINE-OFFLINE value only if main file doesn't have one
+                            mergedRow[col] = onlineOfflineValue;
+                            if (col.toLowerCase().includes('device') && col.toLowerCase().includes('status')) {
+                              console.log(`[MERGE] Using ONLINE-OFFLINE DEVICE STATUS for ${siteCode}: ${onlineOfflineValue} (main file had no value)`);
+                            }
+                          }
                         });
                         return mergedRow;
                       }
-                      // If no match, add empty values for the ONLINE-OFFLINE columns
+                      // If no match, add empty values for the ONLINE-OFFLINE columns only if they don't exist
                       const mergedRow = { ...row };
                       onlineOfflineColumns.forEach((col: string) => {
-                        mergedRow[col] = '';
+                        if (!(col in row)) {
+                          mergedRow[col] = '';
+                        }
                       });
                       return mergedRow;
                     });
@@ -2171,8 +2242,103 @@ export default function ViewData() {
           console.log('Final headers length:', hdrs.length);
           console.log('Expected columns count:', onlineOfflineColumnsToPreserve.length);
           
-          setAllRows(fileRows);
-          setRows(fileRows);
+          // Remove duplicate EQUIPMENT L/R SWITCH STATUS columns
+          // Find all columns that match EQUIPMENT L/R SWITCH STATUS pattern
+          const normalizeForDedup = (str: string) => str.trim().toLowerCase();
+          const equipmentLRSwitchColumns = hdrs.filter((h: string) => {
+            const normalized = normalizeForDedup(h);
+            return (
+              normalized === 'equipment l/r switch status' ||
+              normalized === 'equipment_l/r_switch_status' ||
+              normalized === 'equipmentl/rswitchstatus' ||
+              ((normalized.includes('equipment') || normalized.includes('equipemnt') || normalized.includes('equip') || normalized.includes('eqpt')) &&
+               (normalized.includes('l/r') || normalized.includes('lr') || normalized.includes('l r')) &&
+               (normalized.includes('switch') || normalized.includes('status'))) ||
+              // Also match misspelled "EQUIPEMNT"
+              ((normalized.includes('equipemnt') || normalized.includes('equipemt')) &&
+               (normalized.includes('l/r') || normalized.includes('lr') || normalized.includes('l r')) &&
+               (normalized.includes('switch') || normalized.includes('status')))
+            );
+          });
+          
+          console.log('Found EQUIPMENT L/R SWITCH STATUS columns:', equipmentLRSwitchColumns);
+          
+          if (equipmentLRSwitchColumns.length > 1) {
+            console.log(`Removing ${equipmentLRSwitchColumns.length - 1} duplicate EQUIPMENT L/R SWITCH STATUS column(s)`);
+            
+            // Prefer the column WITH suffix (e.g., "_3", "_2", etc.)
+            // Or prefer the one that matches equipmentLRSwitchStatusHeader if it has a suffix
+            let columnToKeep: string;
+            
+            // First, check if equipmentLRSwitchStatusHeader has a suffix and is in the list
+            if (equipmentLRSwitchStatusHeader && equipmentLRSwitchColumns.includes(equipmentLRSwitchStatusHeader)) {
+              const normalizedHeader = normalizeForDedup(equipmentLRSwitchStatusHeader);
+              if (normalizedHeader.match(/_\d+$/)) {
+                // Header has suffix, use it
+                columnToKeep = equipmentLRSwitchStatusHeader;
+                console.log('Keeping EQUIPMENT L/R SWITCH STATUS column (from header detection with suffix):', columnToKeep);
+              } else {
+                // Header doesn't have suffix, find one with suffix instead
+                const columnWithSuffix = equipmentLRSwitchColumns.find((col: string) => {
+                  const normalized = normalizeForDedup(col);
+                  return normalized.match(/_\d+$/); // Has suffix like "_3" at the end
+                });
+                
+                if (columnWithSuffix) {
+                  columnToKeep = columnWithSuffix;
+                  console.log('Keeping EQUIPMENT L/R SWITCH STATUS column (with suffix):', columnToKeep);
+                } else {
+                  // No column with suffix found, use the header
+                  columnToKeep = equipmentLRSwitchStatusHeader;
+                  console.log('Keeping EQUIPMENT L/R SWITCH STATUS column (from header detection, no suffix available):', columnToKeep);
+                }
+              }
+            } else {
+              // Find column WITH numeric suffix (e.g., "_3", "_2")
+              const columnWithSuffix = equipmentLRSwitchColumns.find((col: string) => {
+                const normalized = normalizeForDedup(col);
+                return normalized.match(/_\d+$/); // Has suffix like "_3" at the end
+              });
+              
+              if (columnWithSuffix) {
+                columnToKeep = columnWithSuffix;
+                console.log('Keeping EQUIPMENT L/R SWITCH STATUS column (with suffix):', columnToKeep);
+              } else {
+                // If none have suffixes, keep the first one (fallback)
+                columnToKeep = equipmentLRSwitchColumns[0];
+                console.log('Keeping first EQUIPMENT L/R SWITCH STATUS column (no suffix found):', columnToKeep);
+              }
+            }
+            
+            // Remove duplicate columns from headers
+            const columnsToRemove = equipmentLRSwitchColumns.filter((col: string) => col !== columnToKeep);
+            console.log('Removing duplicate EQUIPMENT L/R SWITCH STATUS columns:', columnsToRemove);
+            
+            hdrs = hdrs.filter((h: string) => !columnsToRemove.includes(h));
+            
+            // Remove duplicate columns from rows
+            fileRows = fileRows.map((row: any) => {
+              const cleanedRow = { ...row };
+              columnsToRemove.forEach((col: string) => {
+                delete cleanedRow[col];
+              });
+              return cleanedRow;
+            });
+            
+            console.log(`Removed ${columnsToRemove.length} duplicate EQUIPMENT L/R SWITCH STATUS column(s). Kept: ${columnToKeep}`);
+            console.log('Headers after deduplication:', hdrs);
+          } else if (equipmentLRSwitchColumns.length === 1) {
+            console.log('Single EQUIPMENT L/R SWITCH STATUS column found, no deduplication needed:', equipmentLRSwitchColumns[0]);
+          }
+          
+          // Ensure all rows have an id field for tracking (use index if not present)
+          const rowsWithId = fileRows.map((row: any, idx: number) => ({
+            ...row,
+            id: row.id || `${selectedFile}-${idx}`
+          }));
+          
+          setAllRows(rowsWithId);
+          setRows(rowsWithId);
           
           setHeaders(hdrs);
           setCurrentPage(1);
@@ -2240,35 +2406,131 @@ export default function ViewData() {
   useEffect(() => { setCurrentPage(1); }, [rowsPerPage, rows.length, search]);
 
   // Toggle edit mode
-  function handleToggleEditMode() {
+  async function handleToggleEditMode() {
     if (role !== 'CCR') return;
-    setIsEditMode(prev => {
-      const next = !prev;
-      if (!next) {
-        // Turning OFF: save all pending edits
-        if (Object.keys(edits).length > 0) {
+    
+    if (isEditMode) {
+      // Turning OFF: save all pending edits
+      if (Object.keys(edits).length > 0) {
+        setSaveStatus({ message: 'Saving all pending changes...', type: null });
+        
+        try {
           const updatedAll = allRows.map(r => edits[r.id] ? { ...r, ...edits[r.id] } : r);
-          setAllRows(updatedAll);
-          setRows(updatedAll);
-          // Persist edits to backend
-          (async () => {
-            try {
-              const token = localStorage.getItem('token');
-              await fetch(`${API_BASE}/api/uploads/${selectedFile}/rows`, {
-                method: 'PUT',
-                headers: { 
-                  'Content-Type': 'application/json',
-                  'Authorization': token ? `Bearer ${token}` : ''
-                },
-                body: JSON.stringify({ rows: updatedAll })
+          const token = localStorage.getItem('token');
+          
+          if (!token) {
+            throw new Error('Authentication required. Please sign in again.');
+          }
+
+          // Remove the 'id' field from rows before saving to database (it's only for frontend tracking)
+          // Keep all other fields including any MongoDB _id if present
+          const rowsToSave = updatedAll.map((r: any) => {
+            const { id, ...rowWithoutId } = r;
+            return rowWithoutId;
+          });
+
+          const response = await fetch(`${API_BASE}/api/uploads/${selectedFile}/rows`, {
+            method: 'PUT',
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ rows: rowsToSave })
+          });
+
+          const result = await response.json();
+
+          if (!response.ok || !result.success) {
+            throw new Error(result.message || 'Failed to save changes');
+          }
+
+          console.log('Bulk save successful, response:', result);
+          console.log(`Saved ${updatedAll.length} rows to database`);
+
+          // Verify the save by fetching the updated data (optional, for verification)
+          try {
+            const verifyResponse = await fetch(`${API_BASE}/api/uploads/${selectedFile}`, {
+              headers: {
+                'Authorization': `Bearer ${token}`
+              }
+            });
+            const verifyJson = await verifyResponse.json();
+            if (verifyJson?.success && verifyJson.file) {
+              const savedRows = Array.isArray(verifyJson.file.rows) ? verifyJson.file.rows : [];
+              console.log(`[SAVE ROW] Verified: Database now contains ${savedRows.length} rows`);
+              
+              // Verify the saved value is in the database
+              const savedRow = savedRows.find((r: any) => {
+                const sc = String(r['SITE CODE'] || r['Site Code'] || r['site code'] || '').trim();
+                return sc === siteCode;
               });
-            } catch {}
-          })();
+              if (savedRow) {
+                const savedDeviceStatus = savedRow['DEVICE STATUS'] || savedRow['Device Status'] || savedRow['device status'];
+                console.log(`[SAVE ROW] Verified saved DEVICE STATUS for ${siteCode}: ${savedDeviceStatus}`);
+              } else {
+                console.warn(`[SAVE ROW] Could not find saved row for site code: ${siteCode}`);
+              }
+              
+              // Reassign id fields to saved rows for frontend tracking
+              const savedRowsWithId = savedRows.map((row: any, idx: number) => ({
+                ...row,
+                id: row.id || `${selectedFile}-${idx}`
+              }));
+              
+              // Update local state with verified data from database
+              setAllRows(savedRowsWithId);
+              setRows(savedRowsWithId);
+            } else {
+              // Fallback: use the data we just saved
+              setAllRows(updatedAll);
+              setRows(updatedAll);
+            }
+          } catch (verifyError) {
+            console.warn('Could not verify save, using local data:', verifyError);
+            // Fallback: use the data we just saved
+            setAllRows(updatedAll);
+            setRows(updatedAll);
+          }
+          
+          // Get list of all changed columns across all rows
+          const allChangedColumns = new Set<string>();
+          Object.keys(edits).forEach(rowId => {
+            const patch = edits[rowId];
+            Object.keys(patch).forEach(col => allChangedColumns.add(col));
+          });
+          
           setEdits({});
+          
+          const changedColumnsList = Array.from(allChangedColumns);
+          const changedColumnsDisplay = changedColumnsList.length > 0 
+            ? changedColumnsList.slice(0, 3).join(', ') + (changedColumnsList.length > 3 ? '...' : '')
+            : 'data';
+
+          setSaveStatus({ 
+            message: `All changes saved successfully! Updates to ${changedColumnsDisplay} will reflect in all dashboards and counts.`, 
+            type: 'success' 
+          });
+          
+          // Always trigger a custom event to notify other components (like dashboard) to refresh
+          // This ensures all counts and displays are updated regardless of which columns changed
+          window.dispatchEvent(new CustomEvent('viewDataUpdated', { 
+            detail: { fileId: selectedFile, updatedRows: updatedAll, changedColumns: changedColumnsList } 
+          }));
+
+          setTimeout(() => setSaveStatus({ message: '', type: null }), 3000);
+        } catch (error: any) {
+          console.error('Error saving changes:', error);
+          setSaveStatus({ 
+            message: error.message || 'Failed to save changes. Please try again.', 
+            type: 'error' 
+          });
+          setTimeout(() => setSaveStatus({ message: '', type: null }), 5000);
+          return; // Don't turn off edit mode if save failed
         }
       }
-      return next;
-    });
+    }
+    
+    setIsEditMode(prev => !prev);
   }
 
   function handleCellChange(rowId: string, col: string, value: string) {
@@ -2278,31 +2540,132 @@ export default function ViewData() {
     }));
   }
 
-  function handleSaveRow(row: any) {
+  async function handleSaveRow(row: any) {
     const patch = edits[row.id] || {};
+    if (Object.keys(patch).length === 0) {
+      setSaveStatus({ message: 'No changes to save', type: null });
+      setTimeout(() => setSaveStatus({ message: '', type: null }), 2000);
+      return;
+    }
+
+    setSavingRowId(row.id);
+    setSaveStatus({ message: 'Saving changes...', type: null });
+
     const updatedRow = { ...row, ...patch };
     const updatedAll = allRows.map(r => (r.id === row.id ? updatedRow : r));
-    setAllRows(updatedAll);
-    setRows(updatedAll);
-    (async () => {
-      try {
-        const token = localStorage.getItem('token');
-        await fetch(`${API_BASE}/api/uploads/${selectedFile}/rows`, {
-          method: 'PUT',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': token ? `Bearer ${token}` : ''
-          },
-          body: JSON.stringify({ rows: updatedAll })
-        });
-      } catch {}
-    })();
+    
+    // Log what's being saved for debugging
+    const siteCode = updatedRow['SITE CODE'] || updatedRow['Site Code'] || updatedRow['site code'] || 'UNKNOWN';
+    console.log(`[SAVE ROW] Saving changes for site code: ${siteCode}`);
+    console.log(`[SAVE ROW] Changes being saved:`, patch);
+    console.log(`[SAVE ROW] Updated row DEVICE STATUS:`, updatedRow['DEVICE STATUS'] || updatedRow['Device Status'] || updatedRow['device status']);
+    
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication required. Please sign in again.');
+      }
 
-    setEdits(prev => {
-      const next = { ...prev };
-      delete next[row.id];
-      return next;
-    });
+      // Remove the 'id' field from rows before saving to database (it's only for frontend tracking)
+      // Keep all other fields including any MongoDB _id if present
+      const rowsToSave = updatedAll.map((r: any) => {
+        const { id, ...rowWithoutId } = r;
+        return rowWithoutId;
+      });
+      
+      console.log(`[SAVE ROW] Saving ${rowsToSave.length} rows to database`);
+
+      const response = await fetch(`${API_BASE}/api/uploads/${selectedFile}/rows`, {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ rows: rowsToSave })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Failed to save changes');
+      }
+
+      console.log('Save successful, response:', result);
+      console.log(`Saved ${updatedAll.length} rows to database`);
+
+      // Verify the save by fetching the updated data (optional, for verification)
+      // This ensures we have the latest data from the database
+      try {
+        const verifyResponse = await fetch(`${API_BASE}/api/uploads/${selectedFile}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        const verifyJson = await verifyResponse.json();
+        if (verifyJson?.success && verifyJson.file) {
+          const savedRows = Array.isArray(verifyJson.file.rows) ? verifyJson.file.rows : [];
+          console.log(`Verified: Database now contains ${savedRows.length} rows`);
+          
+          // Reassign id fields to saved rows for frontend tracking
+          const savedRowsWithId = savedRows.map((row: any, idx: number) => ({
+            ...row,
+            id: row.id || `${selectedFile}-${idx}`
+          }));
+          
+          // Update local state with verified data from database
+          setAllRows(savedRowsWithId);
+          setRows(savedRowsWithId);
+        } else {
+          // Fallback: use the data we just saved
+          setAllRows(updatedAll);
+          setRows(updatedAll);
+        }
+      } catch (verifyError) {
+        console.warn('Could not verify save, using local data:', verifyError);
+        // Fallback: use the data we just saved
+        setAllRows(updatedAll);
+        setRows(updatedAll);
+      }
+      
+      // Clear the edit for this row
+      setEdits(prev => {
+        const next = { ...prev };
+        delete next[row.id];
+        return next;
+      });
+
+      // Get list of changed columns for the message
+      const changedColumns = Object.keys(patch);
+      const changedColumnsDisplay = changedColumns.length > 0 
+        ? changedColumns.slice(0, 3).join(', ') + (changedColumns.length > 3 ? '...' : '')
+        : 'data';
+
+      setSaveStatus({ 
+        message: `Successfully saved! Changes to ${changedColumnsDisplay} will reflect in all dashboards and counts.`, 
+        type: 'success' 
+      });
+      
+      // Always trigger a custom event to notify other components (like dashboard) to refresh
+      // This ensures all counts and displays are updated regardless of which column changed
+      window.dispatchEvent(new CustomEvent('viewDataUpdated', { 
+        detail: { fileId: selectedFile, updatedRow, changedColumns } 
+      }));
+
+      // Clear success message after 3 seconds
+      setTimeout(() => setSaveStatus({ message: '', type: null }), 3000);
+
+    } catch (error: any) {
+      console.error('Error saving row:', error);
+      setSaveStatus({ 
+        message: error.message || 'Failed to save changes. Please try again.', 
+        type: 'error' 
+      });
+      
+      // Clear error message after 5 seconds
+      setTimeout(() => setSaveStatus({ message: '', type: null }), 5000);
+    } finally {
+      setSavingRowId(null);
+    }
   }
 
   function handleCancelRow(rowId: string) {
@@ -2528,6 +2891,15 @@ export default function ViewData() {
         >
           {isEditMode ? 'DONE' : 'EDIT'}
         </button>
+        {saveStatus.message && (
+          <div className={`px-4 py-2 rounded-lg font-medium ${
+            saveStatus.type === 'success' ? 'bg-green-100 text-green-800 border border-green-300' :
+            saveStatus.type === 'error' ? 'bg-red-100 text-red-800 border border-red-300' :
+            'bg-blue-100 text-blue-800 border border-blue-300'
+          }`}>
+            {saveStatus.message}
+          </div>
+        )}
         {/* Download format select */}
         <label className="block font-medium text-gray-700">Download:</label>
         <select
@@ -2642,8 +3014,20 @@ export default function ViewData() {
                 })}
                 {isEditMode && (
                   <td className="px-1 py-1 border-0 text-center" style={{ minWidth: 120 }}>
-                    <button className="bg-green-600 text-white rounded px-2 py-1 mr-2" onClick={() => handleSaveRow(row)}>Save</button>
-                    <button className="bg-red-600 text-white rounded px-2 py-1" onClick={() => handleCancelRow(row.id)}>Cancel</button>
+                    <button 
+                      className={`${savingRowId === row.id ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'} text-white rounded px-2 py-1 mr-2`} 
+                      onClick={() => handleSaveRow(row)}
+                      disabled={savingRowId === row.id}
+                    >
+                      {savingRowId === row.id ? 'Saving...' : 'Save'}
+                    </button>
+                    <button 
+                      className="bg-red-600 hover:bg-red-700 text-white rounded px-2 py-1" 
+                      onClick={() => handleCancelRow(row.id)}
+                      disabled={savingRowId === row.id}
+                    >
+                      Cancel
+                    </button>
                   </td>
                 )}
               </tr>

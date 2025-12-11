@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, LabelList, LineChart, Line, AreaChart, Area, ReferenceLine } from 'recharts';
 
 type UploadedFile = {
   fileId: string;
@@ -67,12 +68,29 @@ export default function EquipmentDashboard() {
   const [mergedRows, setMergedRows] = useState<MergedRow[]>([]);
   const [divisionFilter, setDivisionFilter] = useState<string>('');
   const [subDivisionFilter, setSubDivisionFilter] = useState<string>('');
+  const [circleFilter, setCircleFilter] = useState<string>('');
   const [snapshotDateLabel, setSnapshotDateLabel] = useState<string>(''); // latest date detected from data (yyyy-MM-dd)
   const [selectedDate, setSelectedDate] = useState<string>(''); // value bound to the Date picker
+  const [refreshTrigger, setRefreshTrigger] = useState(0); // Trigger to refresh dashboard when ViewData is updated
+
+  // Listen for ViewData updates to refresh dashboard
+  useEffect(() => {
+    const handleViewDataUpdate = () => {
+      console.log('ViewData updated, refreshing dashboard...');
+      // Trigger a refresh by updating a state that causes the data fetch to re-run
+      setRefreshTrigger(prev => prev + 1);
+    };
+
+    window.addEventListener('viewDataUpdated', handleViewDataUpdate);
+    return () => {
+      window.removeEventListener('viewDataUpdated', handleViewDataUpdate);
+    };
+  }, []);
 
   useEffect(() => {
     (async () => {
-      if (role !== 'Equipment') {
+      // Allow both Equipment and CCR roles
+      if (role !== 'Equipment' && role !== 'CCR') {
         setIsLoading(false);
         return;
       }
@@ -98,7 +116,59 @@ export default function EquipmentDashboard() {
         const uploadsJson = await uploadsRes.json();
         const files: UploadedFile[] = uploadsJson.files || [];
 
-        // 2) Find latest ONLINE-OFFLINE file
+        // 2) Find latest Device Status Upload file (where user edits are saved)
+        // Use same logic as ViewData: uploadType === 'device-status-upload'
+        const deviceStatusFile = pickLatestUpload(files, (f) => {
+          const name = normalize(f.name || '');
+          const uploadTypeValue = f.uploadType;
+          const uploadType = uploadTypeValue ? String(uploadTypeValue).toLowerCase().trim() : '';
+          
+          // STRICT: Only files with uploadType === 'device-status-upload'
+          const isByType = uploadType === 'device-status-upload';
+          
+          // Also check filename patterns as fallback
+          const isByName = 
+            name.includes('device status') ||
+            name.includes('device_status') ||
+            name.includes('devicestatus');
+          
+          // Exclude ONLINE-OFFLINE and RTU-TRACKER files
+          const isOnlineOfflineFileName = name.includes('online-offline') || 
+                                         name.includes('online_offline') ||
+                                         name.includes('onlineoffline');
+          const normalizedFileName = name.replace(/[-_\s]/g, '');
+          const isRtuTrackerFileName = 
+            name.includes('rtu-tracker') || 
+            name.includes('rtu_tracker') ||
+            name.includes('rtu tracker') ||
+            name.includes('rtutracker') ||
+            normalizedFileName.includes('rtutracker') ||
+            /rtu.*tracker/i.test(f.name || '');
+          
+          const isNotOnlineOffline = !isOnlineOfflineFileName && uploadType !== 'online-offline-data';
+          const isNotRtuTracker = !isRtuTrackerFileName && uploadType !== 'rtu-tracker';
+          
+          const shouldInclude = (isByType || isByName) && isNotOnlineOffline && isNotRtuTracker;
+          
+          if (shouldInclude) {
+            console.log(`CCR Dashboard - Found Device Status Upload file: ${f.name} (uploadType: ${uploadTypeValue})`);
+          }
+          
+          return shouldInclude;
+        });
+        
+        if (!deviceStatusFile) {
+          console.warn('CCR Dashboard - No Device Status Upload file found.');
+          console.warn('CCR Dashboard - Available files:', files.map(f => ({ 
+            name: f.name, 
+            uploadType: f.uploadType,
+            fileId: f.fileId 
+          })));
+        } else {
+          console.log(`CCR Dashboard - Using Device Status Upload file: ${deviceStatusFile.name} (fileId: ${deviceStatusFile.fileId}, uploadType: ${deviceStatusFile.uploadType})`);
+        }
+
+        // 3) Find latest ONLINE-OFFLINE file
         const onlineOfflineFile = pickLatestUpload(files, (f) => {
           const name = normalize(f.name || '');
           const type = normalize(f.uploadType || '');
@@ -114,7 +184,44 @@ export default function EquipmentDashboard() {
           throw new Error('No ONLINE-OFFLINE file found.');
         }
 
-        // 3) Fetch ONLINE-OFFLINE file data
+        // 3) Fetch Device Status Upload file data (if available) - this contains user edits
+        let deviceStatusRows: any[] = [];
+        let deviceStatusHeaders: string[] = [];
+        let mainSiteCodeHeader = '';
+        
+        if (deviceStatusFile) {
+          console.log('CCR Dashboard - Fetching Device Status Upload file:', deviceStatusFile.name);
+          try {
+            const dsRes = await fetch(`http://localhost:5000/api/uploads/${deviceStatusFile.fileId}`, {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            });
+            const dsJson = await dsRes.json();
+            if (dsJson?.success && dsJson.file) {
+              deviceStatusRows = Array.isArray(dsJson.file.rows) ? dsJson.file.rows : [];
+              deviceStatusHeaders = dsJson.file.headers && dsJson.file.headers.length 
+                ? dsJson.file.headers 
+                : (deviceStatusRows[0] ? Object.keys(deviceStatusRows[0]) : []);
+              
+              // Find SITE CODE header in Device Status Upload file
+              mainSiteCodeHeader = deviceStatusHeaders.find((h: string) => {
+                const n = normalize(h);
+                return n === 'site code' || n === 'sitecode' || n === 'site_code';
+              }) || '';
+              
+              console.log('CCR Dashboard - Device Status Upload file loaded:', {
+                rows: deviceStatusRows.length,
+                headers: deviceStatusHeaders.length,
+                siteCodeHeader: mainSiteCodeHeader
+              });
+            }
+          } catch (error) {
+            console.warn('CCR Dashboard - Failed to load Device Status Upload file, using ONLINE-OFFLINE only:', error);
+          }
+        }
+
+        // 4) Fetch ONLINE-OFFLINE file data
         const ooRes = await fetch(`http://localhost:5000/api/uploads/${onlineOfflineFile.fileId}`, {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -130,12 +237,21 @@ export default function EquipmentDashboard() {
         const ooHeaders: string[] =
           ooData.headers && ooData.headers.length ? ooData.headers : ooRows[0] ? Object.keys(ooRows[0]) : [];
 
-        // 4) Identify columns in ONLINE-OFFLINE
+        // 5) Identify columns in ONLINE-OFFLINE
         const siteCodeHeader =
           ooHeaders.find((h) => {
             const n = normalize(h);
             return n === 'site code' || n === 'sitecode' || n === 'site_code';
           }) || '';
+        
+        console.log(`CCR Dashboard - Site Code Header: "${siteCodeHeader}"`);
+        if (!siteCodeHeader) {
+          console.error(`CCR Dashboard - ERROR: Site Code header not found! Available headers:`, ooHeaders.slice(0, 10));
+        } else {
+          // Log sample site codes from first few rows
+          const sampleSiteCodes = ooRows.slice(0, 5).map(row => String(row[siteCodeHeader] || '').trim()).filter(sc => sc);
+          console.log(`CCR Dashboard - Sample site codes (first 5):`, sampleSiteCodes);
+        }
 
         const deviceStatusHeader =
           ooHeaders.find((h) => {
@@ -319,8 +435,24 @@ export default function EquipmentDashboard() {
               }
             }
           } else {
-            // Check if header IS a date (e.g., "17-11-2025", "18-11-2025")
-            const headerDate = parseDateFromString(h);
+            // Check if header IS a date (e.g., "17-11-2025", "18-11-2025", "20-11-2025")
+            // Try multiple parsing approaches
+            let headerDate = parseDateFromString(h);
+            
+            // If direct parsing failed, try trimming and cleaning the header
+            if (!headerDate || isNaN(headerDate.getTime())) {
+              const cleaned = String(h).trim().replace(/\s+/g, ' ');
+              headerDate = parseDateFromString(cleaned);
+            }
+            
+            // If still failed, try removing any prefix/suffix (e.g., "DATE 17-11-2025" -> "17-11-2025")
+            if (!headerDate || isNaN(headerDate.getTime())) {
+              const dateMatch = String(h).match(/(\d{1,2}[-\/]\d{1,2}[-\/]\d{4})/);
+              if (dateMatch) {
+                headerDate = parseDateFromString(dateMatch[1]);
+              }
+            }
+            
             if (headerDate && !isNaN(headerDate.getTime())) {
               dateHeaderNames.push(h);
               dateHeaderMap.set(h, headerDate);
@@ -328,6 +460,42 @@ export default function EquipmentDashboard() {
             }
           }
         });
+        
+        // FALLBACK: If no date headers found, scan ALL headers for date-like patterns
+        if (dateHeaderNames.length === 0) {
+          console.log('CCR Dashboard - No date headers found, scanning all headers for date patterns...');
+          ooHeaders.forEach((h) => {
+            const str = String(h).trim();
+            // Look for patterns like: DD-MM-YYYY, DD/MM/YYYY, YYYY-MM-DD, etc.
+            const datePatterns = [
+              /(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/,  // DD-MM-YYYY or DD/MM/YYYY
+              /(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/,  // YYYY-MM-DD or YYYY/MM/DD
+            ];
+            
+            for (const pattern of datePatterns) {
+              const match = str.match(pattern);
+              if (match) {
+                let headerDate: Date | null = null;
+                if (pattern.source.includes('\\d{4}') && pattern.source.startsWith('(\\d{4})')) {
+                  // YYYY-MM-DD format
+                  headerDate = parseDateFromString(`${match[1]}-${match[2]}-${match[3]}`);
+                } else {
+                  // DD-MM-YYYY format
+                  headerDate = parseDateFromString(`${match[1]}-${match[2]}-${match[3]}`);
+                }
+                
+                if (headerDate && !isNaN(headerDate.getTime())) {
+                  if (!dateHeaderNames.includes(h)) {
+                    dateHeaderNames.push(h);
+                    dateHeaderMap.set(h, headerDate);
+                    console.log(`CCR Dashboard - Found date header (fallback): "${h}" -> ${formatDateToISO(headerDate)}`);
+                  }
+                  break;
+                }
+              }
+            }
+          });
+        }
 
         // Find the latest date from headers (when headers are dates) or from row 2 (when header is "DATE")
         let latestDateValue: Date | null = null;
@@ -383,7 +551,22 @@ export default function EquipmentDashboard() {
         });
         console.log('CCR Dashboard - ====================================');
         
-        // Critical: Check if "17-11-2025" header is detected
+        // Critical: Check if "20-11-2025" header is detected (latest date)
+        const header20Nov = dateHeaderNames.find(h => {
+          const parsed = parseDateFromString(h);
+          return parsed && formatDateToISO(parsed) === '2025-11-20';
+        });
+        if (header20Nov) {
+          console.log('CCR Dashboard - Found 20-11-2025 header:', header20Nov);
+          // Ensure latestDateValue is set to 20-11-2025 if it's the latest
+          const date20Nov = dateHeaderMap.get(header20Nov);
+          if (date20Nov && (!latestDateValue || date20Nov.getTime() > latestDateValue.getTime())) {
+            latestDateValue = date20Nov;
+            console.log('CCR Dashboard - Set latestDateValue to 20-11-2025');
+          }
+        }
+        
+        // Also check for other dates for debugging
         const header17Nov = dateHeaderNames.find(h => {
           const parsed = parseDateFromString(h);
           return parsed && formatDateToISO(parsed) === '2025-11-17';
@@ -469,6 +652,68 @@ export default function EquipmentDashboard() {
         
         // Check if we have multiple DATE columns (indicating date snapshots as columns)
         const hasMultipleDateColumns = dateHeaderNames.length > 1;
+        
+        // If no date headers found, try to find dates in cell values
+        if (dateHeaderNames.length === 0) {
+          console.log('CCR Dashboard - No date headers detected, scanning cell values for dates...');
+          // Scan first few rows to find columns that contain dates
+          const potentialDateColumns = new Map<string, Set<string>>(); // column -> set of dates found
+          
+          ooRows.slice(0, 20).forEach((row) => {
+            ooHeaders.forEach((header) => {
+              const value = row[header];
+              if (value !== null && value !== undefined && value !== '') {
+                const parsed = parseCellDate(value, false);
+                if (parsed && !isNaN(parsed.getTime())) {
+                  const dateKey = formatDateToISO(parsed);
+                  if (!potentialDateColumns.has(header)) {
+                    potentialDateColumns.set(header, new Set());
+                  }
+                  potentialDateColumns.get(header)!.add(dateKey);
+                }
+              }
+            });
+          });
+          
+          // Find columns that consistently contain dates (at least 5 rows with dates)
+          potentialDateColumns.forEach((dates, header) => {
+            if (dates.size > 0) {
+              console.log(`CCR Dashboard - Column "${header}" contains dates:`, Array.from(dates).sort());
+              // Use the most common date as the date for this column
+              const dateCounts = new Map<string, number>();
+              ooRows.slice(0, 50).forEach((row) => {
+                const value = row[header];
+                const parsed = parseCellDate(value, false);
+                if (parsed && !isNaN(parsed.getTime())) {
+                  const dateKey = formatDateToISO(parsed);
+                  dateCounts.set(dateKey, (dateCounts.get(dateKey) || 0) + 1);
+                }
+              });
+              
+              if (dateCounts.size > 0) {
+                // Use the most common date
+                let mostCommonDate = '';
+                let maxCount = 0;
+                dateCounts.forEach((count, date) => {
+                  if (count > maxCount) {
+                    maxCount = count;
+                    mostCommonDate = date;
+                  }
+                });
+                
+                if (maxCount >= 5) {
+                  // This column consistently has dates, treat it as a date column
+                  const parsedDate = parseDateFromString(mostCommonDate);
+                  if (parsedDate && !isNaN(parsedDate.getTime())) {
+                    dateHeaderNames.push(header);
+                    dateHeaderMap.set(header, parsedDate);
+                    console.log(`CCR Dashboard - Detected date column from cell values: "${header}" -> ${mostCommonDate} (${maxCount} occurrences)`);
+                  }
+                }
+              }
+            }
+          });
+        }
         
         ooRows.forEach((row) => {
           const sc = String(row[siteCodeHeader] || '').trim();
@@ -684,20 +929,75 @@ export default function EquipmentDashboard() {
         });
         console.log('CCR Dashboard - Conversion examples (first 20):', conversionExamples);
 
-        // 7) Convert ONLINE-OFFLINE rows with dates directly to MergedRow format
-        // No merging needed - use ONLINE-OFFLINE data directly
+        // 7) Create a map of Device Status Upload data by SITE CODE (for merging user edits)
+        const deviceStatusMap = new Map<string, any>();
+        if (deviceStatusFile && deviceStatusRows.length > 0 && mainSiteCodeHeader) {
+          deviceStatusRows.forEach((row: any) => {
+            const sc = String(row[mainSiteCodeHeader] || '').trim();
+            if (sc) {
+              deviceStatusMap.set(sc, row);
+            }
+          });
+          console.log('CCR Dashboard - Created Device Status Upload map with', deviceStatusMap.size, 'site codes');
+        }
+
+        // 8) Convert ONLINE-OFFLINE rows with dates to MergedRow format and merge with Device Status Upload
+        // Merge Device Status Upload data to preserve user edits
         const merged: MergedRow[] = [];
         const seenSiteCodeDate = new Set<string>(); // Track SITE CODE + DATE combinations to avoid duplicates
         let duplicateCount = 0; // Track how many duplicates we skip
+        let mergedWithDeviceStatusCount = 0; // Track how many rows were merged with Device Status Upload data
         
-        ooRowsWithDates.forEach((ooEntry) => {
+        let skippedNoDate = 0;
+        let skippedNoSiteCode = 0;
+        let processedCount = 0;
+        
+        console.log(`CCR Dashboard - Starting merge process with ${ooRowsWithDates.length} entries from ONLINE-OFFLINE`);
+        
+        // Check first 10 entries in detail
+        const sampleEntries = ooRowsWithDates.slice(0, 10).map((e, idx) => {
+          const dateKey = e.dateValue ? formatDateToISO(e.dateValue) : 'NONE';
+          const dateValid = e.dateValue ? !isNaN(e.dateValue.getTime()) : false;
+          const scValid = e.siteCode && e.siteCode.trim() !== '';
+          const uniqueKey = (dateValid && scValid) ? `${e.siteCode}::${dateKey}` : 'INVALID';
+          return {
+            index: idx,
+            siteCode: e.siteCode || 'MISSING',
+            hasDate: !!e.dateValue,
+            dateValue: dateKey,
+            dateValid,
+            scValid,
+            uniqueKey,
+            willSkip: !dateValid || !scValid
+          };
+        });
+        console.log(`CCR Dashboard - First 10 entries analysis:`, sampleEntries);
+        
+        ooRowsWithDates.forEach((ooEntry, index) => {
           // Only process entries with valid dates
-          if (!ooEntry.dateValue || isNaN(ooEntry.dateValue.getTime())) {
+          if (!ooEntry.dateValue) {
+            skippedNoDate++;
+            if (index < 5) {
+              console.log(`CCR Dashboard - Skipping entry ${index}: no dateValue`, ooEntry);
+            }
             return; // Skip entries without valid dates
           }
           
+          // Check if date is valid
+          if (isNaN(ooEntry.dateValue.getTime())) {
+            skippedNoDate++;
+            if (index < 5) {
+              console.log(`CCR Dashboard - Skipping entry ${index}: invalid date`, ooEntry.dateValue);
+            }
+            return; // Skip entries with invalid dates
+          }
+          
           const sc = ooEntry.siteCode;
-          if (!sc) {
+          if (!sc || sc.trim() === '') {
+            skippedNoSiteCode++;
+            if (index < 5) {
+              console.log(`CCR Dashboard - Skipping entry ${index}: no site code`, ooEntry);
+            }
             return; // Skip entries without site code
           }
           
@@ -708,11 +1008,118 @@ export default function EquipmentDashboard() {
           // Only add if we haven't seen this SITE CODE + DATE combination before
           if (!seenSiteCodeDate.has(uniqueKey)) {
             seenSiteCodeDate.add(uniqueKey);
+            processedCount++;
+            
+            // Start with ONLINE-OFFLINE row data
+            const mergedRow: any = { ...ooEntry.row };
+            
+            // Merge Device Status Upload data if available (preserves user edits)
+            const deviceStatusRow = deviceStatusMap.get(sc);
+            if (deviceStatusRow) {
+              mergedWithDeviceStatusCount++;
+              
+              // Find DEVICE STATUS column in Device Status Upload file
+              const dsDeviceStatusHeader = deviceStatusHeaders.find((h: string) => {
+                const n = normalize(h);
+                return n === 'device status' || n === 'device_status' || n === 'devicestatus' ||
+                       (n.includes('device') && n.includes('status'));
+              });
+              
+              // Find EQUIPMENT L/R SWITCH STATUS column in Device Status Upload file
+              // Handle both "EQUIPMENT" and "EQUIPEMNT" (typo) and any suffix like "_3"
+              const dsEquipLRSwitchHeader = deviceStatusHeaders.find((h: string) => {
+                const n = normalize(h);
+                const matches = n === 'equipment l/r switch status' ||
+                       n === 'equipment_l/r_switch_status' ||
+                       n === 'equipmentl/rswitchstatus' ||
+                       n === 'equipemnt l/r switch status' ||
+                       n === 'equipemnt_l/r_switch_status' ||
+                       n.startsWith('equipment l/r switch status') ||
+                       n.startsWith('equipemnt l/r switch status') ||
+                       ((n.includes('equipment') || n.includes('equipemnt') || n.includes('equip')) &&
+                        (n.includes('l/r') || n.includes('lr') || n.includes('l r')) &&
+                        (n.includes('switch') || n.includes('status')));
+                if (matches) {
+                  console.log(`CCR Dashboard - Matched EQUIPMENT L/R SWITCH STATUS column: "${h}" (normalized: "${n}")`);
+                }
+                return matches;
+              });
+              
+              if (dsEquipLRSwitchHeader) {
+                console.log(`CCR Dashboard - Found EQUIPMENT L/R SWITCH STATUS column in Device Status Upload: "${dsEquipLRSwitchHeader}"`);
+              } else {
+                console.log(`CCR Dashboard - EQUIPMENT L/R SWITCH STATUS column not found in Device Status Upload headers:`, deviceStatusHeaders);
+                console.log(`CCR Dashboard - Searching for columns containing:`, {
+                  hasEquip: deviceStatusHeaders.filter(h => normalize(h).includes('equip')),
+                  hasLR: deviceStatusHeaders.filter(h => normalize(h).includes('l/r') || normalize(h).includes('lr')),
+                  hasSwitch: deviceStatusHeaders.filter(h => normalize(h).includes('switch'))
+                });
+              }
+              
+              // If Device Status Upload has DEVICE STATUS, use it (preserves user edits)
+              if (dsDeviceStatusHeader) {
+                const dsDeviceStatus = String(deviceStatusRow[dsDeviceStatusHeader] || '').trim();
+                if (dsDeviceStatus) {
+                  // Override ONLINE-OFFLINE DEVICE STATUS with Device Status Upload value
+                  if (deviceStatusHeader) {
+                    mergedRow[deviceStatusHeader] = dsDeviceStatus;
+                  }
+                  // Also set in the merged row's __deviceStatus field
+                  mergedRow.__deviceStatus = dsDeviceStatus;
+                  console.log(`CCR Dashboard - Using Device Status Upload DEVICE STATUS for ${sc}: ${dsDeviceStatus}`);
+                }
+              }
+              
+              // If Device Status Upload has EQUIPMENT L/R SWITCH STATUS, use it (preserves user edits)
+              if (dsEquipLRSwitchHeader) {
+                const dsEquipLRSwitch = String(deviceStatusRow[dsEquipLRSwitchHeader] || '').trim();
+                console.log(`CCR Dashboard - Device Status Upload EQUIPMENT L/R SWITCH STATUS for ${sc}: "${dsEquipLRSwitch}" (from column "${dsEquipLRSwitchHeader}")`);
+                if (dsEquipLRSwitch) {
+                  // Override ONLINE-OFFLINE EQUIPMENT L/R SWITCH STATUS with Device Status Upload value
+                  if (equipLRSwitchHeader) {
+                    mergedRow[equipLRSwitchHeader] = dsEquipLRSwitch;
+                    console.log(`CCR Dashboard - Set mergedRow[${equipLRSwitchHeader}] = "${dsEquipLRSwitch}"`);
+                  }
+                  // Also set in the merged row's __equipLRSwitchStatus field
+                  mergedRow.__equipLRSwitchStatus = dsEquipLRSwitch;
+                  console.log(`CCR Dashboard - Set mergedRow.__equipLRSwitchStatus = "${dsEquipLRSwitch}" for site ${sc}`);
+                } else {
+                  console.log(`CCR Dashboard - Device Status Upload EQUIPMENT L/R SWITCH STATUS is empty for ${sc}`);
+                }
+              } else {
+                // Try to find it by checking all columns that might match
+                const possibleColumns = deviceStatusHeaders.filter((h: string) => {
+                  const n = normalize(h);
+                  return (n.includes('equip') || n.includes('equipemnt')) && 
+                         (n.includes('l/r') || n.includes('lr')) && 
+                         (n.includes('switch') || n.includes('status'));
+                });
+                if (possibleColumns.length > 0) {
+                  console.log(`CCR Dashboard - Possible EQUIPMENT L/R SWITCH STATUS columns found but not matched:`, possibleColumns);
+                }
+              }
+              
+              // Merge other columns from Device Status Upload (preserve user edits)
+              // Skip columns we've already handled explicitly (DEVICE STATUS and EQUIPMENT L/R SWITCH STATUS)
+              deviceStatusHeaders.forEach((col: string) => {
+                // Skip if we've already handled this column explicitly
+                if (col === dsDeviceStatusHeader || col === dsEquipLRSwitchHeader) {
+                  return;
+                }
+                
+                const dsValue = deviceStatusRow[col];
+                // Only override if Device Status Upload has a non-empty value
+                if (dsValue !== undefined && dsValue !== null && String(dsValue).trim() !== '') {
+                  mergedRow[col] = dsValue;
+                }
+              });
+            }
+            
             merged.push({
-              ...ooEntry.row, // Include all columns from ONLINE-OFFLINE row
+              ...mergedRow, // Include merged columns
               __statusDate: ooEntry.dateValue,
-              __deviceStatus: ooEntry.row && deviceStatusHeader ? String(ooEntry.row[deviceStatusHeader] || '').trim() : '',
-              __equipLRSwitchStatus: ooEntry.row && equipLRSwitchHeader ? String(ooEntry.row[equipLRSwitchHeader] || '').trim() : '',
+              __deviceStatus: mergedRow.__deviceStatus || (ooEntry.row && deviceStatusHeader ? String(ooEntry.row[deviceStatusHeader] || '').trim() : ''),
+              __equipLRSwitchStatus: mergedRow.__equipLRSwitchStatus || (ooEntry.row && equipLRSwitchHeader ? String(ooEntry.row[equipLRSwitchHeader] || '').trim() : ''),
               __rtuLRSwitchStatus: ooEntry.row && rtuLRSwitchHeader ? String(ooEntry.row[rtuLRSwitchHeader] || '').trim() : '',
               __circleHeader: circleHeader,
               __divisionHeader: divisionHeader,
@@ -720,6 +1127,60 @@ export default function EquipmentDashboard() {
             } as MergedRow);
           } else {
             duplicateCount++;
+          }
+        });
+        
+        console.log(`CCR Dashboard - Merged ${mergedWithDeviceStatusCount} rows with Device Status Upload data`);
+        console.log(`CCR Dashboard - ====== PROCESSING SUMMARY ======`);
+        console.log(`CCR Dashboard - Total ONLINE-OFFLINE entries: ${ooRowsWithDates.length}`);
+        console.log(`CCR Dashboard - Skipped (no date): ${skippedNoDate}`);
+        console.log(`CCR Dashboard - Skipped (no site code): ${skippedNoSiteCode}`);
+        console.log(`CCR Dashboard - Processed (unique): ${processedCount}`);
+        console.log(`CCR Dashboard - Duplicates skipped: ${duplicateCount}`);
+        console.log(`CCR Dashboard - Final merged rows: ${merged.length}`);
+        console.log(`CCR Dashboard - =================================`);
+        
+        // Detailed breakdown
+        const totalSkipped = skippedNoDate + skippedNoSiteCode;
+        const totalShouldProcess = ooRowsWithDates.length - totalSkipped;
+        console.log(`CCR Dashboard - Breakdown: ${ooRowsWithDates.length} total = ${skippedNoDate} (no date) + ${skippedNoSiteCode} (no site code) + ${totalShouldProcess} (should process)`);
+        console.log(`CCR Dashboard - Of ${totalShouldProcess} that should process: ${processedCount} unique + ${duplicateCount} duplicates = ${processedCount + duplicateCount}`);
+        
+        if (merged.length === 0 && ooRowsWithDates.length > 0) {
+          console.error(`CCR Dashboard - ERROR: ${ooRowsWithDates.length} entries processed but 0 merged rows created!`);
+          console.error(`CCR Dashboard - Skipped: ${skippedNoDate} (no date) + ${skippedNoSiteCode} (no site code) = ${totalSkipped} total skipped`);
+          console.error(`CCR Dashboard - Should have processed: ${totalShouldProcess}, but only ${processedCount} were unique`);
+          
+          // Show sample of entries that should have been processed
+          if (totalShouldProcess > 0 && totalShouldProcess <= 10) {
+            console.error(`CCR Dashboard - Sample entries that should have been processed:`, 
+              ooRowsWithDates
+                .filter(e => e.dateValue && !isNaN(e.dateValue.getTime()) && e.siteCode && e.siteCode.trim())
+                .slice(0, 5)
+                .map(e => ({
+                  siteCode: e.siteCode,
+                  date: formatDateToISO(e.dateValue!),
+                  uniqueKey: `${e.siteCode}::${formatDateToISO(e.dateValue!)}`
+                }))
+            );
+          }
+        }
+        
+        // Debug: Verify merged data for specific site codes
+        const testSiteCodes = ['5W2925', '%W2932'];
+        testSiteCodes.forEach(testSc => {
+          const testRow = merged.find((r: any) => {
+            const sc = String((r as any)['SITE CODE'] || (r as any)['Site Code'] || (r as any)['site code'] || '').trim();
+            return sc === testSc;
+          });
+          if (testRow) {
+            console.log(`CCR Dashboard - Merged row for ${testSc}:`, {
+              __deviceStatus: (testRow as MergedRow).__deviceStatus,
+              __equipLRSwitchStatus: (testRow as MergedRow).__equipLRSwitchStatus,
+              hasDeviceStatusRow: deviceStatusMap.has(testSc)
+            });
+          } else {
+            console.log(`CCR Dashboard - No merged row found for ${testSc}`);
           }
         });
 
@@ -779,33 +1240,87 @@ export default function EquipmentDashboard() {
         }
         console.log('CCR Dashboard - ====================================');
         
+        console.log(`CCR Dashboard - Total merged rows created: ${merged.length}`);
+        console.log(`CCR Dashboard - Duplicate rows skipped: ${duplicateCount}`);
+        console.log(`CCR Dashboard - Rows merged with Device Status Upload: ${mergedWithDeviceStatusCount}`);
+        
+        if (merged.length === 0) {
+          console.warn('CCR Dashboard - WARNING: No merged rows created!');
+          console.warn('CCR Dashboard - ONLINE-OFFLINE rows with dates:', ooRowsWithDates.length);
+          console.warn('CCR Dashboard - Device Status Upload rows:', deviceStatusRows.length);
+        }
+        
         setMergedRows(merged);
         
         // Find the latest date from the merged rows (these are the actual dates that will be used for filtering)
         let actualLatestDate: Date | null = null;
+        const datesInMerged = new Set<string>();
         merged.forEach((row) => {
           const d = row.__statusDate as Date | null;
           if (d && !isNaN(d.getTime())) {
+            const iso = formatDateToISO(d);
+            datesInMerged.add(iso);
             if (!actualLatestDate || d.getTime() > actualLatestDate.getTime()) {
               actualLatestDate = d;
             }
           }
         });
         
+        console.log(`CCR Dashboard - Dates found in merged rows:`, Array.from(datesInMerged).sort());
+        console.log(`CCR Dashboard - Latest date in merged rows:`, actualLatestDate ? formatDateToISO(actualLatestDate) : 'NONE');
+        
         // Set snapshot date label (used in the Date picker) based on the latest date found in merged rows
+        // Also set selectedDate directly to ensure it's set on initial load
+        // BUT: Only set selectedDate if we have merged rows with that date, otherwise leave it empty to show all data
         if (actualLatestDate && !isNaN((actualLatestDate as Date).getTime())) {
           const iso = formatDateToISO(actualLatestDate);
           setSnapshotDateLabel(iso);
-          console.log('CCR Dashboard - Latest date from merged rows (set as default):', iso);
+          
+          // Only set selectedDate if we have rows with this date
+          const rowsWithThisDate = merged.filter((row) => {
+            const d = row.__statusDate as Date | null;
+            return d && !isNaN(d.getTime()) && formatDateToISO(d) === iso;
+          });
+          
+          if (rowsWithThisDate.length > 0) {
+            setSelectedDate(iso);
+            console.log(`CCR Dashboard - Set selectedDate to latest date: ${iso} (${rowsWithThisDate.length} rows have this date)`);
+          } else {
+            console.warn(`CCR Dashboard - WARNING: Latest date ${iso} found but no rows have this date! Leaving selectedDate empty.`);
+            setSelectedDate('');
+          }
         } else {
           // Fallback to latestDateValue if no dates in merged rows
+          // Use latestDateValue from ONLINE-OFFLINE data (calculated before merging)
           if (latestDateValue && !isNaN((latestDateValue as Date).getTime())) {
             const iso = formatDateToISO(latestDateValue);
             setSnapshotDateLabel(iso);
-            console.log('CCR Dashboard - Using latestDateValue as fallback:', iso);
+            
+            // If merged rows exist, check if any have this date
+            // If no merged rows, still set the date as default (user wants to see data for this date)
+            if (merged.length > 0) {
+              const rowsWithThisDate = merged.filter((row) => {
+                const d = row.__statusDate as Date | null;
+                return d && !isNaN(d.getTime()) && formatDateToISO(d) === iso;
+              });
+              
+              if (rowsWithThisDate.length > 0) {
+                setSelectedDate(iso);
+                console.log(`CCR Dashboard - Using latestDateValue: ${iso} (${rowsWithThisDate.length} rows have this date)`);
+              } else {
+                // Even if no merged rows have this date, set it as default (data might be filtered out for other reasons)
+                setSelectedDate(iso);
+                console.log(`CCR Dashboard - Set selectedDate to latestDateValue ${iso} (no merged rows have this date, but setting as default)`);
+              }
+            } else {
+              // No merged rows yet, but set the date as default anyway
+              setSelectedDate(iso);
+              console.log(`CCR Dashboard - Set selectedDate to latestDateValue ${iso} (no merged rows yet, but this is the latest date in data)`);
+            }
           } else {
             setSnapshotDateLabel('');
-            console.log('CCR Dashboard - No date found, leaving default empty');
+            setSelectedDate('');
+            console.log('CCR Dashboard - No date found, leaving selectedDate empty to show all data');
           }
         }
       } catch (err: any) {
@@ -815,30 +1330,46 @@ export default function EquipmentDashboard() {
         setIsLoading(false);
       }
     })();
-  }, [role]);
+  }, [role, refreshTrigger]);
 
-  const { divisionHeaderKey, subDivisionHeaderKey } = useMemo(() => {
+  const { divisionHeaderKey, subDivisionHeaderKey, circleHeaderKey } = useMemo(() => {
     const sample = mergedRows[0] as any;
     return {
       divisionHeaderKey: sample?.__divisionHeader as string | undefined,
       subDivisionHeaderKey: sample?.__subDivisionHeader as string | undefined,
+      circleHeaderKey: sample?.__circleHeader as string | undefined,
     };
   }, [mergedRows]);
 
   // Keep the selected date in sync with the latest date from the data
   // When new data loads, always update to the latest date found
+  // This ensures both Equipment and CCR roles have the latest date selected by default
   useEffect(() => {
     if (snapshotDateLabel) {
       // Always update to the latest date when data is loaded
+      // Only update if selectedDate is empty or different from snapshotDateLabel
+      if (!selectedDate || selectedDate !== snapshotDateLabel) {
+        console.log(`CCR Dashboard - Setting selectedDate to latest date: ${snapshotDateLabel}`);
       setSelectedDate(snapshotDateLabel);
     }
-  }, [snapshotDateLabel]);
+    }
+  }, [snapshotDateLabel, selectedDate]);
 
   // Default Division filter to the user's registered division (first division) if available
+  // For Equipment role: filter by user's division
+  // For CCR role: show all divisions by default (no filter)
   useEffect(() => {
-    if (role !== 'Equipment') return;
+    // Allow both Equipment and CCR roles
+    if (role !== 'Equipment' && role !== 'CCR') return;
     if (divisionFilter) return;
     if (!divisionHeaderKey) return;
+    
+    // For CCR role, don't set default division filter - show all divisions
+    if (role === 'CCR') {
+      return;
+    }
+    
+    // For Equipment role, set default to user's division
     if (!userDivisions || userDivisions.length === 0) return;
 
     const preferred = String(userDivisions[0] || '').trim();
@@ -856,9 +1387,20 @@ export default function EquipmentDashboard() {
   }, [role, divisionFilter, divisionHeaderKey, mergedRows, userDivisions]);
 
   const filteredRows = useMemo(() => {
-    if (mergedRows.length === 0) return [];
+    console.log(`CCR Dashboard - filteredRows useMemo: mergedRows.length=${mergedRows.length}, selectedDate="${selectedDate}", divisionFilter="${divisionFilter}", subDivisionFilter="${subDivisionFilter}", circleFilter="${circleFilter}"`);
+    
+    if (mergedRows.length === 0) {
+      console.warn('CCR Dashboard - mergedRows is empty!');
+      return [];
+    }
 
     const filtered = mergedRows.filter((row) => {
+      // Circle filter
+      if (circleHeaderKey && circleFilter) {
+        const v = normalize((row as any)[circleHeaderKey]);
+        if (v !== normalize(circleFilter)) return false;
+      }
+
       // Division filter
       if (divisionHeaderKey && divisionFilter) {
         const v = normalize((row as any)[divisionHeaderKey]);
@@ -880,11 +1422,6 @@ export default function EquipmentDashboard() {
         // Normalize to local date (ignore time components)
         const rowIso = formatDateToISO(d);
         
-        // Debug: log mismatches for 17-11-2025
-        if (selectedDate === '2025-11-17' && rowIso !== selectedDate) {
-          console.log(`CCR Dashboard - Date mismatch for 17-11-2025: Row has ${rowIso}, expected ${selectedDate}`);
-        }
-        
         // Only include rows where DATE exactly equals the selected date
         if (rowIso !== selectedDate) return false;
       }
@@ -893,6 +1430,24 @@ export default function EquipmentDashboard() {
     });
     
     // Debug: log filtering results
+    console.log(`CCR Dashboard - Filtering results: ${filtered.length} rows after filtering from ${mergedRows.length} total rows`);
+      
+      // Show all unique dates in merged rows
+      const allDatesInMerged = new Map<string, number>();
+    const rowsWithoutDates = mergedRows.filter((row) => {
+        const d = row.__statusDate as Date | null;
+        if (d && !isNaN(d.getTime())) {
+          const dateKey = formatDateToISO(d);
+          allDatesInMerged.set(dateKey, (allDatesInMerged.get(dateKey) || 0) + 1);
+        return false;
+      }
+      return true;
+    });
+    
+    if (rowsWithoutDates.length > 0) {
+      console.warn(`CCR Dashboard - WARNING: ${rowsWithoutDates.length} rows have no valid date!`);
+    }
+    
     if (selectedDate) {
       // Count rows with the selected date in ALL merged rows
       const rowsWithSelectedDate = mergedRows.filter((row) => {
@@ -903,27 +1458,33 @@ export default function EquipmentDashboard() {
         return false;
       });
       
-      // Show all unique dates in merged rows
-      const allDatesInMerged = new Map<string, number>();
-      mergedRows.forEach((row) => {
-        const d = row.__statusDate as Date | null;
-        if (d && !isNaN(d.getTime())) {
-          const dateKey = formatDateToISO(d);
-          allDatesInMerged.set(dateKey, (allDatesInMerged.get(dateKey) || 0) + 1);
-        }
-      });
-      
       console.log(`CCR Dashboard - Selected date: ${selectedDate}`);
       console.log(`CCR Dashboard - Rows with date ${selectedDate} in merged rows:`, rowsWithSelectedDate.length);
       console.log(`CCR Dashboard - Filtered rows after all filters:`, filtered.length);
+      
+      if (rowsWithSelectedDate.length === 0) {
+        console.warn(`CCR Dashboard - WARNING: No rows found with selected date ${selectedDate}!`);
+      }
+    }
+    
       const availableDatesArray = Array.from(allDatesInMerged.entries()).sort();
-      console.log(`CCR Dashboard - All available dates in merged rows:`, availableDatesArray);
-      console.log(`CCR Dashboard - Available dates (expanded):`, availableDatesArray.map(([date, count]) => `${date}: ${count} rows`));
+    console.log(`CCR Dashboard - All available dates in merged rows (${availableDatesArray.length} unique dates):`, availableDatesArray.map(([date, count]) => `${date}: ${count} rows`));
       
       // Show breakdown by date
       availableDatesArray.forEach(([date, count]) => {
         console.log(`CCR Dashboard -   Date ${date}: ${count} rows`);
       });
+    
+    // Log sample of filtered rows
+    if (filtered.length > 0) {
+      console.log(`CCR Dashboard - Sample filtered rows (first 3):`, filtered.slice(0, 3).map((r: any) => ({
+        siteCode: (r as any)['SITE CODE'] || (r as any)['Site Code'] || 'N/A',
+        deviceStatus: r.__deviceStatus,
+        equipLRSwitch: r.__equipLRSwitchStatus,
+        date: r.__statusDate ? formatDateToISO(r.__statusDate) : 'N/A'
+      })));
+    } else {
+      console.warn(`CCR Dashboard - WARNING: No filtered rows! This will result in zero counts.`);
     }
     
     return filtered;
@@ -933,6 +1494,7 @@ export default function EquipmentDashboard() {
     subDivisionHeaderKey,
     divisionFilter,
     subDivisionFilter,
+    circleFilter,
     selectedDate,
   ]);
 
@@ -956,6 +1518,16 @@ export default function EquipmentDashboard() {
     return Array.from(set).sort();
   }, [mergedRows, subDivisionHeaderKey]);
 
+  const circleOptions = useMemo(() => {
+    if (!circleHeaderKey) return [];
+    const set = new Set<string>();
+    mergedRows.forEach((row) => {
+      const v = String((row as any)[circleHeaderKey] || '').trim();
+      if (v) set.add(v);
+    });
+    return Array.from(set).sort();
+  }, [mergedRows, circleHeaderKey]);
+
   // Compute card counts from filtered rows
   const {
     onlineCount,
@@ -965,6 +1537,8 @@ export default function EquipmentDashboard() {
     switchIssueCount,
     rtuLocalCount,
   } = useMemo(() => {
+    console.log(`CCR Dashboard - Computing counts from ${filteredRows.length} filtered rows`);
+    
     let online = 0;
     let offline = 0;
     let local = 0;
@@ -980,24 +1554,57 @@ export default function EquipmentDashboard() {
 
       const equipRaw = row.__equipLRSwitchStatus || '';
       const equipLR = normalize(equipRaw);
+      
+      // Get site code from row (try multiple possible column names)
+      const siteCode = (row as any)['SITE CODE'] || 
+                       (row as any)['Site Code'] || 
+                       (row as any)['site code'] || 
+                       (row as any)['SITE_CODE'] ||
+                       (row as any)['SiteCode'] ||
+                       'UNKNOWN';
+      
+      // Debug: Log first few rows to verify values (especially for site code 5W2925 or %W2932)
+      if (siteCode === '5W2925' || siteCode === '%W2932' || (local + remote + switchIssue < 5 && equipRaw)) {
+        console.log(`CCR Dashboard - Count check for ${siteCode}: __equipLRSwitchStatus="${equipRaw}" (normalized: "${equipLR}")`);
+      }
+      
       // Treat any value containing "local" as LOCAL
-      if (equipLR.includes('local')) local += 1;
+      if (equipLR.includes('local')) {
+        local += 1;
+        if (siteCode === '5W2925' || siteCode === '%W2932' || local <= 3) {
+          console.log(`CCR Dashboard - Counting LOCAL for ${siteCode}: "${equipRaw}" (normalized: "${equipLR}")`);
+        }
+      }
       // Treat any value containing "remote" as REMOTE
-      if (equipLR.includes('remote')) remote += 1;
+      if (equipLR.includes('remote')) {
+        remote += 1;
+        if (siteCode === '5W2925' || siteCode === '%W2932') {
+          console.log(`CCR Dashboard - Counting REMOTE for ${siteCode}: "${equipRaw}"`);
+        }
+      }
       // Treat any value that mentions both "switch" and "issue" (or is exactly "switchissue") as SWITCH ISSUE
       if (
         equipLR === 'switchissue' ||
         (equipLR.includes('switch') && equipLR.includes('issue'))
       ) {
         switchIssue += 1;
+        if (siteCode === '5W2925' || siteCode === '%W2932') {
+          console.log(`CCR Dashboard - Counting SWITCH ISSUE for ${siteCode}: "${equipRaw}"`);
+        }
       }
 
       const rtuRaw = row.__rtuLRSwitchStatus || '';
       const rtuLR = normalize(rtuRaw);
-      if (rtuLR.includes('rtu local') || rtuLR === 'local') rtuLocal += 1;
+      // Count any value in RTU L/R SWITCH STATUS that contains "local"
+      if (rtuLR.includes('local')) {
+        rtuLocal += 1;
+        if (siteCode === '5W2925' || siteCode === '%W2932' || rtuLocal <= 3) {
+          console.log(`CCR Dashboard - Counting RTU LOCAL for ${siteCode}: "${rtuRaw}" (normalized: "${rtuLR}")`);
+        }
+      }
     });
 
-    return {
+    const counts = {
       onlineCount: online,
       offlineCount: offline,
       localCount: local,
@@ -1005,13 +1612,122 @@ export default function EquipmentDashboard() {
       switchIssueCount: switchIssue,
       rtuLocalCount: rtuLocal,
     };
+    
+    console.log(`CCR Dashboard - Final counts:`, counts);
+    
+    return counts;
   }, [filteredRows]);
 
-  if (role !== 'Equipment') {
+  // Calculate trend data by date for ONLINE & OFFLINE
+  // Use mergedRows filtered by Circle, Division, Sub Division (but NOT by Date) to show all historical dates
+  const onlineOfflineTrendData = useMemo(() => {
+    const dateMap = new Map<string, { date: string; online: number; offline: number }>();
+    
+    // Filter by Circle, Division, Sub Division (but NOT by Date) to get all dates
+    const rowsForTrend = mergedRows.filter((row) => {
+      // Circle filter
+      if (circleHeaderKey && circleFilter) {
+        const v = normalize((row as any)[circleHeaderKey]);
+        if (v !== normalize(circleFilter)) return false;
+      }
+
+      // Division filter
+      if (divisionHeaderKey && divisionFilter) {
+        const v = normalize((row as any)[divisionHeaderKey]);
+        if (v !== normalize(divisionFilter)) return false;
+      }
+
+      // Sub Division filter
+      if (subDivisionHeaderKey && subDivisionFilter) {
+        const v = normalize((row as any)[subDivisionHeaderKey]);
+        if (v !== normalize(subDivisionFilter)) return false;
+      }
+
+      return true;
+    });
+    
+    rowsForTrend.forEach((row) => {
+      const d = row.__statusDate as Date | null;
+      if (!d || isNaN(d.getTime())) return;
+      
+      const dateKey = formatDateToISO(d);
+      if (!dateMap.has(dateKey)) {
+        dateMap.set(dateKey, { date: dateKey, online: 0, offline: 0 });
+      }
+      
+      const entry = dateMap.get(dateKey)!;
+      const dsRaw = row.__deviceStatus || '';
+      const ds = normalize(dsRaw);
+      if (ds === 'online') entry.online += 1;
+      if (ds === 'offline') entry.offline += 1;
+    });
+    
+    return Array.from(dateMap.values())
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map(item => ({
+        ...item,
+        dateLabel: new Date(item.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      }));
+  }, [mergedRows, circleHeaderKey, circleFilter, divisionHeaderKey, divisionFilter, subDivisionHeaderKey, subDivisionFilter]);
+
+  // Calculate trend data by date for LOCAL & REMOTE
+  // Use mergedRows filtered by Circle, Division, Sub Division (but NOT by Date) to show all historical dates
+  const localRemoteTrendData = useMemo(() => {
+    const dateMap = new Map<string, { date: string; local: number; remote: number }>();
+    
+    // Filter by Circle, Division, Sub Division (but NOT by Date) to get all dates
+    const rowsForTrend = mergedRows.filter((row) => {
+      // Circle filter
+      if (circleHeaderKey && circleFilter) {
+        const v = normalize((row as any)[circleHeaderKey]);
+        if (v !== normalize(circleFilter)) return false;
+      }
+
+      // Division filter
+      if (divisionHeaderKey && divisionFilter) {
+        const v = normalize((row as any)[divisionHeaderKey]);
+        if (v !== normalize(divisionFilter)) return false;
+      }
+
+      // Sub Division filter
+      if (subDivisionHeaderKey && subDivisionFilter) {
+        const v = normalize((row as any)[subDivisionHeaderKey]);
+        if (v !== normalize(subDivisionFilter)) return false;
+      }
+
+      return true;
+    });
+    
+    rowsForTrend.forEach((row) => {
+      const d = row.__statusDate as Date | null;
+      if (!d || isNaN(d.getTime())) return;
+      
+      const dateKey = formatDateToISO(d);
+      if (!dateMap.has(dateKey)) {
+        dateMap.set(dateKey, { date: dateKey, local: 0, remote: 0 });
+      }
+      
+      const entry = dateMap.get(dateKey)!;
+      const equipRaw = row.__equipLRSwitchStatus || '';
+      const equipLR = normalize(equipRaw);
+      if (equipLR.includes('local')) entry.local += 1;
+      if (equipLR.includes('remote')) entry.remote += 1;
+    });
+    
+    return Array.from(dateMap.values())
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map(item => ({
+        ...item,
+        dateLabel: new Date(item.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      }));
+  }, [mergedRows, circleHeaderKey, circleFilter, divisionHeaderKey, divisionFilter, subDivisionHeaderKey, subDivisionFilter]);
+
+  // Allow both Equipment and CCR roles
+  if (role !== 'Equipment' && role !== 'CCR') {
     return (
       <div className="p-6">
         <h2 className="text-xl font-bold text-gray-800 mb-2">CCR Status Dashboard</h2>
-        <p className="text-gray-600">This dashboard is available for Equipment role users only.</p>
+        <p className="text-gray-600">This dashboard is available for Equipment and CCR role users only.</p>
       </div>
     );
   }
@@ -1045,7 +1761,23 @@ export default function EquipmentDashboard() {
       </div>
 
       {/* Filters */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-white rounded-lg shadow p-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 bg-white rounded-lg shadow p-4">
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 mb-1">Circle</label>
+          <select
+            className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
+            value={circleFilter}
+            onChange={(e) => setCircleFilter(e.target.value)}
+          >
+            <option value="">All</option>
+            {circleOptions.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div>
           <label className="block text-xs font-semibold text-gray-600 mb-1">Division</label>
           <select
@@ -1187,6 +1919,131 @@ export default function EquipmentDashboard() {
             </svg>
           }
         />
+      </div>
+
+      {/* Trend Analysis Charts - Side by Side */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* ONLINE & OFFLINE Trend Chart */}
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          <div className="mb-4">
+            <h3 className="text-xl font-bold text-gray-800">Device Status Trend</h3>
+            <p className="text-sm text-gray-600 mt-1">ONLINE vs OFFLINE over time</p>
+          </div>
+          <ResponsiveContainer width="100%" height={350}>
+            <LineChart
+              data={onlineOfflineTrendData}
+              margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
+              <XAxis 
+                dataKey="dateLabel" 
+                tick={{ fill: '#6b7280', fontSize: 11 }}
+                angle={-45}
+                textAnchor="end"
+                height={80}
+              />
+              <YAxis 
+                tick={{ fill: '#6b7280', fontSize: 12 }}
+                label={{ value: 'Count', angle: -90, position: 'insideLeft', fill: '#6b7280', style: { fontSize: '12px', fontWeight: 600 } }}
+              />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: '#ffffff', 
+                  border: '1px solid #e5e7eb', 
+                  borderRadius: '8px',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                  padding: '12px'
+                }}
+                labelStyle={{ fontWeight: 600, marginBottom: '4px', color: '#374151' }}
+              />
+              <Legend 
+                wrapperStyle={{ paddingTop: '10px' }}
+                iconType="circle"
+              />
+              <Line 
+                type="monotone" 
+                dataKey="online" 
+                stroke="#10b981" 
+                strokeWidth={3}
+                dot={{ fill: '#10b981', r: 4, strokeWidth: 2, stroke: '#ffffff' }}
+                activeDot={{ r: 6, stroke: '#10b981', strokeWidth: 2 }}
+                name="ONLINE"
+                animationDuration={1000}
+              />
+              <Line 
+                type="monotone" 
+                dataKey="offline" 
+                stroke="#f43f5e" 
+                strokeWidth={3}
+                dot={{ fill: '#f43f5e', r: 4, strokeWidth: 2, stroke: '#ffffff' }}
+                activeDot={{ r: 6, stroke: '#f43f5e', strokeWidth: 2 }}
+                name="OFFLINE"
+                animationDuration={1000}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* LOCAL & REMOTE Trend Chart */}
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          <div className="mb-4">
+            <h3 className="text-xl font-bold text-gray-800">Switch Status Trend</h3>
+            <p className="text-sm text-gray-600 mt-1">LOCAL vs REMOTE over time</p>
+          </div>
+          <ResponsiveContainer width="100%" height={350}>
+            <LineChart
+              data={localRemoteTrendData}
+              margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
+              <XAxis 
+                dataKey="dateLabel" 
+                tick={{ fill: '#6b7280', fontSize: 11 }}
+                angle={-45}
+                textAnchor="end"
+                height={80}
+              />
+              <YAxis 
+                tick={{ fill: '#6b7280', fontSize: 12 }}
+                label={{ value: 'Count', angle: -90, position: 'insideLeft', fill: '#6b7280', style: { fontSize: '12px', fontWeight: 600 } }}
+              />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: '#ffffff', 
+                  border: '1px solid #e5e7eb', 
+                  borderRadius: '8px',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                  padding: '12px'
+                }}
+                labelStyle={{ fontWeight: 600, marginBottom: '4px', color: '#374151' }}
+              />
+              <Legend 
+                wrapperStyle={{ paddingTop: '10px' }}
+                iconType="circle"
+              />
+              <Line 
+                type="monotone" 
+                dataKey="local" 
+                stroke="#0ea5e9" 
+                strokeWidth={3}
+                dot={{ fill: '#0ea5e9', r: 4, strokeWidth: 2, stroke: '#ffffff' }}
+                activeDot={{ r: 6, stroke: '#0ea5e9', strokeWidth: 2 }}
+                name="LOCAL"
+                animationDuration={1000}
+              />
+              <Line 
+                type="monotone" 
+                dataKey="remote" 
+                stroke="#6366f1" 
+                strokeWidth={3}
+                dot={{ fill: '#6366f1', r: 4, strokeWidth: 2, stroke: '#ffffff' }}
+                activeDot={{ r: 6, stroke: '#6366f1', strokeWidth: 2 }}
+                name="REMOTE"
+                animationDuration={1000}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
       </div>
     </div>
   );
