@@ -187,35 +187,70 @@ export default function EquipmentStatus() {
       { label: 'RMU Side 24 Pin', key: 'rmuSide24Pin' },
       { label: 'Cable Size', key: 'cableSize' },
       { label: 'Electrical Operation', key: 'electricalOperation' },
-      { label: 'Remote Operation', key: 'remoteOperation' }
+      { label: 'Remote Operation', key: 'remoteOperation' },
+      { label: 'Cable IC From or OG To', key: 'cableICFromOrOGTo' }
     ];
 
     // Helper function to check if value exists
     const hasValue = (val: any) => val && val.toString().trim() !== '' && val !== 'N/A';
     
-    let terminalTables = '';
-    terminalKeys.forEach(prefix => {
-      const terminalData = inspectionData.terminals?.[prefix];
-      if (terminalData) {
-        const validFields = terminalFields.filter(field => hasValue(terminalData[field.key]));
-        if (validFields.length > 0) {
-          terminalTables += `
-            <h3 style="margin-top: 20px; color: #1e40af;">${prefix.toUpperCase()} Terminal Details</h3>
-            <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
-          `;
-          validFields.forEach(field => {
-            const value = terminalData[field.key];
-            terminalTables += `
-              <tr>
-                <td style="padding: 8px; border: 1px solid #ddd; width: 40%; font-weight: bold; background-color: #f3f4f6;">${field.label}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; width: 60%;">${value}</td>
-              </tr>
-            `;
-          });
-          terminalTables += `</table>`;
-        }
+    // Generate terminal table in the same format as web view (parameters as rows, terminals as columns)
+    let terminalTable = '';
+    if (inspectionData.terminals && Object.keys(inspectionData.terminals).length > 0) {
+      // Check if there's any data to display
+      const hasAnyData = terminalFields.some(field => {
+        return terminalKeys.some(prefix => {
+          const terminalData = inspectionData.terminals[prefix];
+          const value = terminalData?.[field.key];
+          return hasValue(value);
+        });
+      });
+
+      if (hasAnyData) {
+        terminalTable = `
+          <div class="section">
+            <div class="section-title">Terminal Details (Fields 21-61)</div>
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; border: 2px solid #000;">
+              <thead>
+                <tr style="background-color: #f3f4f6;">
+                  <th style="padding: 10px; border: 2px solid #000; text-align: left; font-weight: bold; background-color: #f3f4f6;">Parameter</th>
+                  <th style="padding: 10px; border: 2px solid #000; text-align: center; font-weight: bold; background-color: #f3f4f6;">OD1</th>
+                  <th style="padding: 10px; border: 2px solid #000; text-align: center; font-weight: bold; background-color: #f3f4f6;">OD2</th>
+                  <th style="padding: 10px; border: 2px solid #000; text-align: center; font-weight: bold; background-color: #f3f4f6;">VL1</th>
+                  <th style="padding: 10px; border: 2px solid #000; text-align: center; font-weight: bold; background-color: #f3f4f6;">VL2</th>
+                  <th style="padding: 10px; border: 2px solid #000; text-align: center; font-weight: bold; background-color: #f3f4f6;">VL3</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${terminalFields.map(field => {
+                  const hasAnyValue = terminalKeys.some(prefix => {
+                    const terminalData = inspectionData.terminals[prefix];
+                    const value = terminalData?.[field.key];
+                    return hasValue(value);
+                  });
+
+                  if (!hasAnyValue) return '';
+
+                  const rowCells = terminalKeys.map(prefix => {
+                    const terminalData = inspectionData.terminals[prefix];
+                    const value = terminalData?.[field.key];
+                    const displayValue = hasValue(value) ? value : '';
+                    return `<td style="padding: 8px; border: 2px solid #000; text-align: center;">${displayValue}</td>`;
+                  }).join('');
+
+                  return `
+                    <tr>
+                      <td style="padding: 8px; border: 2px solid #000; font-weight: bold; background-color: #f9fafb;">${field.label}</td>
+                      ${rowCells}
+                    </tr>
+                  `;
+                }).filter(row => row !== '').join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
       }
-    });
+    }
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -374,7 +409,7 @@ export default function EquipmentStatus() {
         </div>
         ` : ''}
 
-        ${terminalTables}
+        ${terminalTable}
 
         ${hasValue(inspectionData.remarks) ? `
         <div class="section">
