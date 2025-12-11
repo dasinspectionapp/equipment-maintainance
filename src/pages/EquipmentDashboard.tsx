@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, LabelList, LineChart, Line, AreaChart, Area, ReferenceLine } from 'recharts';
+import { XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
 
 type UploadedFile = {
   fileId: string;
@@ -560,7 +560,7 @@ export default function EquipmentDashboard() {
           console.log('CCR Dashboard - Found 20-11-2025 header:', header20Nov);
           // Ensure latestDateValue is set to 20-11-2025 if it's the latest
           const date20Nov = dateHeaderMap.get(header20Nov);
-          if (date20Nov && (!latestDateValue || date20Nov.getTime() > latestDateValue.getTime())) {
+          if (date20Nov instanceof Date && (!latestDateValue || date20Nov.getTime() > latestDateValue.getTime())) {
             latestDateValue = date20Nov;
             console.log('CCR Dashboard - Set latestDateValue to 20-11-2025');
           }

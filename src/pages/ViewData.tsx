@@ -2457,19 +2457,7 @@ export default function ViewData() {
             const verifyJson = await verifyResponse.json();
             if (verifyJson?.success && verifyJson.file) {
               const savedRows = Array.isArray(verifyJson.file.rows) ? verifyJson.file.rows : [];
-              console.log(`[SAVE ROW] Verified: Database now contains ${savedRows.length} rows`);
-              
-              // Verify the saved value is in the database
-              const savedRow = savedRows.find((r: any) => {
-                const sc = String(r['SITE CODE'] || r['Site Code'] || r['site code'] || '').trim();
-                return sc === siteCode;
-              });
-              if (savedRow) {
-                const savedDeviceStatus = savedRow['DEVICE STATUS'] || savedRow['Device Status'] || savedRow['device status'];
-                console.log(`[SAVE ROW] Verified saved DEVICE STATUS for ${siteCode}: ${savedDeviceStatus}`);
-              } else {
-                console.warn(`[SAVE ROW] Could not find saved row for site code: ${siteCode}`);
-              }
+              console.log(`[BULK SAVE] Verified: Database now contains ${savedRows.length} rows`);
               
               // Reassign id fields to saved rows for frontend tracking
               const savedRowsWithId = savedRows.map((row: any, idx: number) => ({

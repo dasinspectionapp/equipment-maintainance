@@ -4031,7 +4031,6 @@ export default function Dashboard() {
               const userData = user ? JSON.parse(user) : null;
               const userRole = userData?.role || '';
               const isCCR = userRole === 'CCR' || userRole.toLowerCase() === 'ccr';
-              const isEquipment = userRole === 'Equipment' || userRole.toLowerCase() === 'equipment';
               
               return (
                 <div className={`grid grid-cols-1 ${isCCR ? 'md:grid-cols-3 lg:grid-cols-6' : 'md:grid-cols-4'} gap-4`}>
