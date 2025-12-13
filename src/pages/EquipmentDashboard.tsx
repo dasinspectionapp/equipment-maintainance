@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
+import { API_BASE } from '../utils/api';
 
 type UploadedFile = {
   fileId: string;
@@ -105,7 +106,7 @@ export default function EquipmentDashboard() {
         }
 
         // 1) Fetch all uploads
-        const uploadsRes = await fetch('http://localhost:5000/api/uploads', {
+        const uploadsRes = await fetch(`${API_BASE}/api/uploads`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -192,7 +193,7 @@ export default function EquipmentDashboard() {
         if (deviceStatusFile) {
           console.log('CCR Dashboard - Fetching Device Status Upload file:', deviceStatusFile.name);
           try {
-            const dsRes = await fetch(`http://localhost:5000/api/uploads/${deviceStatusFile.fileId}`, {
+            const dsRes = await fetch(`${API_BASE}/api/uploads/${deviceStatusFile.fileId}`, {
               headers: {
                 Authorization: `Bearer ${token}`,
               },
@@ -222,7 +223,7 @@ export default function EquipmentDashboard() {
         }
 
         // 4) Fetch ONLINE-OFFLINE file data
-        const ooRes = await fetch(`http://localhost:5000/api/uploads/${onlineOfflineFile.fileId}`, {
+        const ooRes = await fetch(`${API_BASE}/api/uploads/${onlineOfflineFile.fileId}`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
