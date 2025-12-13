@@ -71,6 +71,37 @@ export default function EquipmentStatus() {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [logoBase64, setLogoBase64] = useState<string | null>(null);
 
+  // Fetch logo on component mount
+  useEffect(() => {
+    const fetchLogo = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        const response = await fetch(`${API_BASE}/api/admin/uploads/logo`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.ok) {
+          const blob = await response.blob();
+          const imageUrl = URL.createObjectURL(blob);
+          setLogoUrl(imageUrl);
+
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            setLogoBase64(reader.result as string);
+          };
+          reader.readAsDataURL(blob);
+        }
+      } catch (error) {
+        console.error('Error fetching logo:', error);
+      }
+    };
+    fetchLogo();
+  }, []);
+
   // Handle ESC key and arrow keys for modals
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -180,9 +211,10 @@ export default function EquipmentStatus() {
         // Might be Excel serial date - try converting
         if (typeof dateString === 'string' && !isNaN(Number(dateString))) {
           const excelSerial = Number(dateString);
-          // Excel serial date starts from Jan 1, 1900
-          const excelEpoch = new Date(1900, 0, 1);
-          date = new Date(excelEpoch.getTime() + (excelSerial - 2) * 24 * 60 * 60 * 1000);
+          // Excel serial date: Excel incorrectly treats 1900 as a leap year, so we adjust
+          // Excel epoch: December 30, 1899 (since Excel thinks 1900 is a leap year)
+          const excelEpoch = new Date(1899, 11, 30); // Dec 30, 1899
+          date = new Date(excelEpoch.getTime() + (excelSerial - 1) * 24 * 60 * 60 * 1000);
           if (isNaN(date.getTime())) return null;
         } else {
           return null;
@@ -258,17 +290,6 @@ export default function EquipmentStatus() {
     // Helper function to check if value exists
     const hasValue = (val: any) => val && val.toString().trim() !== '' && val !== 'N/A';
     
-    // Helper function to check if a value should have red background
-    const shouldHighlightRed = (val: any): boolean => {
-      if (!val) return false;
-      const valueUpper = val.toString().trim().toUpperCase();
-      const redValues = [
-        'NO', 'POOR', 'DISCONNECTED', 'RED', 'FAULTY', 'BATTERY FAULTY',
-        'NOT OPERATING', 'MISSING', 'NOT WORKING', 'NOT AVAILABLE',
-        'IDLE', 'IDLER', 'DAMAGED', 'DAMAGE', 'REMOVED', 'NOT UPDATING IN RELAY'
-      ];
-      return redValues.some(redValue => valueUpper === redValue || valueUpper.includes(redValue));
-    };
     
     // Helper function to get cell styling based on value
     const getCellStyle = (val: any): string => {
@@ -1025,7 +1046,7 @@ const shouldHighlightRed = (value: string | null | undefined): boolean => {
   const redValues = [
     'NO', 'POOR', 'DISCONNECTED', 'RED', 'FAULTY', 'BATTERY FAULTY',
     'NOT OPERATING', 'MISSING', 'NOT WORKING', 'NOT AVAILABLE',
-    'IDLE', 'IDLER', 'DAMAGED', 'DAMAGE', 'REMOVED'
+    'IDLE', 'IDLER', 'DAMAGED', 'DAMAGE', 'REMOVED', 'NOT UPDATING IN RELAY'
   ];
   return redValues.some(redValue => valueUpper === redValue || valueUpper.includes(redValue));
 };
