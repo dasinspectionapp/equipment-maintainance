@@ -159,7 +159,8 @@ export const getInspectionBySiteCode = async (req, res) => {
     const { siteCode } = req.params;
 
     const inspection = await RMUInspection.findOne({ siteCode })
-      .populate('submittedBy', 'fullName userId email');
+      .populate('submittedBy', 'fullName userId email')
+      .lean(); // Use lean() to get plain JavaScript object
 
     if (!inspection) {
       return res.status(404).json({
@@ -168,9 +169,48 @@ export const getInspectionBySiteCode = async (req, res) => {
       });
     }
 
+    // Ensure all fields are present, even if undefined/null
+    // This ensures the frontend always receives all expected fields
+    const inspectionData = {
+      ...inspection,
+      // Fields 27-40 - ensure they exist
+      fpiStatus: inspection.fpiStatus || '',
+      availability12V: inspection.availability12V || '',
+      overallWiringIssue: inspection.overallWiringIssue || '',
+      controlCard: inspection.controlCard || '',
+      beddingCondition: inspection.beddingCondition || '',
+      batteryStatus: inspection.batteryStatus || '',
+      relayGroupChangeUpdate: inspection.relayGroupChangeUpdate || '',
+      availability230V: inspection.availability230V || '',
+      sf6Gas: inspection.sf6Gas || '',
+      rmuLocationSameAsGIS: inspection.rmuLocationSameAsGIS || '',
+      doorHydraulics: inspection.doorHydraulics || '',
+      controlCabinetDoor: inspection.controlCabinetDoor || '',
+      doorGasket: inspection.doorGasket || '',
+      dummyLatchCommand: inspection.dummyLatchCommand || '',
+      // Ensure terminals object exists
+      terminals: inspection.terminals || {},
+      // Ensure remarks exists
+      remarks: inspection.remarks || ''
+    };
+
+    // Debug: Log what fields have values
+    console.log('🔍 Server: Inspection data for siteCode:', siteCode);
+    console.log('🔍 Server: Field 27 (fpiStatus):', inspectionData.fpiStatus);
+    console.log('🔍 Server: Field 28 (availability12V):', inspectionData.availability12V);
+    console.log('🔍 Server: Field 29 (overallWiringIssue):', inspectionData.overallWiringIssue);
+    console.log('🔍 Server: Field 30 (controlCard):', inspectionData.controlCard);
+    console.log('🔍 Server: Field 32 (batteryStatus):', inspectionData.batteryStatus);
+    console.log('🔍 Server: Field 35 (sf6Gas):', inspectionData.sf6Gas);
+    console.log('🔍 Server: Field 39 (doorGasket):', inspectionData.doorGasket);
+    console.log('🔍 Server: Field 40 (dummyLatchCommand):', inspectionData.dummyLatchCommand);
+    console.log('🔍 Server: Terminals:', inspectionData.terminals);
+    console.log('🔍 Server: Remarks:', inspectionData.remarks);
+    console.log('🔍 Server: Full inspection object keys:', Object.keys(inspectionData));
+
     res.status(200).json({
       success: true,
-      data: inspection
+      data: inspectionData
     });
   } catch (error) {
     console.error('Get inspection error:', error);
@@ -419,10 +459,10 @@ export const massUploadInspections = async (req, res) => {
     await file.mv(tempFilePath);
 
     try {
-      const workbook = XLSX.readFile(tempFilePath);
+      const workbook = XLSX.readFile(tempFilePath, { cellDates: true, cellNF: false, cellText: false });
       const sheetName = workbook.SheetNames[0];
       const sheet = workbook.Sheets[sheetName];
-      const data = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+      const data = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null, raw: false, dateNF: 'yyyy-mm-dd' });
 
       if (data.length < 2) {
         throw new Error('Excel file must contain at least a header row and one data row');
@@ -556,22 +596,71 @@ export const massUploadInspections = async (req, res) => {
             const dbField = fieldMapping[normalizedKey];
             const colIndex = columnMap[dbField];
             if (colIndex !== undefined && row[colIndex] !== null && row[colIndex] !== undefined) {
-              let value = String(row[colIndex]).trim();
-              if (value === '') return;
+              let value = row[colIndex];
               
-              if (dbField.includes('Date') && value) {
+              // Handle date fields
+              if (dbField.includes('Date')) {
                 try {
-                  const date = new Date(value);
-                  if (!isNaN(date.getTime())) {
-                    inspectionData[dbField] = date;
-                  } else {
-                    inspectionData[dbField] = value;
+                  let parsedDate = null;
+                  
+                  // If it's already a Date object (from XLSX with cellDates: true)
+                  if (value instanceof Date) {
+                    parsedDate = value;
                   }
-                } catch {
-                  inspectionData[dbField] = value;
+                  // Check if value is a number (Excel serial date)
+                  else if (typeof value === 'number' && value > 0 && value < 1000000) {
+                    // Excel serial date: days since January 1, 1900
+                    // Excel incorrectly treats 1900 as a leap year, so we adjust
+                    const excelEpoch = new Date(1899, 11, 30); // Dec 30, 1899
+                    parsedDate = new Date(excelEpoch.getTime() + (value - 1) * 24 * 60 * 60 * 1000);
+                  }
+                  // Handle string dates
+                  else if (typeof value === 'string') {
+                    const trimmed = value.trim();
+                    if (trimmed === '') return;
+                    
+                    // Try DD-MM-YYYY format first (common in Excel exports)
+                    const ddmmyyyyMatch = trimmed.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+                    if (ddmmyyyyMatch) {
+                      const [, day, month, year] = ddmmyyyyMatch;
+                      const dayNum = parseInt(day, 10);
+                      const monthNum = parseInt(month, 10);
+                      const yearNum = parseInt(year, 10);
+                      if (dayNum >= 1 && dayNum <= 31 && monthNum >= 1 && monthNum <= 12 && yearNum >= 1900 && yearNum <= 2100) {
+                        parsedDate = new Date(yearNum, monthNum - 1, dayNum);
+                      }
+                    } else {
+                      // Try other formats
+                      parsedDate = new Date(trimmed);
+                    }
+                  }
+                  
+                  // Validate the parsed date
+                  if (parsedDate && !isNaN(parsedDate.getTime())) {
+                    const year = parsedDate.getFullYear();
+                    // Only accept reasonable years
+                    if (year >= 1900 && year <= 2100) {
+                      inspectionData[dbField] = parsedDate;
+                    } else {
+                      console.warn(`Invalid date year ${year} for ${dbField}, storing as null:`, value);
+                      inspectionData[dbField] = null;
+                    }
+                  } else {
+                    inspectionData[dbField] = null;
+                  }
+                } catch (error) {
+                  console.error(`Error parsing date for ${dbField}:`, value, error);
+                  inspectionData[dbField] = null;
                 }
               } else {
-                inspectionData[dbField] = value;
+                // Non-date fields
+                if (typeof value === 'string') {
+                  const trimmed = value.trim();
+                  if (trimmed === '') return;
+                  inspectionData[dbField] = trimmed;
+                } else {
+                  inspectionData[dbField] = value;
+                }
               }
             }
           });

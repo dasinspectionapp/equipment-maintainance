@@ -68,6 +68,8 @@ export default function EquipmentStatus() {
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
   const [videoModalOpen, setVideoModalOpen] = useState(false);
   const [pdfModalOpen, setPdfModalOpen] = useState(false);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoBase64, setLogoBase64] = useState<string | null>(null);
 
   // Handle ESC key and arrow keys for modals
   useEffect(() => {
@@ -152,16 +154,78 @@ export default function EquipmentStatus() {
   const formatDate = (dateString: string | Date | null) => {
     if (!dateString || dateString === '' || dateString === 'N/A') return null;
     try {
-      const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
+      let date: Date;
+      
+      // Handle different date formats
+      if (typeof dateString === 'string') {
+        // Check if it's already in DD/MM/YYYY or DD-MM-YYYY format
+        const ddmmyyyyMatch = dateString.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{4})$/);
+        if (ddmmyyyyMatch) {
+          const [, day, month, year] = ddmmyyyyMatch;
+          date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        } else {
+          // Try parsing as standard date string
+          date = new Date(dateString);
+        }
+      } else {
+        date = dateString;
+      }
+      
+      // Validate date
       if (isNaN(date.getTime())) return null;
-      return date.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      
+      // Check if year is reasonable (between 1900 and 2100)
+      const year = date.getFullYear();
+      if (year < 1900 || year > 2100) {
+        // Might be Excel serial date - try converting
+        if (typeof dateString === 'string' && !isNaN(Number(dateString))) {
+          const excelSerial = Number(dateString);
+          // Excel serial date starts from Jan 1, 1900
+          const excelEpoch = new Date(1900, 0, 1);
+          date = new Date(excelEpoch.getTime() + (excelSerial - 2) * 24 * 60 * 60 * 1000);
+          if (isNaN(date.getTime())) return null;
+        } else {
+          return null;
+        }
+      }
+      
+      // Format as DD/MM/YYYY
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const yearFormatted = date.getFullYear();
+      return `${day}/${month}/${yearFormatted}`;
     } catch {
       return null;
     }
   };
 
-  const downloadPDF = () => {
+  const downloadPDF = async () => {
     if (!inspectionData) return;
+
+    // Fetch logo if not already loaded
+    let logoDataForPDF = logoBase64;
+    if (!logoDataForPDF) {
+      try {
+        const token = localStorage.getItem('token');
+        if (token) {
+          const response = await fetch(`${API_BASE}/api/admin/uploads/logo`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          if (response.ok) {
+            const blob = await response.blob();
+            logoDataForPDF = await new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.readAsDataURL(blob);
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching logo for PDF:', error);
+      }
+    }
 
     // Create a printable version of the inspection report
     const printWindow = window.open('', '_blank');
@@ -193,6 +257,27 @@ export default function EquipmentStatus() {
 
     // Helper function to check if value exists
     const hasValue = (val: any) => val && val.toString().trim() !== '' && val !== 'N/A';
+    
+    // Helper function to check if a value should have red background
+    const shouldHighlightRed = (val: any): boolean => {
+      if (!val) return false;
+      const valueUpper = val.toString().trim().toUpperCase();
+      const redValues = [
+        'NO', 'POOR', 'DISCONNECTED', 'RED', 'FAULTY', 'BATTERY FAULTY',
+        'NOT OPERATING', 'MISSING', 'NOT WORKING', 'NOT AVAILABLE',
+        'IDLE', 'IDLER', 'DAMAGED', 'DAMAGE', 'REMOVED', 'NOT UPDATING IN RELAY'
+      ];
+      return redValues.some(redValue => valueUpper === redValue || valueUpper.includes(redValue));
+    };
+    
+    // Helper function to get cell styling based on value
+    const getCellStyle = (val: any): string => {
+      if (shouldHighlightRed(val)) {
+        // Use a more visible red background for PDF - using both background-color and background
+        return 'padding: 10px; border: 1px solid #ddd; text-align: left; background-color: #fecaca; background: #fecaca; color: #991b1b; font-weight: bold;';
+      }
+      return 'padding: 10px; border: 1px solid #ddd; text-align: left;';
+    };
     
     // Generate terminal table in the same format as web view (parameters as rows, terminals as columns)
     let terminalTable = '';
@@ -235,7 +320,12 @@ export default function EquipmentStatus() {
                     const terminalData = inspectionData.terminals[prefix];
                     const value = terminalData?.[field.key];
                     const displayValue = hasValue(value) ? value : '';
-                    return `<td style="padding: 8px; border: 2px solid #000; text-align: center;">${displayValue}</td>`;
+                    let cellStyle = 'padding: 8px; border: 2px solid #000; text-align: center;';
+                    if (displayValue && shouldHighlightRed(displayValue)) {
+                      // Use a more visible red background for PDF
+                      cellStyle = 'padding: 8px; border: 2px solid #000; text-align: center; background-color: #fecaca; background: #fecaca; color: #991b1b; font-weight: bold;';
+                    }
+                    return `<td style="${cellStyle}">${displayValue}</td>`;
                   }).join('');
 
                   return `
@@ -261,9 +351,14 @@ export default function EquipmentStatus() {
           @media print {
             body { margin: 0; }
             .no-print { display: none; }
+            * {
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+              color-adjust: exact !important;
+            }
           }
           body { font-family: Arial, sans-serif; padding: 20px; }
-          .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #1e40af; padding-bottom: 20px; }
+          .header { text-align: left; margin-bottom: 30px; border-bottom: 3px solid #1e40af; padding-bottom: 20px; display: flex; align-items: flex-start; gap: 20px; }
           .header h1 { color: #1e40af; margin: 0; }
           .section { margin-bottom: 25px; }
           .section-title { background-color: #1e40af; color: white; padding: 10px; font-weight: bold; margin-bottom: 15px; }
@@ -272,13 +367,25 @@ export default function EquipmentStatus() {
           th { background-color: #f3f4f6; font-weight: bold; }
           .label { font-weight: bold; color: #374151; }
           .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #6b7280; }
+          td.highlight-red {
+            background-color: #fee2e2 !important;
+            color: #991b1b !important;
+            font-weight: bold !important;
+          }
         </style>
       </head>
       <body>
-        <div class="header">
-          <h1>RMU INSPECTION REPORT</h1>
-          <p>BANGALORE ELECTRICITY SUPPLY COMPANY LIMITED</p>
-          <p style="font-size: 12px;">O/o. The General Manager (Ele.), DAS & Smart Grid, BESCOM, BICC-1 Bldg, 2nd Sector, 24th Main, 17th Cross, HSR layout, Bangalore – 560102</p>
+        <div class="header" style="display: flex; align-items: flex-start; gap: 20px;">
+          ${logoDataForPDF ? `
+          <div style="flex-shrink: 0;">
+            <img src="${logoDataForPDF}" alt="BESCOM Logo" style="height: 60px; width: auto; max-width: 200px; object-fit: contain; display: block;" />
+          </div>
+          ` : ''}
+          <div style="flex: 1;">
+            <h1>RMU INSPECTION REPORT</h1>
+            <p>BANGALORE ELECTRICITY SUPPLY COMPANY LIMITED</p>
+            <p style="font-size: 12px;">O/o. The General Manager (Ele.), DAS & Smart Grid, BESCOM, BICC-1 Bldg, 2nd Sector, 24th Main, 17th Cross, HSR layout, Bangalore – 560102</p>
+          </div>
         </div>
 
         ${(hasValue(inspectionData.siteCode) || hasValue(inspectionData.circle) || hasValue(inspectionData.division) || 
@@ -312,9 +419,9 @@ export default function EquipmentStatus() {
                 const field1 = basicFields[i];
                 const field2 = basicFields[i + 1];
                 if (field2) {
-                  rows.push(`<tr><td class="label">${field1.label}</td><td>${field1.value}</td><td class="label">${field2.label}</td><td>${field2.value}</td></tr>`);
+                  rows.push(`<tr><td class="label">${field1.label}</td><td style="${getCellStyle(field1.value)}">${field1.value}</td><td class="label">${field2.label}</td><td style="${getCellStyle(field2.value)}">${field2.value}</td></tr>`);
                 } else {
-                  rows.push(`<tr><td class="label">${field1.label}</td><td colspan="3">${field1.value}</td></tr>`);
+                  rows.push(`<tr><td class="label">${field1.label}</td><td colspan="3" style="${getCellStyle(field1.value)}">${field1.value}</td></tr>`);
                 }
               }
               return rows.join('');
@@ -342,9 +449,9 @@ export default function EquipmentStatus() {
                 const field1 = additionalFields[i];
                 const field2 = additionalFields[i + 1];
                 if (field2) {
-                  rows.push(`<tr><td class="label">${field1.label}</td><td>${field1.value}</td><td class="label">${field2.label}</td><td>${field2.value}</td></tr>`);
+                  rows.push(`<tr><td class="label">${field1.label}</td><td style="${getCellStyle(field1.value)}">${field1.value}</td><td class="label">${field2.label}</td><td style="${getCellStyle(field2.value)}">${field2.value}</td></tr>`);
                 } else {
-                  rows.push(`<tr><td class="label">${field1.label}</td><td colspan="3">${field1.value}</td></tr>`);
+                  rows.push(`<tr><td class="label">${field1.label}</td><td colspan="3" style="${getCellStyle(field1.value)}">${field1.value}</td></tr>`);
                 }
               }
               return rows.join('');
@@ -392,14 +499,14 @@ export default function EquipmentStatus() {
               for (let i = 0; i < statusFields.length; i++) {
                 const field = statusFields[i];
                 if (field.fullWidth) {
-                  rows.push(`<tr><td class="label">${field.label}</td><td colspan="3">${field.value}</td></tr>`);
+                  rows.push(`<tr><td class="label">${field.label}</td><td colspan="3" style="${getCellStyle(field.value)}">${field.value}</td></tr>`);
                 } else {
                   const field2 = statusFields[i + 1];
                   if (field2 && !field2.fullWidth) {
-                    rows.push(`<tr><td class="label">${field.label}</td><td>${field.value}</td><td class="label">${field2.label}</td><td>${field2.value}</td></tr>`);
+                    rows.push(`<tr><td class="label">${field.label}</td><td style="${getCellStyle(field.value)}">${field.value}</td><td class="label">${field2.label}</td><td style="${getCellStyle(field2.value)}">${field2.value}</td></tr>`);
                     i++; // Skip next field as we used it
                   } else {
-                    rows.push(`<tr><td class="label">${field.label}</td><td colspan="3">${field.value}</td></tr>`);
+                    rows.push(`<tr><td class="label">${field.label}</td><td colspan="3" style="${getCellStyle(field.value)}">${field.value}</td></tr>`);
                   }
                 }
               }
@@ -471,8 +578,22 @@ export default function EquipmentStatus() {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">Equipment Status</h1>
-          <p className="text-gray-600">Search and view RMU Inspection Reports by Site Code</p>
+          <div className="flex items-start gap-4">
+            {logoUrl && (
+              <div className="flex-shrink-0">
+                <img 
+                  src={logoUrl} 
+                  alt="BESCOM Logo" 
+                  className="h-16 w-auto object-contain"
+                  style={{ maxHeight: '64px' }}
+                />
+              </div>
+            )}
+            <div className="flex-1">
+              <h1 className="text-3xl font-bold text-gray-800 mb-2">Equipment Status</h1>
+              <p className="text-gray-600">Search and view RMU Inspection Reports by Site Code</p>
+            </div>
+          </div>
         </div>
 
         {/* Search Section */}
@@ -679,8 +800,13 @@ export default function EquipmentStatus() {
                               const terminalData = inspectionData.terminals[prefix];
                               const value = terminalData?.[field.key];
                               const displayValue = value && value.toString().trim() !== '' && value !== 'N/A' ? value : '';
+                              const hasRedBg = shouldHighlightRed(displayValue);
                               return (
-                                <td key={prefix} className="border-2 border-gray-400 px-4 py-2 text-center text-sm">
+                                <td 
+                                  key={prefix} 
+                                  className={`border-2 border-gray-400 px-4 py-2 text-center text-sm ${hasRedBg ? 'bg-red-100 border-red-400' : ''}`}
+                                  style={hasRedBg ? { backgroundColor: '#fee2e2', color: '#991b1b', fontWeight: 'bold' } : {}}
+                                >
                                   {displayValue}
                                 </td>
                               );
@@ -892,16 +1018,30 @@ export default function EquipmentStatus() {
   );
 }
 
+// Utility function to check if a value should have red background
+const shouldHighlightRed = (value: string | null | undefined): boolean => {
+  if (!value) return false;
+  const valueUpper = value.toString().trim().toUpperCase();
+  const redValues = [
+    'NO', 'POOR', 'DISCONNECTED', 'RED', 'FAULTY', 'BATTERY FAULTY',
+    'NOT OPERATING', 'MISSING', 'NOT WORKING', 'NOT AVAILABLE',
+    'IDLE', 'IDLER', 'DAMAGED', 'DAMAGE', 'REMOVED'
+  ];
+  return redValues.some(redValue => valueUpper === redValue || valueUpper.includes(redValue));
+};
+
 function InfoCard({ label, value, fullWidth }: { label: string; value: string | null | undefined; fullWidth?: boolean }) {
   // Only render if value exists and is not empty
   if (!value || value.trim() === '' || value === 'N/A') {
     return null;
   }
   
+  const hasRedBackground = shouldHighlightRed(value);
+  
   return (
-    <div className={`bg-gray-50 p-4 rounded-lg ${fullWidth ? 'col-span-2' : ''}`}>
+    <div className={`${hasRedBackground ? 'bg-red-100 border-2 border-red-400' : 'bg-gray-50'} p-4 rounded-lg ${fullWidth ? 'col-span-2' : ''}`}>
       <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-      <p className="text-gray-800 font-semibold">{value}</p>
+      <p className={`font-semibold ${hasRedBackground ? 'text-red-900' : 'text-gray-800'}`}>{value}</p>
     </div>
   );
 }

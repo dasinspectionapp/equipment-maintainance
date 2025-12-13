@@ -191,6 +191,132 @@ export default function SurveyForm() {
     remarks: '',
   });
 
+  // Helper function to parse date from various formats and convert to YYYY-MM-DD for date inputs
+  const parseDateForInput = (dateValue: any): string => {
+    if (!dateValue) return '';
+    
+    try {
+      // Handle string dates
+      if (typeof dateValue === 'string') {
+        const trimmed = dateValue.trim();
+        
+        // If it's already in YYYY-MM-DD format, return as is
+        if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+          return trimmed;
+        }
+        
+        // Handle DD-MM-YYYY format (from Excel) - e.g., "10-11-2025", "29-10-2025"
+        const ddmmyyyyMatch = trimmed.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+        if (ddmmyyyyMatch) {
+          const [, day, month, year] = ddmmyyyyMatch;
+          const dayNum = parseInt(day, 10);
+          const monthNum = parseInt(month, 10);
+          const yearNum = parseInt(year, 10);
+          // Validate: day should be 1-31, month 1-12, year 1900-2100
+          if (dayNum >= 1 && dayNum <= 31 && monthNum >= 1 && monthNum <= 12 && yearNum >= 1900 && yearNum <= 2100) {
+            return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+          }
+        }
+        
+        // Handle YYYY-MM-DD format but with slashes or other separators
+        const yyyymmddMatch = trimmed.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+        if (yyyymmddMatch) {
+          const [, year, month, day] = yyyymmddMatch;
+          const yearNum = parseInt(year, 10);
+          if (yearNum >= 1900 && yearNum <= 2100) {
+            return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+          }
+        }
+        
+        // Handle ISO date strings with invalid years (like +045244-12-31T18:30:00.000Z)
+        // These are Excel serial dates that were incorrectly converted to ISO format
+        if (trimmed.includes('T') || trimmed.includes('Z')) {
+          // Check for malformed dates with very large years (like +045244, 45958, 44307)
+          // Extract the number from patterns like +045244-12-31 or 45244-12-31
+          const invalidYearMatch = trimmed.match(/[\+\-]?0*(\d{5,})[\-\/](\d{1,2})[\-\/](\d{1,2})/);
+          if (invalidYearMatch) {
+            const serialDateNum = parseInt(invalidYearMatch[1], 10);
+            // Excel serial dates are typically in range 1-100000 (representing dates from 1900-2173)
+            if (serialDateNum > 1 && serialDateNum < 1000000) {
+              try {
+                // Excel serial date: days since January 1, 1900
+                // Excel incorrectly treats 1900 as a leap year, so we adjust
+                // Excel epoch: December 30, 1899 (since Excel thinks 1900 is a leap year)
+                const excelEpoch = new Date(Date.UTC(1899, 11, 30)); // Dec 30, 1899 UTC
+                const millisecondsPerDay = 24 * 60 * 60 * 1000;
+                // Excel serial date 1 = Jan 1, 1900, but we adjust for the leap year bug
+                const excelDate = new Date(excelEpoch.getTime() + (serialDateNum - 1) * millisecondsPerDay);
+                
+                if (!isNaN(excelDate.getTime())) {
+                  const year = excelDate.getFullYear();
+                  if (year >= 1900 && year <= 2100) {
+                    const monthStr = String(excelDate.getMonth() + 1).padStart(2, '0');
+                    const dayStr = String(excelDate.getDate()).padStart(2, '0');
+                    console.log(`✅ Converted Excel serial date ${serialDateNum} to ${year}-${monthStr}-${dayStr}`);
+                    return `${year}-${monthStr}-${dayStr}`;
+                  }
+                }
+              } catch (e) {
+                console.warn('Failed to convert Excel serial date:', serialDateNum, e);
+              }
+            }
+            // If conversion failed, skip this invalid date
+            console.warn('⚠️ Skipping invalid date with large year:', trimmed);
+            return '';
+          }
+          
+          // Try normal ISO date parsing for valid dates
+          const date = new Date(trimmed);
+          if (!isNaN(date.getTime())) {
+            const year = date.getFullYear();
+            if (year >= 1900 && year <= 2100) {
+              const monthStr = String(date.getMonth() + 1).padStart(2, '0');
+              const dayStr = String(date.getDate()).padStart(2, '0');
+              return `${year}-${monthStr}-${dayStr}`;
+            }
+          }
+        }
+      }
+      
+      // Handle Date objects
+      if (dateValue instanceof Date) {
+        if (!isNaN(dateValue.getTime())) {
+          const year = dateValue.getFullYear();
+          if (year >= 1900 && year <= 2100) {
+            const monthStr = String(dateValue.getMonth() + 1).padStart(2, '0');
+            const dayStr = String(dateValue.getDate()).padStart(2, '0');
+            return `${year}-${monthStr}-${dayStr}`;
+          } else {
+            console.warn('Date object with invalid year:', year, dateValue);
+            return '';
+          }
+        }
+      }
+      
+      // Try parsing as Date object as last resort
+      const date = new Date(dateValue);
+      if (!isNaN(date.getTime())) {
+        const year = date.getFullYear();
+        // Check if year is reasonable (between 1900 and 2100)
+        if (year >= 1900 && year <= 2100) {
+          const monthStr = String(date.getMonth() + 1).padStart(2, '0');
+          const dayStr = String(date.getDate()).padStart(2, '0');
+          return `${year}-${monthStr}-${dayStr}`;
+        } else {
+          console.warn('Could not parse date - invalid year:', year, dateValue);
+          return '';
+        }
+      }
+      
+      // If all parsing fails, return empty string
+      console.warn('Could not parse date:', dateValue);
+      return '';
+    } catch (error) {
+      console.error('Error parsing date:', dateValue, error);
+      return '';
+    }
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -238,6 +364,53 @@ export default function SurveyForm() {
       if (data.success && data.data) {
         const inspection = data.data;
         
+        // Log the raw API response to see what fields have data
+        console.log('🔍 Raw API Response - Full inspection object:', inspection);
+        console.log('🔍 Raw API Response - Fields 27-40 check:', {
+          hasFpiStatus: inspection.fpiStatus !== undefined && inspection.fpiStatus !== null,
+          fpiStatus: inspection.fpiStatus,
+          hasAvailability12V: inspection.availability12V !== undefined && inspection.availability12V !== null,
+          availability12V: inspection.availability12V,
+          hasControlCard: inspection.controlCard !== undefined && inspection.controlCard !== null,
+          controlCard: inspection.controlCard,
+          hasBatteryStatus: inspection.batteryStatus !== undefined && inspection.batteryStatus !== null,
+          batteryStatus: inspection.batteryStatus,
+          hasSf6Gas: inspection.sf6Gas !== undefined && inspection.sf6Gas !== null,
+          sf6Gas: inspection.sf6Gas,
+          hasDoorGasket: inspection.doorGasket !== undefined && inspection.doorGasket !== null,
+          doorGasket: inspection.doorGasket,
+          hasDummyLatchCommand: inspection.dummyLatchCommand !== undefined && inspection.dummyLatchCommand !== null,
+          dummyLatchCommand: inspection.dummyLatchCommand,
+          hasTerminals: inspection.terminals !== undefined && inspection.terminals !== null,
+          terminals: inspection.terminals,
+          hasRemarks: inspection.remarks !== undefined && inspection.remarks !== null,
+          remarks: inspection.remarks
+        });
+        
+        // Parse dates first for debugging
+        const parsedDateOfCommission = parseDateForInput(inspection.dateOfCommission);
+        const parsedInspectionDate = parseDateForInput(inspection.inspectionDate);
+        const parsedPreviousAMCDate = parseDateForInput(inspection.previousAMCDate);
+        
+        // Debug: Log date values
+        console.log('📅 Date parsing debug:', {
+          dateOfCommission: {
+            raw: inspection.dateOfCommission,
+            parsed: parsedDateOfCommission,
+            type: typeof inspection.dateOfCommission
+          },
+          inspectionDate: {
+            raw: inspection.inspectionDate,
+            parsed: parsedInspectionDate,
+            type: typeof inspection.inspectionDate
+          },
+          previousAMCDate: {
+            raw: inspection.previousAMCDate,
+            parsed: parsedPreviousAMCDate,
+            type: typeof inspection.previousAMCDate
+          }
+        });
+        
         // Populate form fields
         const formFields: any = {
           siteCode: inspection.siteCode || '',
@@ -245,16 +418,16 @@ export default function SurveyForm() {
           division: inspection.division || '',
           subDivision: inspection.subDivision || '',
           om: inspection.om || '',
-          dateOfCommission: inspection.dateOfCommission ? new Date(inspection.dateOfCommission).toISOString().split('T')[0] : '',
+          dateOfCommission: parsedDateOfCommission,
           feederNumberAndName: inspection.feederNumberAndName || '',
-          inspectionDate: inspection.inspectionDate ? new Date(inspection.inspectionDate).toISOString().split('T')[0] : '',
+          inspectionDate: parsedInspectionDate,
           rmuMakeType: inspection.rmuMakeType || '',
           locationHRN: inspection.locationHRN || '',
           serialNo: inspection.serialNo || '',
           latLong: inspection.latLong || '',
           warrantyStatus: inspection.warrantyStatus || '',
           coFeederName: inspection.coFeederName || '',
-          previousAMCDate: inspection.previousAMCDate ? new Date(inspection.previousAMCDate).toISOString().split('T')[0] : '',
+          previousAMCDate: parseDateForInput(inspection.previousAMCDate),
           mfmMake: inspection.mfmMake || '',
           relayMakeModelNo: inspection.relayMakeModelNo || '',
           fpiMakeModelNo: inspection.fpiMakeModelNo || '',
@@ -266,24 +439,25 @@ export default function SurveyForm() {
           earthingConnection: inspection.earthingConnection || '',
           commAccessoriesAvailability: inspection.commAccessoriesAvailability || '',
           relayGroupChange: inspection.relayGroupChange || '',
-          fpiStatus: inspection.fpiStatus || '',
-          availability12V: inspection.availability12V || '',
-          overallWiringIssue: inspection.overallWiringIssue || '',
-          controlCard: inspection.controlCard || '',
-          beddingCondition: inspection.beddingCondition || '',
-          batteryStatus: inspection.batteryStatus || '',
-          relayGroupChangeUpdate: inspection.relayGroupChangeUpdate || '',
-          availability230V: inspection.availability230V || '',
-          sf6Gas: inspection.sf6Gas || '',
-          rmuLocationSameAsGIS: inspection.rmuLocationSameAsGIS || '',
-          doorHydraulics: inspection.doorHydraulics || '',
-          controlCabinetDoor: inspection.controlCabinetDoor || '',
-          doorGasket: inspection.doorGasket || '',
-          dummyLatchCommand: inspection.dummyLatchCommand || '',
-          remarks: inspection.remarks || ''
+          fpiStatus: inspection.fpiStatus !== undefined && inspection.fpiStatus !== null ? String(inspection.fpiStatus) : '',
+          availability12V: inspection.availability12V !== undefined && inspection.availability12V !== null ? String(inspection.availability12V) : '',
+          overallWiringIssue: inspection.overallWiringIssue !== undefined && inspection.overallWiringIssue !== null ? String(inspection.overallWiringIssue) : '',
+          controlCard: inspection.controlCard !== undefined && inspection.controlCard !== null ? String(inspection.controlCard) : '',
+          beddingCondition: inspection.beddingCondition !== undefined && inspection.beddingCondition !== null ? String(inspection.beddingCondition) : '',
+          batteryStatus: inspection.batteryStatus !== undefined && inspection.batteryStatus !== null ? String(inspection.batteryStatus) : '',
+          relayGroupChangeUpdate: inspection.relayGroupChangeUpdate !== undefined && inspection.relayGroupChangeUpdate !== null ? String(inspection.relayGroupChangeUpdate) : '',
+          availability230V: inspection.availability230V !== undefined && inspection.availability230V !== null ? String(inspection.availability230V) : '',
+          sf6Gas: inspection.sf6Gas !== undefined && inspection.sf6Gas !== null ? String(inspection.sf6Gas) : '',
+          rmuLocationSameAsGIS: inspection.rmuLocationSameAsGIS !== undefined && inspection.rmuLocationSameAsGIS !== null ? String(inspection.rmuLocationSameAsGIS) : '',
+          doorHydraulics: inspection.doorHydraulics !== undefined && inspection.doorHydraulics !== null ? String(inspection.doorHydraulics) : '',
+          controlCabinetDoor: inspection.controlCabinetDoor !== undefined && inspection.controlCabinetDoor !== null ? String(inspection.controlCabinetDoor) : '',
+          doorGasket: inspection.doorGasket !== undefined && inspection.doorGasket !== null ? String(inspection.doorGasket) : '',
+          dummyLatchCommand: inspection.dummyLatchCommand !== undefined && inspection.dummyLatchCommand !== null ? String(inspection.dummyLatchCommand) : '',
+          remarks: inspection.remarks !== undefined && inspection.remarks !== null ? String(inspection.remarks) : ''
         };
 
         // Populate terminal data (OD1, OD2, VL1, VL2, VL3)
+        // Initialize all terminal fields first to ensure they're always set
         const terminalKeys = ['od1', 'od2', 'vl1', 'vl2', 'vl3'];
         const terminalFields = [
           'cablesConnected', 'connectedTo', 'loadAmpsR', 'loadAmpsY', 'loadAmpsB',
@@ -293,19 +467,119 @@ export default function SurveyForm() {
           'electricalOperation', 'remoteOperation', 'cableICFromOrOGTo'
         ];
 
+        // Initialize all terminal fields to empty strings first
+        terminalKeys.forEach(prefix => {
+          terminalFields.forEach(field => {
+            const key = `${prefix}_${field}`;
+            formFields[key] = '';
+          });
+        });
+
+        // Then populate with actual data if it exists
         if (inspection.terminals) {
           terminalKeys.forEach(prefix => {
             const terminalData = inspection.terminals[prefix];
             if (terminalData) {
               terminalFields.forEach(field => {
                 const key = `${prefix}_${field}`;
-                formFields[key] = terminalData[field] || '';
+                const value = terminalData[field];
+                if (value !== null && value !== undefined && value !== '') {
+                  formFields[key] = value;
+                }
               });
             }
           });
         }
 
-        setFormData(prev => ({ ...prev, ...formFields }));
+        // Debug: Log all data being loaded - expand all values for visibility
+        console.log('📋 Raw inspection data - Field 27 (fpiStatus):', inspection.fpiStatus);
+        console.log('📋 Raw inspection data - Field 28 (availability12V):', inspection.availability12V);
+        console.log('📋 Raw inspection data - Field 29 (overallWiringIssue):', inspection.overallWiringIssue);
+        console.log('📋 Raw inspection data - Field 30 (controlCard):', inspection.controlCard);
+        console.log('📋 Raw inspection data - Field 31 (beddingCondition):', inspection.beddingCondition);
+        console.log('📋 Raw inspection data - Field 32 (batteryStatus):', inspection.batteryStatus);
+        console.log('📋 Raw inspection data - Field 33 (relayGroupChangeUpdate):', inspection.relayGroupChangeUpdate);
+        console.log('📋 Raw inspection data - Field 34 (availability230V):', inspection.availability230V);
+        console.log('📋 Raw inspection data - Field 35 (sf6Gas):', inspection.sf6Gas);
+        console.log('📋 Raw inspection data - Field 36 (rmuLocationSameAsGIS):', inspection.rmuLocationSameAsGIS);
+        console.log('📋 Raw inspection data - Field 37 (doorHydraulics):', inspection.doorHydraulics);
+        console.log('📋 Raw inspection data - Field 38 (controlCabinetDoor):', inspection.controlCabinetDoor);
+        console.log('📋 Raw inspection data - Field 39 (doorGasket):', inspection.doorGasket);
+        console.log('📋 Raw inspection data - Field 40 (dummyLatchCommand):', inspection.dummyLatchCommand);
+        console.log('📋 Raw inspection data - Terminals:', inspection.terminals);
+        console.log('📋 Raw inspection data - Remarks:', inspection.remarks);
+        console.log('📋 Full inspection object:', inspection);
+        
+        // Count how many fields have values
+        const fieldsWithValues = Object.keys(formFields).filter(key => {
+          const value = formFields[key];
+          return value !== null && value !== undefined && value !== '';
+        });
+        
+        console.log(`📋 FormFields summary: ${fieldsWithValues.length} fields with values out of ${Object.keys(formFields).length} total fields`);
+        console.log('📋 FormFields - Field 27 (fpiStatus):', formFields.fpiStatus);
+        console.log('📋 FormFields - Field 28 (availability12V):', formFields.availability12V);
+        console.log('📋 FormFields - Field 29 (overallWiringIssue):', formFields.overallWiringIssue);
+        console.log('📋 FormFields - Field 30 (controlCard):', formFields.controlCard);
+        console.log('📋 FormFields - Field 31 (beddingCondition):', formFields.beddingCondition);
+        console.log('📋 FormFields - Field 32 (batteryStatus):', formFields.batteryStatus);
+        console.log('📋 FormFields - Field 33 (relayGroupChangeUpdate):', formFields.relayGroupChangeUpdate);
+        console.log('📋 FormFields - Field 34 (availability230V):', formFields.availability230V);
+        console.log('📋 FormFields - Field 35 (sf6Gas):', formFields.sf6Gas);
+        console.log('📋 FormFields - Field 36 (rmuLocationSameAsGIS):', formFields.rmuLocationSameAsGIS);
+        console.log('📋 FormFields - Field 37 (doorHydraulics):', formFields.doorHydraulics);
+        console.log('📋 FormFields - Field 38 (controlCabinetDoor):', formFields.controlCabinetDoor);
+        console.log('📋 FormFields - Field 39 (doorGasket):', formFields.doorGasket);
+        console.log('📋 FormFields - Field 40 (dummyLatchCommand):', formFields.dummyLatchCommand);
+        console.log('📋 FormFields - Terminal OD1 sample:', {
+          od1_cablesConnected: formFields.od1_cablesConnected,
+          od1_switchPosition: formFields.od1_switchPosition,
+          od1_loadAmpsR: formFields.od1_loadAmpsR,
+          od1_cableICFromOrOGTo: formFields.od1_cableICFromOrOGTo
+        });
+        console.log('📋 FormFields - Terminal VL1 sample:', {
+          vl1_cablesConnected: formFields.vl1_cablesConnected,
+          vl1_switchPosition: formFields.vl1_switchPosition,
+          vl1_loadAmpsR: formFields.vl1_loadAmpsR,
+          vl1_cableICFromOrOGTo: formFields.vl1_cableICFromOrOGTo
+        });
+        console.log('📋 FormFields - Remarks:', formFields.remarks);
+
+        // Update form data - merge with existing state to preserve all field definitions
+        try {
+          setFormData(prev => {
+            // Create a complete form data object with all fields
+            const updated = { ...prev };
+            
+            // Update all fields from formFields
+            Object.keys(formFields).forEach(key => {
+              try {
+                updated[key as keyof typeof updated] = formFields[key];
+              } catch (err) {
+                console.error(`Error setting field ${key}:`, err);
+              }
+            });
+            
+            console.log('📋 FormData after update - checking key fields:', {
+              fpiStatus: updated.fpiStatus,
+              availability12V: updated.availability12V,
+              controlCard: updated.controlCard,
+              batteryStatus: updated.batteryStatus,
+              sf6Gas: updated.sf6Gas,
+              doorGasket: updated.doorGasket,
+              dummyLatchCommand: updated.dummyLatchCommand,
+              od1_cablesConnected: updated.od1_cablesConnected,
+              od1_switchPosition: updated.od1_switchPosition,
+              remarks: updated.remarks
+            });
+            
+            return updated;
+          });
+        } catch (error) {
+          console.error('Error updating form data:', error);
+          // Fallback: set form data directly
+          setFormData(formFields);
+        }
 
         // Load images if they exist
         if (inspection.images && Array.isArray(inspection.images) && inspection.images.length > 0) {
@@ -1316,9 +1590,9 @@ export default function SurveyForm() {
           </div>
         </div>
 
-        {/* Fields 20-40: Combined section with grid layout */}
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <h3 className="text-lg font-semibold mb-4">RMU Status & Conditions (Continued)</h3>
+        {/* Fields 27-40: RMU Status & Conditions (Continued) */}
+        <div className="bg-white rounded-lg shadow-sm p-6" style={{ display: 'block', visibility: 'visible' }}>
+          <h3 className="text-lg font-semibold mb-4">RMU Status & Conditions (Continued) - Fields 27-40</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {/* Field 27 */}
             <div>
@@ -1337,7 +1611,7 @@ export default function SurveyForm() {
             </div>
 
             {/* Fields 28-33 */}
-            <div>
+            <div key="field-28">
               <label className="block text-sm font-medium text-gray-700 mb-2">28) 12V Availability:</label>
               <select
                 name="availability12V"
@@ -1352,7 +1626,7 @@ export default function SurveyForm() {
               </select>
             </div>
 
-            <div>
+            <div key="field-29" style={{ minHeight: '80px' }}>
               <label className="block text-sm font-medium text-gray-700 mb-2">29) Over all Wiring issue:</label>
               <select
                 name="overallWiringIssue"
@@ -1367,7 +1641,7 @@ export default function SurveyForm() {
               </select>
             </div>
 
-            <div>
+            <div key="field-30" style={{ minHeight: '80px' }}>
               <label className="block text-sm font-medium text-gray-700 mb-2">30) Control card:</label>
               <select
                 name="controlCard"
@@ -1382,7 +1656,7 @@ export default function SurveyForm() {
               </select>
             </div>
 
-            <div>
+            <div key="field-31" style={{ minHeight: '80px' }}>
               <label className="block text-sm font-medium text-gray-700 mb-2">31) Bedding condition:</label>
               <select
                 name="beddingCondition"
@@ -1397,7 +1671,7 @@ export default function SurveyForm() {
               </select>
             </div>
 
-            <div>
+            <div key="field-32" style={{ minHeight: '80px' }}>
               <label className="block text-sm font-medium text-gray-700 mb-2">32) Battery Status:</label>
               <select
                 name="batteryStatus"
@@ -1412,7 +1686,7 @@ export default function SurveyForm() {
               </select>
             </div>
 
-            <div>
+            <div key="field-33" style={{ minHeight: '80px' }}>
               <label className="block text-sm font-medium text-gray-700 mb-2">33) Relay Group change from 1 to 2 command from CCR:</label>
               <select
                 name="relayGroupChangeUpdate"
@@ -1426,7 +1700,7 @@ export default function SurveyForm() {
                 ))}
               </select>
             </div>
-            <div>
+            <div key="field-34" style={{ minHeight: '80px' }}>
               <label className="block text-sm font-medium text-gray-700 mb-2">34) 230V Availability:</label>
               <select
                 name="availability230V"
@@ -1441,7 +1715,7 @@ export default function SurveyForm() {
               </select>
             </div>
 
-            <div>
+            <div key="field-35" style={{ minHeight: '80px' }}>
               <label className="block text-sm font-medium text-gray-700 mb-2">35) SF6 Gas:</label>
               <select
                 name="sf6Gas"
@@ -1456,7 +1730,7 @@ export default function SurveyForm() {
               </select>
             </div>
 
-            <div>
+            <div key="field-36" style={{ minHeight: '80px' }}>
               <label className="block text-sm font-medium text-gray-700 mb-2">36) RMU location same as GIS data?:</label>
               <select
                 name="rmuLocationSameAsGIS"
@@ -1471,7 +1745,7 @@ export default function SurveyForm() {
               </select>
             </div>
 
-            <div>
+            <div key="field-37" style={{ minHeight: '80px' }}>
               <label className="block text-sm font-medium text-gray-700 mb-2">37) Door Hydraulics:</label>
               <select
                 name="doorHydraulics"
@@ -1486,7 +1760,7 @@ export default function SurveyForm() {
               </select>
             </div>
 
-            <div>
+            <div key="field-38" style={{ minHeight: '80px' }}>
               <label className="block text-sm font-medium text-gray-700 mb-2">38) Control cabinet door:</label>
               <select
                 name="controlCabinetDoor"
@@ -1501,7 +1775,7 @@ export default function SurveyForm() {
               </select>
             </div>
 
-            <div>
+            <div key="field-39" style={{ minHeight: '80px' }}>
               <label className="block text-sm font-medium text-gray-700 mb-2">39) Door Gasket:</label>
               <select
                 name="doorGasket"
@@ -1516,7 +1790,7 @@ export default function SurveyForm() {
               </select>
             </div>
 
-            <div>
+            <div key="field-40" style={{ minHeight: '80px' }}>
               <label className="block text-sm font-medium text-gray-700 mb-2">40) Dummy Latch command from CCR:</label>
               <select
                 name="dummyLatchCommand"
