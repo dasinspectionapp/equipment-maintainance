@@ -294,8 +294,8 @@ export default function EquipmentStatus() {
     // Helper function to get cell styling based on value
     const getCellStyle = (val: any): string => {
       if (shouldHighlightRed(val)) {
-        // Use a more visible red background for PDF - using both background-color and background
-        return 'padding: 10px; border: 1px solid #ddd; text-align: left; background-color: #fecaca; background: #fecaca; color: #991b1b; font-weight: bold;';
+        // Red text with bold, no background
+        return 'padding: 10px; border: 1px solid #ddd; text-align: left; color: #dc2626; font-weight: bold;';
       }
       return 'padding: 10px; border: 1px solid #ddd; text-align: left;';
     };
@@ -343,8 +343,8 @@ export default function EquipmentStatus() {
                     const displayValue = hasValue(value) ? value : '';
                     let cellStyle = 'padding: 8px; border: 2px solid #000; text-align: center;';
                     if (displayValue && shouldHighlightRed(displayValue)) {
-                      // Use a more visible red background for PDF
-                      cellStyle = 'padding: 8px; border: 2px solid #000; text-align: center; background-color: #fecaca; background: #fecaca; color: #991b1b; font-weight: bold;';
+                      // Red text with bold, no background
+                      cellStyle = 'padding: 8px; border: 2px solid #000; text-align: center; color: #dc2626; font-weight: bold;';
                     }
                     return `<td style="${cellStyle}">${displayValue}</td>`;
                   }).join('');
@@ -389,8 +389,7 @@ export default function EquipmentStatus() {
           .label { font-weight: bold; color: #374151; }
           .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #6b7280; }
           td.highlight-red {
-            background-color: #fee2e2 !important;
-            color: #991b1b !important;
+            color: #dc2626 !important;
             font-weight: bold !important;
           }
         </style>
@@ -825,8 +824,8 @@ export default function EquipmentStatus() {
                               return (
                                 <td 
                                   key={prefix} 
-                                  className={`border-2 border-gray-400 px-4 py-2 text-center text-sm ${hasRedBg ? 'bg-red-100 border-red-400' : ''}`}
-                                  style={hasRedBg ? { backgroundColor: '#fee2e2', color: '#991b1b', fontWeight: 'bold' } : {}}
+                                  className="border-2 border-gray-400 px-4 py-2 text-center text-sm"
+                                  style={hasRedBg ? { color: '#dc2626', fontWeight: 'bold' } : {}}
                                 >
                                   {displayValue}
                                 </td>
@@ -1056,13 +1055,13 @@ function InfoCard({ label, value, fullWidth }: { label: string; value: string | 
   if (!value || value.trim() === '' || value === 'N/A') {
     return null;
   }
-  
-  const hasRedBackground = shouldHighlightRed(value);
-  
+
+  const hasRedText = shouldHighlightRed(value);
+
   return (
-    <div className={`${hasRedBackground ? 'bg-red-100 border-2 border-red-400' : 'bg-gray-50'} p-4 rounded-lg ${fullWidth ? 'col-span-2' : ''}`}>
+    <div className={`bg-gray-50 p-4 rounded-lg ${fullWidth ? 'col-span-2' : ''}`}>
       <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-      <p className={`font-semibold ${hasRedBackground ? 'text-red-900' : 'text-gray-800'}`}>{value}</p>
+      <p className={`font-semibold ${hasRedText ? 'text-red-600' : 'text-gray-800'}`} style={hasRedText ? { fontWeight: 'bold' } : {}}>{value}</p>
     </div>
   );
 }
