@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import AutocompleteInput from '../components/AutocompleteInput';
 import { API_BASE } from '../utils/api';
 import { compressImage } from '../utils/imageCompression';
+import { compressVideo } from '../utils/videoCompression';
 
 export default function SurveyForm() {
   const [images, setImages] = useState<string[]>([]);
@@ -514,8 +515,8 @@ export default function SurveyForm() {
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { 
           facingMode: 'environment',
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
+          width: { ideal: 640 },
+          height: { ideal: 480 }
         },
         audio: true
       });
@@ -546,7 +547,7 @@ export default function SurveyForm() {
         });
       }
       
-      // Try to get the best supported video format
+      // Try to get the best supported video format with lower bitrate for compression
       let mimeType = 'video/webm;codecs=vp8,opus'; // More compatible than vp9
       
       // Check for better codec support
@@ -560,8 +561,10 @@ export default function SurveyForm() {
         mimeType = 'video/mp4';
       }
       
+      // Use lower bitrate for initial recording to reduce file size
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: mimeType
+        mimeType: mimeType,
+        videoBitsPerSecond: 2000000 // 2 Mbps for better compression
       });
       mediaRecorderRef.current = mediaRecorder;
       
@@ -573,10 +576,21 @@ export default function SurveyForm() {
         }
       };
       
-      mediaRecorder.onstop = () => {
+      mediaRecorder.onstop = async () => {
         const blob = new Blob(chunks, { type: 'video/webm' });
-        const videoUrl = URL.createObjectURL(blob);
-        setRecordedVideo(videoUrl);
+        
+        // Compress video to less than 10 MB
+        try {
+          const compressedBlob = await compressVideo(blob);
+          const videoUrl = URL.createObjectURL(compressedBlob);
+          setRecordedVideo(videoUrl);
+        } catch (error) {
+          console.error('Error compressing recorded video:', error);
+          // Fallback to original if compression fails
+          const videoUrl = URL.createObjectURL(blob);
+          setRecordedVideo(videoUrl);
+        }
+        
         setIsRecording(false);
         setRecordingTime(0);
         
@@ -631,11 +645,20 @@ export default function SurveyForm() {
     }
   };
 
-  const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.type.startsWith('video/')) {
-      const videoUrl = URL.createObjectURL(file);
-      setRecordedVideo(videoUrl);
+      try {
+        // Compress uploaded video to less than 10 MB
+        const compressedBlob = await compressVideo(file);
+        const videoUrl = URL.createObjectURL(compressedBlob);
+        setRecordedVideo(videoUrl);
+      } catch (error) {
+        console.error('Error compressing uploaded video:', error);
+        // Fallback to original if compression fails
+        const videoUrl = URL.createObjectURL(file);
+        setRecordedVideo(videoUrl);
+      }
     }
     // Reset input so same file can be selected again
     if (videoFileInputRef.current) {
@@ -844,23 +867,31 @@ export default function SurveyForm() {
       let videoBase64 = null;
       if (recordedVideo) {
         try {
-          // If it's already a data URL, use it directly
+          // If it's already a data URL, use it directly (already compressed)
           if (recordedVideo.startsWith('data:')) {
             videoBase64 = recordedVideo;
           } 
-          // If it's a blob URL, fetch and convert to base64
+          // If it's a blob URL, fetch and compress if needed
           else if (recordedVideo.startsWith('blob:')) {
             const response = await fetch(recordedVideo);
             const blob = await response.blob();
-            videoBase64 = await blobToBase64(blob);
+            
+            // Compress video if over 10 MB
+            if (blob.size > 10000000) {
+              const compressedBlob = await compressVideo(blob);
+              videoBase64 = await blobToBase64(compressedBlob);
+            } else {
+              // Convert to base64 if already under size limit
+              videoBase64 = await blobToBase64(blob);
+            }
           }
           // Otherwise assume it's already base64 or URL
           else {
             videoBase64 = recordedVideo;
           }
         } catch (error) {
-          console.error('Error converting video to base64:', error);
-          // Continue without video if conversion fails
+          console.error('Error processing video:', error);
+          // Continue without video if processing fails
         }
       }
 
