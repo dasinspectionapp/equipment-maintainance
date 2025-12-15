@@ -1439,8 +1439,24 @@ export default function MyData() {
               // Remove CIRCLE
               if (normalized === 'circle') return false;
               
-              // Keep DEVICE TYPE for routing logic (don't remove it)
-              // Removed: DEVICE TYPE filter to allow routing based on device type
+              // Remove DEVICE TYPE for Equipment role users
+              if (userRole === 'Equipment' && 
+                  ((normalized.includes('device') && normalized.includes('type')) ||
+                   normalized === 'devicetype' || normalized === 'device_type' ||
+                   normalized === 'device type')) return false;
+              
+              // Remove RTU MAKE for Equipment role users
+              if (userRole === 'Equipment' && 
+                  ((normalized.includes('rtu') && normalized.includes('make')) ||
+                   normalized === 'rtumake' || normalized === 'rtu_make' ||
+                   normalized === 'rtu make')) return false;
+              
+              // Remove NO OF DAYS OFFLINE for Equipment role users
+              if (userRole === 'Equipment' && 
+                  ((normalized.includes('days') && normalized.includes('offline')) ||
+                   normalized === 'noofdaysoffline' || normalized === 'no_of_days_offline' ||
+                   normalized === 'no of days offline' || normalized === 'numberofdaysoffline' ||
+                   normalized === 'number_of_days_offline' || normalized === 'number of days offline')) return false;
               
               // Remove ATTRIBUTE
               if (normalized === 'attribute') return false;
@@ -1667,8 +1683,16 @@ export default function MyData() {
                     
                     console.log('MY DATA - Merged ONLINE-OFFLINE data into', mergedCount, 'rows');
                     
-                    // Find RTU MAKE column to insert DEVICE STATUS and NO OF DAYS OFFLINE after it
-                    const rtuMakeHeader = hdrs.find((h: string) => {
+                    // Find EQUIPMENT MAKE column to insert DEVICE STATUS and NO OF DAYS OFFLINE after it
+                    // (Will be reordered later to ensure DATE and DEVICE STATUS come after EQUIPMENT MAKE)
+                    const equipmentMakeHeader = hdrs.find((h: string) => {
+                      const normalized = normalizeHeader(h);
+                      return (normalized.includes('equipment') && normalized.includes('make')) ||
+                             normalized === 'equipmentmake' || normalized === 'equipment_make' ||
+                             normalized === 'equipment make';
+                    });
+                    
+                    const insertAfterHeader = equipmentMakeHeader || hdrs.find((h: string) => {
                       const normalized = normalizeHeader(h);
                       return normalized === 'rtu make' ||
                              normalized === 'rtu_make' ||
@@ -1676,31 +1700,31 @@ export default function MyData() {
                              (normalized.includes('rtu') && normalized.includes('make'));
                     });
                     
-                    console.log('MY DATA - RTU MAKE header found:', rtuMakeHeader);
+                    console.log('MY DATA - Insert after header found:', insertAfterHeader, equipmentMakeHeader ? '(EQUIPMENT MAKE)' : '(RTU MAKE)');
                     
-                    // Insert ONLINE-OFFLINE columns after RTU MAKE
-                    if (rtuMakeHeader) {
-                      const rtuMakeIndex = hdrs.indexOf(rtuMakeHeader);
-                      if (rtuMakeIndex !== -1) {
+                    // Insert ONLINE-OFFLINE columns after EQUIPMENT MAKE (or RTU MAKE as fallback)
+                    if (insertAfterHeader) {
+                      const insertIndex = hdrs.indexOf(insertAfterHeader);
+                      if (insertIndex !== -1) {
                         // Only insert columns that aren't already in headers, maintaining order
                         const columnsToAdd = onlineOfflineColumns.filter(col => !hdrs.includes(col));
                         if (columnsToAdd.length > 0) {
-                          // Insert columns after RTU MAKE
+                          // Insert columns after EQUIPMENT MAKE (or RTU MAKE)
                           hdrs = [
-                            ...hdrs.slice(0, rtuMakeIndex + 1),
+                            ...hdrs.slice(0, insertIndex + 1),
                             ...columnsToAdd,
-                            ...hdrs.slice(rtuMakeIndex + 1)
+                            ...hdrs.slice(insertIndex + 1)
                           ];
-                          console.log('MY DATA - Inserted ONLINE-OFFLINE columns after RTU MAKE at index', rtuMakeIndex + 1);
+                          console.log(`MY DATA - Inserted ONLINE-OFFLINE columns after ${equipmentMakeHeader ? 'EQUIPMENT MAKE' : 'RTU MAKE'} at index`, insertIndex + 1);
                           console.log('MY DATA - Columns inserted:', columnsToAdd);
                         }
                       }
                     } else {
-                      // If RTU MAKE not found, add at the end
+                      // If neither found, add at the end
                       const columnsToAdd = onlineOfflineColumns.filter(col => !hdrs.includes(col));
                       if (columnsToAdd.length > 0) {
                         hdrs = [...hdrs, ...columnsToAdd];
-                        console.log('MY DATA - RTU MAKE not found, added ONLINE-OFFLINE columns at the end:', columnsToAdd);
+                        console.log('MY DATA - EQUIPMENT MAKE/RTU MAKE not found, added ONLINE-OFFLINE columns at the end:', columnsToAdd);
                       }
                     }
                   } else {
@@ -1779,11 +1803,17 @@ export default function MyData() {
             const normalized = normalize(h);
             
             // PRESERVE merged ONLINE-OFFLINE columns (DEVICE STATUS and NO OF DAYS OFFLINE)
+            // BUT remove NO OF DAYS OFFLINE for Equipment role users (even merged column)
             if (mergedDeviceStatusColumn && h === mergedDeviceStatusColumn) {
               console.log('MY DATA - Preserving merged DEVICE STATUS column:', h);
               return true;
             }
             if (mergedNoOfDaysOfflineColumn && h === mergedNoOfDaysOfflineColumn) {
+              // Remove merged NO OF DAYS OFFLINE column for Equipment role users
+              if (userRole === 'Equipment') {
+                console.log('MY DATA - Removing merged NO OF DAYS OFFLINE column for Equipment role:', h);
+                return false;
+              }
               console.log('MY DATA - Preserving merged NO OF DAYS OFFLINE column:', h);
               return true;
             }
@@ -1794,8 +1824,17 @@ export default function MyData() {
             // Remove CIRCLE
             if (normalized === 'circle') return false;
             
-            // Keep DEVICE TYPE for routing logic (don't remove it)
-            // Removed: DEVICE TYPE filter to allow routing based on device type
+            // Remove DEVICE TYPE for Equipment role users
+            if (userRole === 'Equipment' && 
+                ((normalized.includes('device') && normalized.includes('type')) ||
+                 normalized === 'devicetype' || normalized === 'device_type' ||
+                 normalized === 'device type')) return false;
+            
+            // Remove RTU MAKE for Equipment role users
+            if (userRole === 'Equipment' && 
+                ((normalized.includes('rtu') && normalized.includes('make')) ||
+                 normalized === 'rtumake' || normalized === 'rtu_make' ||
+                 normalized === 'rtu make')) return false;
             
             // Remove ATTRIBUTE
             if (normalized === 'attribute') return false;
@@ -1806,6 +1845,19 @@ export default function MyData() {
             
             // Remove HRN
             if (normalized === 'hrn') return false;
+            
+            // Remove "No of Days Offline" for Equipment role users (handles variations)
+            // BUT preserve if it's the merged column
+            if (userRole === 'Equipment' && 
+                ((normalized.includes('days') && normalized.includes('offline')) ||
+                normalized === 'noofdaysoffline' || normalized === 'no_of_days_offline' ||
+                normalized === 'no of days offline' || normalized === 'numberofdaysoffline' ||
+                normalized === 'number_of_days_offline' || normalized === 'number of days offline')) {
+              // Only filter if it's NOT the merged column
+              if (h !== mergedNoOfDaysOfflineColumn) {
+                return false;
+              }
+            }
             
             // Remove "No of Days Offline" only for RTU/Communication role users (handles variations)
             // BUT preserve if it's the merged column
@@ -1847,22 +1899,82 @@ export default function MyData() {
             return true;
           });
           
+          // CRITICAL: Remove duplicate DEVICE STATUS columns
+          // Find all DEVICE STATUS columns (including variations like DEVICE STATUS_3)
+          const allDeviceStatusColumns = hdrs.filter((h: string) => {
+            const normalized = normalize(h);
+            return (normalized.includes('device') && normalized.includes('status')) ||
+                   normalized === 'devicestatus' || normalized === 'device_status';
+          });
+          
+          // If there are multiple DEVICE STATUS columns, keep only one
+          if (allDeviceStatusColumns.length > 1) {
+            // Prefer the merged column if it exists, otherwise keep the first one
+            const columnToKeep = mergedDeviceStatusColumn && allDeviceStatusColumns.includes(mergedDeviceStatusColumn)
+              ? mergedDeviceStatusColumn
+              : allDeviceStatusColumns[0];
+            
+            console.log('MY DATA - Found multiple DEVICE STATUS columns:', allDeviceStatusColumns);
+            console.log('MY DATA - Keeping column:', columnToKeep);
+            
+            // Remove all DEVICE STATUS columns except the one to keep
+            hdrs = hdrs.filter((h: string) => {
+              const normalized = normalize(h);
+              const isDeviceStatus = (normalized.includes('device') && normalized.includes('status')) ||
+                                    normalized === 'devicestatus' || normalized === 'device_status';
+              
+              if (isDeviceStatus) {
+                // Keep only the selected column
+                if (h === columnToKeep) {
+                  return true;
+                }
+                console.log('MY DATA - Removing duplicate DEVICE STATUS column:', h);
+                return false;
+              }
+              
+              return true;
+            });
+            
+            // Update mergedDeviceStatusColumn to the kept column
+            if (columnToKeep) {
+              mergedDeviceStatusColumn = columnToKeep;
+            }
+          } else if (allDeviceStatusColumns.length === 1 && mergedDeviceStatusColumn && allDeviceStatusColumns[0] !== mergedDeviceStatusColumn) {
+            // If we have one DEVICE STATUS column but it's not the merged one, replace it
+            console.log('MY DATA - Replacing existing DEVICE STATUS column with merged one');
+            const existingIndex = hdrs.indexOf(allDeviceStatusColumns[0]);
+            if (existingIndex !== -1) {
+              hdrs[existingIndex] = mergedDeviceStatusColumn;
+            }
+          }
+          
           // CRITICAL: Ensure merged ONLINE-OFFLINE columns are in headers after filtering
           // If they were filtered out, add them back
           if (mergedDeviceStatusColumn && !hdrs.includes(mergedDeviceStatusColumn)) {
             console.warn('MY DATA - CRITICAL: DEVICE STATUS column missing after filtering, re-adding it');
-            // Find RTU MAKE to insert after it
-            const rtuMakeIndex = hdrs.findIndex((h: string) => {
+            // Find EQUIPMENT MAKE to insert after it (will be reordered later if needed)
+            const equipmentMakeIndex = hdrs.findIndex((h: string) => {
               const normalized = normalizeHeader(h);
-              return normalized === 'rtu make' ||
-                     normalized === 'rtu_make' ||
-                     normalized === 'rtumake' ||
-                     (normalized.includes('rtu') && normalized.includes('make'));
+              return (normalized.includes('equipment') && normalized.includes('make')) ||
+                     normalized === 'equipmentmake' || normalized === 'equipment_make' ||
+                     normalized === 'equipment make';
             });
-            if (rtuMakeIndex !== -1) {
-              hdrs.splice(rtuMakeIndex + 1, 0, mergedDeviceStatusColumn);
+            if (equipmentMakeIndex !== -1) {
+              hdrs.splice(equipmentMakeIndex + 1, 0, mergedDeviceStatusColumn);
             } else {
-              hdrs.push(mergedDeviceStatusColumn);
+              // Fallback to RTU MAKE if EQUIPMENT MAKE not found
+              const rtuMakeIndex = hdrs.findIndex((h: string) => {
+                const normalized = normalizeHeader(h);
+                return normalized === 'rtu make' ||
+                       normalized === 'rtu_make' ||
+                       normalized === 'rtumake' ||
+                       (normalized.includes('rtu') && normalized.includes('make'));
+              });
+              if (rtuMakeIndex !== -1) {
+                hdrs.splice(rtuMakeIndex + 1, 0, mergedDeviceStatusColumn);
+              } else {
+                hdrs.push(mergedDeviceStatusColumn);
+              }
             }
           }
           
@@ -1952,6 +2064,82 @@ export default function MyData() {
             });
             console.log('MY DATA - Ensured all rows have merged columns:', columnsToEnsure);
             console.log('MY DATA - Sample row with merged columns:', fileRows[0]);
+          }
+          
+          // Reorder columns: DATE and DEVICE STATUS should come after EQUIPMENT MAKE
+          const equipmentMakeIndex = hdrs.findIndex((h: string) => {
+            const normalized = normalize(h);
+            return (normalized.includes('equipment') && normalized.includes('make')) ||
+                   normalized === 'equipmentmake' || normalized === 'equipment_make' ||
+                   normalized === 'equipment make';
+          });
+          
+          if (equipmentMakeIndex !== -1) {
+            // Find DATE column
+            const dateIndex = hdrs.findIndex((h: string) => {
+              const normalized = normalize(h);
+              return normalized === 'date' || normalized === 'inspection date' ||
+                     (normalized.includes('date') && !normalized.includes('offline') && !normalized.includes('commission'));
+            });
+            
+            // Find DEVICE STATUS column (could be merged or original)
+            const deviceStatusIndex = hdrs.findIndex((h: string) => {
+              const normalized = normalize(h);
+              return (normalized.includes('device') && normalized.includes('status')) ||
+                     normalized === 'devicestatus' || normalized === 'device_status';
+            });
+            
+            // Remove DATE and DEVICE STATUS from their current positions
+            const columnsToMove: string[] = [];
+            let dateCol: string | undefined;
+            let deviceStatusCol: string | undefined;
+            
+            if (dateIndex !== -1 && dateIndex !== equipmentMakeIndex + 1) {
+              dateCol = hdrs[dateIndex];
+              if (dateCol) {
+                columnsToMove.push(dateCol);
+                hdrs.splice(dateIndex, 1);
+              }
+            }
+            
+            // Recalculate deviceStatusIndex after DATE removal if needed
+            let adjustedDeviceStatusIndex = deviceStatusIndex;
+            if (dateIndex !== -1 && dateIndex < deviceStatusIndex) {
+              adjustedDeviceStatusIndex = deviceStatusIndex - 1;
+            }
+            
+            if (adjustedDeviceStatusIndex !== -1 && adjustedDeviceStatusIndex !== equipmentMakeIndex + 1 && adjustedDeviceStatusIndex !== equipmentMakeIndex + 2) {
+              deviceStatusCol = hdrs[adjustedDeviceStatusIndex];
+              if (deviceStatusCol) {
+                columnsToMove.push(deviceStatusCol);
+                hdrs.splice(adjustedDeviceStatusIndex, 1);
+              }
+            }
+            
+            // Insert DATE and DEVICE STATUS after EQUIPMENT MAKE
+            if (columnsToMove.length > 0) {
+              // Recalculate equipmentMakeIndex after removals
+              const newEquipmentMakeIndex = hdrs.findIndex((h: string) => {
+                const normalized = normalize(h);
+                return (normalized.includes('equipment') && normalized.includes('make')) ||
+                       normalized === 'equipmentmake' || normalized === 'equipment_make' ||
+                       normalized === 'equipment make';
+              });
+              
+              if (newEquipmentMakeIndex !== -1) {
+                // Insert DATE first, then DEVICE STATUS
+                let insertIndex = newEquipmentMakeIndex + 1;
+                if (dateCol) {
+                  hdrs.splice(insertIndex, 0, dateCol);
+                  insertIndex++;
+                }
+                if (deviceStatusCol) {
+                  hdrs.splice(insertIndex, 0, deviceStatusCol);
+                }
+                
+                console.log('MY DATA - Reordered columns: DATE and DEVICE STATUS after EQUIPMENT MAKE');
+              }
+            }
           }
           
           setHeaders(hdrs);
@@ -7210,7 +7398,7 @@ export default function MyData() {
                         
                         if (siteObservationsDialogData.uploadedPhotos && siteObservationsDialogData.uploadedPhotos.length > 0) {
                           const uploadedBase64 = await Promise.all(
-                            siteObservationsDialogData.uploadedPhotos.map(async (file) => {
+                            siteObservationsDialogData.uploadedPhotos.map(async (file: File) => {
                               try {
                                 // Compress image to less than 1 MB
                                 return await compressImage(file);
@@ -7234,7 +7422,7 @@ export default function MyData() {
                         let documentData: Array<{ name: string; data: string }> = [...(supportDocuments[selectedSiteObservationRowKey] || [])];
                         if (siteObservationsDialogData.uploadedDocuments && siteObservationsDialogData.uploadedDocuments.length > 0) {
                           const newDocuments = await Promise.all(
-                            siteObservationsDialogData.uploadedDocuments.map(file =>
+                            siteObservationsDialogData.uploadedDocuments.map((file: File) =>
                               new Promise<{ name: string; data: string }>((resolve, reject) => {
                                 const reader = new FileReader();
                                 reader.onload = (e) => resolve({
@@ -8065,7 +8253,7 @@ export default function MyData() {
                         
                         if (siteObservationsDialogData.uploadedPhotos && siteObservationsDialogData.uploadedPhotos.length > 0) {
                           const uploadedBase64 = await Promise.all(
-                            siteObservationsDialogData.uploadedPhotos.map(async (file) => {
+                            siteObservationsDialogData.uploadedPhotos.map(async (file: File) => {
                               try {
                                 // Compress image to less than 1 MB
                                 return await compressImage(file);
@@ -8470,23 +8658,21 @@ export default function MyData() {
                     // Convert uploaded photos to base64
                     if (siteObservationsDialogData.uploadedPhotos && siteObservationsDialogData.uploadedPhotos.length > 0) {
                       const uploadedBase64 = await Promise.all(
-                        siteObservationsDialogData.uploadedPhotos.map(file =>
-                          async (file) => {
-                            try {
-                              // Compress image to less than 1 MB
-                              return await compressImage(file);
-                            } catch (error) {
-                              console.error('Error compressing uploaded image:', error);
-                              // Fallback to original if compression fails
-                              return new Promise<string>((resolve, reject) => {
-                                const reader = new FileReader();
-                                reader.onload = (e) => resolve(e.target?.result as string);
-                                reader.onerror = reject;
-                                reader.readAsDataURL(file);
-                              });
-                            }
+                        siteObservationsDialogData.uploadedPhotos.map(async (file: File) => {
+                          try {
+                            // Compress image to less than 1 MB
+                            return await compressImage(file);
+                          } catch (error) {
+                            console.error('Error compressing uploaded image:', error);
+                            // Fallback to original if compression fails
+                            return new Promise<string>((resolve, reject) => {
+                              const reader = new FileReader();
+                              reader.onload = (e) => resolve(e.target?.result as string);
+                              reader.onerror = reject;
+                              reader.readAsDataURL(file);
+                            });
                           }
-                        )
+                        })
                       );
                       photoData = [...photoData, ...uploadedBase64];
                     }
@@ -8494,7 +8680,7 @@ export default function MyData() {
                     // Convert uploaded documents (PDF) to base64
                     if (siteObservationsDialogData.uploadedDocuments && siteObservationsDialogData.uploadedDocuments.length > 0) {
                       const newDocuments = await Promise.all(
-                        siteObservationsDialogData.uploadedDocuments.map(file =>
+                        siteObservationsDialogData.uploadedDocuments.map((file: File) =>
                           new Promise<{ name: string; data: string }>((resolve, reject) => {
                             const reader = new FileReader();
                             reader.onload = (e) => resolve({

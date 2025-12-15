@@ -66,7 +66,6 @@ export async function compressImage(
       // Try different quality levels until we get under the size limit
       let quality = 0.9;
       let minQuality = 0.1;
-      let bestDataUrl = '';
       let attempts = 0;
       const maxAttempts = 20;
 
@@ -121,3 +120,4 @@ export async function compressImages(
     images.map(img => compressImage(img, maxSizeBytes))
   );
 }
+
