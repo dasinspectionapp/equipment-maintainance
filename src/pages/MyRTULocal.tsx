@@ -2655,6 +2655,66 @@ export default function MyRTULocal() {
           
           setRows(filteredRows);
           
+          // Remove specific columns for RTU/Communication role
+          if (userRole === 'RTU/Communication') {
+            const columnsToRemove: string[] = [];
+            
+            hdrs.forEach((header: string) => {
+              const normalized = normalize(header);
+              
+              // Remove EQUIPEMNT L/R SWITCH STATUS_3 (note: typo "EQUIPEMNT")
+              if ((normalized.includes('equipemnt') || normalized.includes('equipment')) && 
+                  normalized.includes('l') && normalized.includes('r') && 
+                  normalized.includes('switch') && normalized.includes('status') && 
+                  normalized.includes('_3')) {
+                columnsToRemove.push(header);
+              }
+              
+              // Remove RTU L/R SWITCH STATUS_3
+              if (normalized.includes('rtu') && normalized.includes('l') && 
+                  normalized.includes('r') && normalized.includes('switch') && 
+                  normalized.includes('status') && normalized.includes('_3')) {
+                columnsToRemove.push(header);
+              }
+              
+              // Remove DEVICE STATUS
+              if ((normalized.includes('device') && normalized.includes('status')) ||
+                  normalized === 'devicestatus' || normalized === 'device_status') {
+                columnsToRemove.push(header);
+              }
+              
+              // Remove EQUIPEMNT L/R SWITCH STATUS (note: typo "EQUIPEMNT", without _3)
+              if ((normalized.includes('equipemnt') || normalized.includes('equipment')) && 
+                  normalized.includes('l') && normalized.includes('r') && 
+                  normalized.includes('switch') && normalized.includes('status') && 
+                  !normalized.includes('_3')) {
+                columnsToRemove.push(header);
+              }
+            });
+            
+            // Remove columns from headers
+            columnsToRemove.forEach(col => {
+              const index = hdrs.indexOf(col);
+              if (index !== -1) {
+                hdrs.splice(index, 1);
+                console.log('MY RTU LOCAL - Removed column for RTU/Communication role:', col);
+              }
+            });
+            
+            // Remove columns from rows
+            if (columnsToRemove.length > 0) {
+              filteredRows = filteredRows.map((row: any) => {
+                const newRow = { ...row };
+                columnsToRemove.forEach(col => {
+                  delete newRow[col];
+                });
+                return newRow;
+              });
+              setRows(filteredRows);
+              console.log('MY RTU LOCAL - Removed', columnsToRemove.length, 'column(s) for RTU/Communication role');
+            }
+          }
+          
           setHeaders(hdrs);
           setCurrentPage(1);
           

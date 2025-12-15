@@ -1439,24 +1439,18 @@ export default function MyData() {
               // Remove CIRCLE
               if (normalized === 'circle') return false;
               
-              // Remove DEVICE TYPE for Equipment role users
-              if (userRole === 'Equipment' && 
+              // Role-specific column removals
+              // Remove DEVICE TYPE for Equipment, RTU/Communication, and O&M roles
+              if ((userRole === 'Equipment' || userRole === 'RTU/Communication' || userRole === 'O&M') &&
                   ((normalized.includes('device') && normalized.includes('type')) ||
                    normalized === 'devicetype' || normalized === 'device_type' ||
                    normalized === 'device type')) return false;
               
-              // Remove RTU MAKE for Equipment role users
-              if (userRole === 'Equipment' && 
+              // Remove RTU MAKE for Equipment and O&M roles (not RTU/Communication)
+              if ((userRole === 'Equipment' || userRole === 'O&M') &&
                   ((normalized.includes('rtu') && normalized.includes('make')) ||
                    normalized === 'rtumake' || normalized === 'rtu_make' ||
                    normalized === 'rtu make')) return false;
-              
-              // Remove NO OF DAYS OFFLINE for Equipment role users
-              if (userRole === 'Equipment' && 
-                  ((normalized.includes('days') && normalized.includes('offline')) ||
-                   normalized === 'noofdaysoffline' || normalized === 'no_of_days_offline' ||
-                   normalized === 'no of days offline' || normalized === 'numberofdaysoffline' ||
-                   normalized === 'number_of_days_offline' || normalized === 'number of days offline')) return false;
               
               // Remove ATTRIBUTE
               if (normalized === 'attribute') return false;
@@ -1803,17 +1797,11 @@ export default function MyData() {
             const normalized = normalize(h);
             
             // PRESERVE merged ONLINE-OFFLINE columns (DEVICE STATUS and NO OF DAYS OFFLINE)
-            // BUT remove NO OF DAYS OFFLINE for Equipment role users (even merged column)
             if (mergedDeviceStatusColumn && h === mergedDeviceStatusColumn) {
               console.log('MY DATA - Preserving merged DEVICE STATUS column:', h);
               return true;
             }
             if (mergedNoOfDaysOfflineColumn && h === mergedNoOfDaysOfflineColumn) {
-              // Remove merged NO OF DAYS OFFLINE column for Equipment role users
-              if (userRole === 'Equipment') {
-                console.log('MY DATA - Removing merged NO OF DAYS OFFLINE column for Equipment role:', h);
-                return false;
-              }
               console.log('MY DATA - Preserving merged NO OF DAYS OFFLINE column:', h);
               return true;
             }
@@ -1824,14 +1812,15 @@ export default function MyData() {
             // Remove CIRCLE
             if (normalized === 'circle') return false;
             
-            // Remove DEVICE TYPE for Equipment role users
-            if (userRole === 'Equipment' && 
+            // Role-specific column removals
+            // Remove DEVICE TYPE for Equipment, RTU/Communication, and O&M roles
+            if ((userRole === 'Equipment' || userRole === 'RTU/Communication' || userRole === 'O&M') &&
                 ((normalized.includes('device') && normalized.includes('type')) ||
                  normalized === 'devicetype' || normalized === 'device_type' ||
                  normalized === 'device type')) return false;
             
-            // Remove RTU MAKE for Equipment role users
-            if (userRole === 'Equipment' && 
+            // Remove RTU MAKE for Equipment and O&M roles (not RTU/Communication)
+            if ((userRole === 'Equipment' || userRole === 'O&M') &&
                 ((normalized.includes('rtu') && normalized.includes('make')) ||
                  normalized === 'rtumake' || normalized === 'rtu_make' ||
                  normalized === 'rtu make')) return false;
@@ -1845,32 +1834,6 @@ export default function MyData() {
             
             // Remove HRN
             if (normalized === 'hrn') return false;
-            
-            // Remove "No of Days Offline" for Equipment role users (handles variations)
-            // BUT preserve if it's the merged column
-            if (userRole === 'Equipment' && 
-                ((normalized.includes('days') && normalized.includes('offline')) ||
-                normalized === 'noofdaysoffline' || normalized === 'no_of_days_offline' ||
-                normalized === 'no of days offline' || normalized === 'numberofdaysoffline' ||
-                normalized === 'number_of_days_offline' || normalized === 'number of days offline')) {
-              // Only filter if it's NOT the merged column
-              if (h !== mergedNoOfDaysOfflineColumn) {
-                return false;
-              }
-            }
-            
-            // Remove "No of Days Offline" only for RTU/Communication role users (handles variations)
-            // BUT preserve if it's the merged column
-            if (userRole === 'RTU/Communication' && 
-                ((normalized.includes('days') && normalized.includes('offline')) ||
-                normalized === 'noofdaysoffline' || normalized === 'no_of_days_offline' ||
-                normalized === 'no of days offline' || normalized === 'numberofdaysoffline' ||
-                normalized === 'number_of_days_offline' || normalized === 'number of days offline')) {
-              // Only filter if it's NOT the merged column
-              if (h !== mergedNoOfDaysOfflineColumn) {
-                return false;
-              }
-            }
             
             // Remove L/R Status (handles variations like "L/R Status", "LR Status", "L R Status", etc.)
             if ((normalized.includes('l') && normalized.includes('r') && normalized.includes('status')) ||
@@ -1945,6 +1908,59 @@ export default function MyData() {
             const existingIndex = hdrs.indexOf(allDeviceStatusColumns[0]);
             if (existingIndex !== -1) {
               hdrs[existingIndex] = mergedDeviceStatusColumn;
+            }
+          }
+          
+          // CRITICAL: Remove duplicate NO OF DAYS OFFLINE columns
+          // Find all NO OF DAYS OFFLINE columns (including variations like NO OF DAYS OFFLINE_3)
+          const allNoOfDaysOfflineColumns = hdrs.filter((h: string) => {
+            const normalized = normalize(h);
+            return (normalized.includes('days') && normalized.includes('offline')) ||
+                   normalized === 'noofdaysoffline' || normalized === 'no_of_days_offline' ||
+                   normalized === 'no of days offline' || normalized === 'numberofdaysoffline' ||
+                   normalized === 'number_of_days_offline' || normalized === 'number of days offline';
+          });
+          
+          // If there are multiple NO OF DAYS OFFLINE columns, keep only one
+          if (allNoOfDaysOfflineColumns.length > 1) {
+            // Prefer the merged column if it exists, otherwise keep the first one
+            const columnToKeep = mergedNoOfDaysOfflineColumn && allNoOfDaysOfflineColumns.includes(mergedNoOfDaysOfflineColumn)
+              ? mergedNoOfDaysOfflineColumn
+              : allNoOfDaysOfflineColumns[0];
+            
+            console.log('MY DATA - Found multiple NO OF DAYS OFFLINE columns:', allNoOfDaysOfflineColumns);
+            console.log('MY DATA - Keeping column:', columnToKeep);
+            
+            // Remove all NO OF DAYS OFFLINE columns except the one to keep
+            hdrs = hdrs.filter((h: string) => {
+              const normalized = normalize(h);
+              const isNoOfDaysOffline = (normalized.includes('days') && normalized.includes('offline')) ||
+                                       normalized === 'noofdaysoffline' || normalized === 'no_of_days_offline' ||
+                                       normalized === 'no of days offline' || normalized === 'numberofdaysoffline' ||
+                                       normalized === 'number_of_days_offline' || normalized === 'number of days offline';
+              
+              if (isNoOfDaysOffline) {
+                // Keep only the selected column
+                if (h === columnToKeep) {
+                  return true;
+                }
+                console.log('MY DATA - Removing duplicate NO OF DAYS OFFLINE column:', h);
+                return false;
+              }
+              
+              return true;
+            });
+            
+            // Update mergedNoOfDaysOfflineColumn to the kept column
+            if (columnToKeep) {
+              mergedNoOfDaysOfflineColumn = columnToKeep;
+            }
+          } else if (allNoOfDaysOfflineColumns.length === 1 && mergedNoOfDaysOfflineColumn && allNoOfDaysOfflineColumns[0] !== mergedNoOfDaysOfflineColumn) {
+            // If we have one NO OF DAYS OFFLINE column but it's not the merged one, replace it
+            console.log('MY DATA - Replacing existing NO OF DAYS OFFLINE column with merged one');
+            const existingIndex = hdrs.indexOf(allNoOfDaysOfflineColumns[0]);
+            if (existingIndex !== -1) {
+              hdrs[existingIndex] = mergedNoOfDaysOfflineColumn;
             }
           }
           
@@ -2138,6 +2154,49 @@ export default function MyData() {
                 }
                 
                 console.log('MY DATA - Reordered columns: DATE and DEVICE STATUS after EQUIPMENT MAKE');
+              }
+            }
+          }
+          
+          // Reorder RTU MAKE to come after EQUIPMENT MAKE (only for RTU/Communication role)
+          if (userRole === 'RTU/Communication') {
+            const equipmentMakeIndexForRtu = hdrs.findIndex((h: string) => {
+              const normalized = normalize(h);
+              return (normalized.includes('equipment') && normalized.includes('make')) ||
+                     normalized === 'equipmentmake' || normalized === 'equipment_make' ||
+                     normalized === 'equipment make';
+            });
+            
+            if (equipmentMakeIndexForRtu !== -1) {
+              // Find RTU MAKE column
+              const rtuMakeIndex = hdrs.findIndex((h: string) => {
+                const normalized = normalize(h);
+                return (normalized.includes('rtu') && normalized.includes('make')) ||
+                       normalized === 'rtumake' || normalized === 'rtu_make' ||
+                       normalized === 'rtu make';
+              });
+              
+              // Only reorder if RTU MAKE exists and is not already after EQUIPMENT MAKE
+              if (rtuMakeIndex !== -1 && rtuMakeIndex !== equipmentMakeIndexForRtu + 1) {
+                const rtuMakeCol = hdrs[rtuMakeIndex];
+                if (rtuMakeCol) {
+                  // Remove RTU MAKE from current position
+                  hdrs.splice(rtuMakeIndex, 1);
+                  
+                  // Recalculate equipmentMakeIndex after removal
+                  const newEquipmentMakeIndexForRtu = hdrs.findIndex((h: string) => {
+                    const normalized = normalize(h);
+                    return (normalized.includes('equipment') && normalized.includes('make')) ||
+                           normalized === 'equipmentmake' || normalized === 'equipment_make' ||
+                           normalized === 'equipment make';
+                  });
+                  
+                  if (newEquipmentMakeIndexForRtu !== -1) {
+                    // Insert RTU MAKE after EQUIPMENT MAKE
+                    hdrs.splice(newEquipmentMakeIndexForRtu + 1, 0, rtuMakeCol);
+                    console.log('MY DATA - Reordered RTU MAKE column after EQUIPMENT MAKE for RTU/Communication role');
+                  }
+                }
               }
             }
           }
