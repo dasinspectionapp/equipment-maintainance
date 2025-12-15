@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
-import { API_BASE } from '../utils/api';
 
 type UploadedFile = {
   fileId: string;
@@ -73,7 +72,6 @@ export default function EquipmentDashboard() {
   const [snapshotDateLabel, setSnapshotDateLabel] = useState<string>(''); // latest date detected from data (yyyy-MM-dd)
   const [selectedDate, setSelectedDate] = useState<string>(''); // value bound to the Date picker
   const [refreshTrigger, setRefreshTrigger] = useState(0); // Trigger to refresh dashboard when ViewData is updated
-  const [hasInitializedDate, setHasInitializedDate] = useState(false); // Track if we've set the initial date
 
   // Listen for ViewData updates to refresh dashboard
   useEffect(() => {
@@ -107,7 +105,7 @@ export default function EquipmentDashboard() {
         }
 
         // 1) Fetch all uploads
-        const uploadsRes = await fetch(`${API_BASE}/api/uploads`, {
+        const uploadsRes = await fetch('http://localhost:5000/api/uploads', {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -194,7 +192,7 @@ export default function EquipmentDashboard() {
         if (deviceStatusFile) {
           console.log('CCR Dashboard - Fetching Device Status Upload file:', deviceStatusFile.name);
           try {
-            const dsRes = await fetch(`${API_BASE}/api/uploads/${deviceStatusFile.fileId}`, {
+            const dsRes = await fetch(`http://localhost:5000/api/uploads/${deviceStatusFile.fileId}`, {
               headers: {
                 Authorization: `Bearer ${token}`,
               },
@@ -224,7 +222,7 @@ export default function EquipmentDashboard() {
         }
 
         // 4) Fetch ONLINE-OFFLINE file data
-        const ooRes = await fetch(`${API_BASE}/api/uploads/${onlineOfflineFile.fileId}`, {
+        const ooRes = await fetch(`http://localhost:5000/api/uploads/${onlineOfflineFile.fileId}`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -1353,16 +1351,19 @@ export default function EquipmentDashboard() {
     };
   }, [mergedRows]);
 
-  // Set the initial selected date to the latest date from the data (only on first load)
-  // After initial load, allow user to freely change the date without it being reset
+  // Keep the selected date in sync with the latest date from the data
+  // When new data loads, always update to the latest date found
+  // This ensures both Equipment and CCR roles have the latest date selected by default
   useEffect(() => {
-    if (snapshotDateLabel && !hasInitializedDate) {
-      // Only set on initial load, not when user manually changes the date
-      console.log(`CCR Dashboard - Setting initial selectedDate to latest date: ${snapshotDateLabel}`);
+    if (snapshotDateLabel) {
+      // Always update to the latest date when data is loaded
+      // Only update if selectedDate is empty or different from snapshotDateLabel
+      if (!selectedDate || selectedDate !== snapshotDateLabel) {
+        console.log(`CCR Dashboard - Setting selectedDate to latest date: ${snapshotDateLabel}`);
       setSelectedDate(snapshotDateLabel);
-      setHasInitializedDate(true);
     }
-  }, [snapshotDateLabel, hasInitializedDate]);
+    }
+  }, [snapshotDateLabel, selectedDate]);
 
   // Default Division filter to the user's registered division (first division) if available
   // For Equipment role: filter by user's division

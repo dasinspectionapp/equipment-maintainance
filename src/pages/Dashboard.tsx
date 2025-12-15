@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 import { API_BASE } from '../utils/api';
+import { compressImage } from '../utils/imageCompression';
 
 interface DashboardStats {
   totalUsers: number;
@@ -3094,14 +3095,21 @@ export default function Dashboard() {
                             }
                             if (siteObservationsDialogData.uploadedPhotos && siteObservationsDialogData.uploadedPhotos.length > 0) {
                               const uploadedBase64 = await Promise.all(
-                                siteObservationsDialogData.uploadedPhotos.map((file: File) =>
-                                  new Promise<string>((resolve, reject) => {
-                                    const reader = new FileReader();
-                                    reader.onload = (e) => resolve(e.target?.result as string);
-                                    reader.onerror = reject;
-                                    reader.readAsDataURL(file);
-                                  })
-                                )
+                                siteObservationsDialogData.uploadedPhotos.map(async (file: File) => {
+                                  try {
+                                    // Compress image to less than 1 MB
+                                    return await compressImage(file);
+                                  } catch (error) {
+                                    console.error('Error compressing uploaded image:', error);
+                                    // Fallback to original if compression fails
+                                    return new Promise<string>((resolve, reject) => {
+                                      const reader = new FileReader();
+                                      reader.onload = (e) => resolve(e.target?.result as string);
+                                      reader.onerror = reject;
+                                      reader.readAsDataURL(file);
+                                    });
+                                  }
+                                })
                               );
                               allPhotos.push(...uploadedBase64);
                             }
@@ -3392,14 +3400,21 @@ export default function Dashboard() {
               }
               if (capturedDialogData.uploadedPhotos && capturedDialogData.uploadedPhotos.length > 0) {
                 const uploadedBase64 = await Promise.all(
-                  capturedDialogData.uploadedPhotos.map((file: File) =>
-                    new Promise<string>((resolve, reject) => {
-                      const reader = new FileReader();
-                      reader.onload = (e) => resolve(e.target?.result as string);
-                      reader.onerror = reject;
-                      reader.readAsDataURL(file);
-                    })
-                  )
+                  capturedDialogData.uploadedPhotos.map(async (file: File) => {
+                    try {
+                      // Compress image to less than 1 MB
+                      return await compressImage(file);
+                    } catch (error) {
+                      console.error('Error compressing uploaded image:', error);
+                      // Fallback to original if compression fails
+                      return new Promise<string>((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = (e) => resolve(e.target?.result as string);
+                        reader.onerror = reject;
+                        reader.readAsDataURL(file);
+                      });
+                    }
+                  })
                 );
                 routingPhotoData = [...routingPhotoData, ...uploadedBase64];
               }
@@ -5194,9 +5209,12 @@ export default function Dashboard() {
                         id="upload-site-observations-photo"
                         accept="image/*"
                         multiple
-                        onChange={(e) => {
+                        onChange={async (e) => {
                           const files = Array.from(e.target.files || []);
                           if (files.length > 0) {
+                            // Compress images before adding to state
+                            // Note: We'll compress when submitting, but we can also compress here for preview
+                            // For now, we'll keep the File objects and compress during submission
                             setSiteObservationsDialogData(prev => ({
                               ...prev,
                               uploadedPhotos: [...prev.uploadedPhotos, ...files]
@@ -5416,6 +5434,15 @@ export default function Dashboard() {
                           ctx.drawImage(video, 0, 0);
                           const dataUrl = canvas.toDataURL('image/jpeg');
                           
+                          // Compress image to less than 1 MB
+                          let compressedDataUrl = dataUrl;
+                          try {
+                            compressedDataUrl = await compressImage(dataUrl);
+                          } catch (error) {
+                            console.error('Error compressing captured image:', error);
+                            // Fallback to original if compression fails
+                          }
+                          
                           // Get location if available
                           let latitude: number | undefined;
                           let longitude: number | undefined;
@@ -5436,7 +5463,7 @@ export default function Dashboard() {
                           setSiteObservationsDialogData(prev => ({
                             ...prev,
                             capturedPhotos: [...prev.capturedPhotos, {
-                              data: dataUrl,
+                              data: compressedDataUrl,
                               latitude,
                               longitude,
                               timestamp: new Date().toISOString(),

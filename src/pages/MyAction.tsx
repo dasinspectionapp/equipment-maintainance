@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { logActivity } from '../utils/activityLogger';
 import { API_BASE } from '../utils/api';
+import { compressImage } from '../utils/imageCompression';
 
 // Helper function to add metadata overlay to captured photo
 function addMetadataToPhoto(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, latitude?: number, longitude?: number, timestamp?: string, location?: string): void {
@@ -1431,7 +1432,17 @@ export default function MyAction() {
                         
                         // Get the final image data with metadata overlay
                         const imageData = canvas.toDataURL('image/jpeg', 0.9);
-                        setCapturedImageData(imageData);
+                        
+                        // Compress image to less than 1 MB
+                        let compressedImageData = imageData;
+                        try {
+                          compressedImageData = await compressImage(imageData);
+                        } catch (error) {
+                          console.error('Error compressing captured image:', error);
+                          // Fallback to original if compression fails
+                        }
+                        
+                        setCapturedImageData(compressedImageData);
                       }
                     }
                   }}

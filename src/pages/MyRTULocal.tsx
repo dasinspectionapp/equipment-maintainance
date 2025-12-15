@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import { API_BASE } from '../utils/api';
+import { compressImage } from '../utils/imageCompression';
 
 const PAGE_SIZE_OPTIONS = [25, 50, 75, 100];
 
@@ -3750,14 +3751,21 @@ export default function MyRTULocal() {
                       
                       if (siteObservationsDialogData.uploadedPhotos && siteObservationsDialogData.uploadedPhotos.length > 0) {
                         const uploadedBase64 = await Promise.all(
-                          siteObservationsDialogData.uploadedPhotos.map(file =>
-                            new Promise<string>((resolve, reject) => {
-                              const reader = new FileReader();
-                              reader.onload = (e) => resolve(e.target?.result as string);
-                              reader.onerror = reject;
-                              reader.readAsDataURL(file);
-                            })
-                          )
+                          siteObservationsDialogData.uploadedPhotos.map(async (file) => {
+                            try {
+                              // Compress image to less than 1 MB
+                              return await compressImage(file);
+                            } catch (error) {
+                              console.error('Error compressing uploaded image:', error);
+                              // Fallback to original if compression fails
+                              return new Promise<string>((resolve, reject) => {
+                                const reader = new FileReader();
+                                reader.onload = (e) => resolve(e.target?.result as string);
+                                reader.onerror = reject;
+                                reader.readAsDataURL(file);
+                              });
+                            }
+                          })
                         );
                         photoData = [...photoData, ...uploadedBase64];
                       }
@@ -3934,7 +3942,16 @@ export default function MyRTULocal() {
                         const timestamp = new Date().toISOString();
                         const imageData = canvas.toDataURL('image/jpeg', 0.9);
                         
-                        setSiteObservationsCapturedImageData(imageData);
+                        // Compress image to less than 1 MB
+                        let compressedImageData = imageData;
+                        try {
+                          compressedImageData = await compressImage(imageData);
+                        } catch (error) {
+                          console.error('Error compressing captured image:', error);
+                          // Fallback to original if compression fails
+                        }
+                        
+                        setSiteObservationsCapturedImageData(compressedImageData);
                         setCapturedPhotoMetadata({ latitude, longitude, timestamp, location });
                         
                         // Stop camera stream

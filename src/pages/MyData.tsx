@@ -1,8 +1,9 @@
-﻿import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import { logActivity } from '../utils/activityLogger';
 import { loadUserDataState, loadAllUserDataStates, bulkSyncAllDataStates } from '../utils/dataSync';
 import { API_BASE } from '../utils/api';
+import { compressImage } from '../utils/imageCompression';
 
 const PAGE_SIZE_OPTIONS = [25, 50, 75, 100];
 
@@ -6899,15 +6900,24 @@ export default function MyData() {
                         input.type = 'file';
                         input.accept = 'image/*';
                         input.capture = 'environment';
-                        input.onchange = (e: any) => {
+                        input.onchange = async (e: any) => {
                           const file = e.target.files?.[0];
                           if (file) {
-                            const reader = new FileReader();
-                            reader.onload = (event) => {
-                              setSiteObservationsCapturedImageData(event.target?.result as string);
+                            try {
+                              // Compress image to less than 1 MB
+                              const compressedImage = await compressImage(file);
+                              setSiteObservationsCapturedImageData(compressedImage);
                               setShowSiteObservationsCameraPreview(true);
-                            };
-                            reader.readAsDataURL(file);
+                            } catch (error) {
+                              console.error('Error compressing captured image:', error);
+                              // Fallback to original if compression fails
+                              const reader = new FileReader();
+                              reader.onload = (event) => {
+                                setSiteObservationsCapturedImageData(event.target?.result as string);
+                                setShowSiteObservationsCameraPreview(true);
+                              };
+                              reader.readAsDataURL(file);
+                            }
                           }
                         };
                         input.click();
@@ -7200,14 +7210,21 @@ export default function MyData() {
                         
                         if (siteObservationsDialogData.uploadedPhotos && siteObservationsDialogData.uploadedPhotos.length > 0) {
                           const uploadedBase64 = await Promise.all(
-                            siteObservationsDialogData.uploadedPhotos.map(file =>
-                              new Promise<string>((resolve, reject) => {
-                                const reader = new FileReader();
-                                reader.onload = (e) => resolve(e.target?.result as string);
-                                reader.onerror = reject;
-                                reader.readAsDataURL(file);
-                              })
-                            )
+                            siteObservationsDialogData.uploadedPhotos.map(async (file) => {
+                              try {
+                                // Compress image to less than 1 MB
+                                return await compressImage(file);
+                              } catch (error) {
+                                console.error('Error compressing uploaded image:', error);
+                                // Fallback to original if compression fails
+                                return new Promise<string>((resolve, reject) => {
+                                  const reader = new FileReader();
+                                  reader.onload = (e) => resolve(e.target?.result as string);
+                                  reader.onerror = reject;
+                                  reader.readAsDataURL(file);
+                                });
+                              }
+                            })
                           );
                           photoData = [...photoData, ...uploadedBase64];
                         }
@@ -8048,14 +8065,21 @@ export default function MyData() {
                         
                         if (siteObservationsDialogData.uploadedPhotos && siteObservationsDialogData.uploadedPhotos.length > 0) {
                           const uploadedBase64 = await Promise.all(
-                            siteObservationsDialogData.uploadedPhotos.map(file =>
-                              new Promise<string>((resolve, reject) => {
-                                const reader = new FileReader();
-                                reader.onload = (e) => resolve(e.target?.result as string);
-                                reader.onerror = reject;
-                                reader.readAsDataURL(file);
-                              })
-                            )
+                            siteObservationsDialogData.uploadedPhotos.map(async (file) => {
+                              try {
+                                // Compress image to less than 1 MB
+                                return await compressImage(file);
+                              } catch (error) {
+                                console.error('Error compressing uploaded image:', error);
+                                // Fallback to original if compression fails
+                                return new Promise<string>((resolve, reject) => {
+                                  const reader = new FileReader();
+                                  reader.onload = (e) => resolve(e.target?.result as string);
+                                  reader.onerror = reject;
+                                  reader.readAsDataURL(file);
+                                });
+                              }
+                            })
                           );
                           routingPhotoData = [...routingPhotoData, ...uploadedBase64];
                         }
@@ -8447,12 +8471,21 @@ export default function MyData() {
                     if (siteObservationsDialogData.uploadedPhotos && siteObservationsDialogData.uploadedPhotos.length > 0) {
                       const uploadedBase64 = await Promise.all(
                         siteObservationsDialogData.uploadedPhotos.map(file =>
-                          new Promise<string>((resolve, reject) => {
-                            const reader = new FileReader();
-                            reader.onload = (e) => resolve(e.target?.result as string);
-                            reader.onerror = reject;
-                            reader.readAsDataURL(file);
-                          })
+                          async (file) => {
+                            try {
+                              // Compress image to less than 1 MB
+                              return await compressImage(file);
+                            } catch (error) {
+                              console.error('Error compressing uploaded image:', error);
+                              // Fallback to original if compression fails
+                              return new Promise<string>((resolve, reject) => {
+                                const reader = new FileReader();
+                                reader.onload = (e) => resolve(e.target?.result as string);
+                                reader.onerror = reject;
+                                reader.readAsDataURL(file);
+                              });
+                            }
+                          }
                         )
                       );
                       photoData = [...photoData, ...uploadedBase64];
@@ -9594,7 +9627,16 @@ export default function MyData() {
                           // Get the final image data with metadata overlay
                           const imageData = canvas.toDataURL('image/jpeg', 0.9);
                           
-                          setSiteObservationsCapturedImageData(imageData);
+                          // Compress image to less than 1 MB
+                          let compressedImageData = imageData;
+                          try {
+                            compressedImageData = await compressImage(imageData);
+                          } catch (error) {
+                            console.error('Error compressing captured image:', error);
+                            // Fallback to original if compression fails
+                          }
+                          
+                          setSiteObservationsCapturedImageData(compressedImageData);
                           setCapturedPhotoMetadata({
                             latitude,
                             longitude,
