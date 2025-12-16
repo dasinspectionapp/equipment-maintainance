@@ -68,6 +68,59 @@ export default function EquipmentStatus() {
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
   const [videoModalOpen, setVideoModalOpen] = useState(false);
   const [pdfModalOpen, setPdfModalOpen] = useState(false);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  
+  // Load logo on component mount
+  useEffect(() => {
+    const loadLogo = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const logoApiUrl = API_BASE ? `${API_BASE}/api/admin/uploads/logo` : '/api/admin/uploads/logo';
+        const headers: HeadersInit = {};
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+        
+        console.log('Loading logo from:', logoApiUrl);
+        const logoResponse = await fetch(logoApiUrl, { headers });
+        console.log('Logo response status:', logoResponse.status, 'Content-Type:', logoResponse.headers.get('content-type'));
+        
+        if (logoResponse.ok) {
+          const contentType = logoResponse.headers.get('content-type') || '';
+          if (contentType.startsWith('image/')) {
+            const logoBlob = await logoResponse.blob();
+            console.log('Logo blob size:', logoBlob.size);
+            if (logoBlob.size > 0) {
+              const logoDataUrl = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                  if (reader.result) {
+                    console.log('Logo loaded successfully');
+                    resolve(reader.result as string);
+                  } else {
+                    reject(new Error('Failed to read logo'));
+                  }
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(logoBlob);
+              });
+              setLogoUrl(logoDataUrl);
+            } else {
+              console.warn('Logo blob is empty');
+            }
+          } else {
+            console.warn('Logo response is not an image. Content-Type:', contentType);
+          }
+        } else {
+          console.warn('Logo response not OK:', logoResponse.status, logoResponse.statusText);
+        }
+      } catch (error) {
+        console.error('Error loading logo:', error);
+      }
+    };
+    
+    loadLogo();
+  }, []);
 
   // Handle ESC key and arrow keys for modals
   useEffect(() => {
@@ -139,6 +192,22 @@ export default function EquipmentStatus() {
       }
 
       if (data.success && data.data) {
+        // Debug: Log date fields to see their format
+        console.log('Inspection data dates (raw from API):', {
+          dateOfCommission: data.data.dateOfCommission,
+          inspectionDate: data.data.inspectionDate,
+          previousAMCDate: data.data.previousAMCDate,
+          types: {
+            dateOfCommission: typeof data.data.dateOfCommission,
+            inspectionDate: typeof data.data.inspectionDate,
+            previousAMCDate: typeof data.data.previousAMCDate
+          },
+          formatted: {
+            dateOfCommission: formatDate(data.data.dateOfCommission),
+            inspectionDate: formatDate(data.data.inspectionDate),
+            previousAMCDate: formatDate(data.data.previousAMCDate)
+          }
+        });
         setInspectionData(data.data);
       }
     } catch (error: any) {
@@ -149,19 +218,247 @@ export default function EquipmentStatus() {
     }
   };
 
-  const formatDate = (dateString: string | Date | null) => {
-    if (!dateString || dateString === '' || dateString === 'N/A') return null;
+  const formatDate = (dateString: string | Date | null | number) => {
+    // Handle null/undefined/empty
+    if (!dateString && dateString !== 0) return null;
+    if (dateString === '' || dateString === 'N/A' || dateString === 'null' || dateString === 'undefined') return null;
+    
     try {
-      const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
-      if (isNaN(date.getTime())) return null;
-      return date.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    } catch {
+      // Handle Date objects directly
+      if (dateString instanceof Date) {
+        if (!isNaN(dateString.getTime())) {
+          return dateString.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        }
+        return null;
+      }
+      
+      // Handle string values
+      if (typeof dateString === 'string') {
+        const trimmed = dateString.trim();
+        if (!trimmed || trimmed === 'null' || trimmed === 'undefined') return null;
+        
+        // First, check if it's in DD-MM-YYYY, DD/MM/YYYY, or DD.MM.YYYY format
+        // This handles formats like "28-10-2025" or "13-02-2025" - prioritize this over ISO
+        const datePartsArray = trimmed.split(/[-\/\.]/);
+        if (datePartsArray.length === 3) {
+          const day = parseInt(datePartsArray[0], 10);
+          const month = parseInt(datePartsArray[1], 10);
+          const year = parseInt(datePartsArray[2], 10);
+          
+          if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+            // Check if year looks like an Excel serial (5 digits, typically 40000-50000 range)
+            if (year > 10000 && year < 100000) {
+              // This is likely an Excel serial date in DD/MM/YYYY format where YYYY is actually the serial
+              let excelDate: Date;
+              if (year < 61) {
+                excelDate = new Date(1900, 0, year - 1);
+              } else {
+                excelDate = new Date(1900, 0, year - 2);
+              }
+              
+              if (!isNaN(excelDate.getTime()) && excelDate.getFullYear() >= 1900 && excelDate.getFullYear() <= 2100) {
+                return excelDate.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+              }
+            } else if (day > 0 && day <= 31 && month > 0 && month <= 12 && year >= 1900 && year <= 2100) {
+              // Normal date format (DD-MM-YYYY, DD/MM/YYYY, DD.MM.YYYY)
+              // Create date using year, month, day (month is 0-indexed in JavaScript Date)
+              const parsedDate = new Date(year, month - 1, day);
+              if (!isNaN(parsedDate.getTime())) {
+                // Verify the date was parsed correctly by checking the components
+                if (parsedDate.getFullYear() === year && parsedDate.getMonth() === month - 1 && parsedDate.getDate() === day) {
+                  const formatted = parsedDate.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                  console.log(`formatDate: Successfully parsed "${trimmed}" (DD-MM-YYYY) as ${formatted}`);
+                  return formatted;
+                } else {
+                  console.warn(`formatDate: Date validation failed for "${trimmed}"`, {
+                    expected: { year, month, day },
+                    actual: { year: parsedDate.getFullYear(), month: parsedDate.getMonth() + 1, day: parsedDate.getDate() }
+                  });
+                }
+              }
+            }
+          }
+        }
+        
+        // Then try parsing as ISO date string (from MongoDB Date objects)
+        // This handles formats like "2025-12-16T00:00:00.000Z" or "2025-12-16"
+        const isoDate = new Date(trimmed);
+        if (!isNaN(isoDate.getTime())) {
+          const year = isoDate.getFullYear();
+          if (year >= 1900 && year <= 2100) {
+            const formatted = isoDate.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            console.log(`formatDate: Successfully parsed "${trimmed}" (ISO) as ${formatted}`);
+            return formatted;
+          }
+        }
+        
+        // Check if it's a numeric string (Excel serial date) - do this LAST
+        // BE VERY CONSERVATIVE: Only treat as Excel serial if it's clearly a serial number
+        if (/^\d+$/.test(trimmed)) {
+          const numValue = parseFloat(trimmed);
+          
+          // If it looks like a year (1900-2100), don't treat as Excel serial
+          if (numValue >= 1900 && numValue <= 2100) {
+            console.warn(`formatDate: Numeric string "${trimmed}" looks like a year, not treating as Excel serial date`);
+            return null;
+          }
+          
+          // Only treat as Excel serial if it's clearly in the Excel serial range
+          // Excel serial dates for dates from 2000-2100 are typically 36526-73050
+          // But to be safe, we'll use a wider range: 1-100000, but exclude year-like numbers
+          if (numValue >= 1 && numValue <= 100000 && numValue < 1900) {
+            // Likely an Excel serial date
+            let excelDate: Date;
+            if (numValue < 61) {
+              excelDate = new Date(1900, 0, numValue - 1);
+            } else {
+              excelDate = new Date(1900, 0, numValue - 2);
+            }
+            
+            const resultYear = excelDate.getFullYear();
+            // Only return if the resulting year is reasonable (1900-2100)
+            if (!isNaN(excelDate.getTime()) && resultYear >= 1900 && resultYear <= 2100) {
+              const formatted = excelDate.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+              console.log(`formatDate: Converted numeric string "${trimmed}" (Excel serial ${numValue}) to ${formatted}`);
+              return formatted;
+            } else {
+              console.warn(`formatDate: Numeric string "${trimmed}" produced invalid date year ${resultYear}, not treating as Excel serial`);
+            }
+          } else {
+            console.warn(`formatDate: Numeric string "${trimmed}" is not a valid Excel serial date (expected 1-100000, excluding 1900-2100)`);
+          }
+        }
+        
+      }
+      
+      // Handle number values
+      // BE VERY CONSERVATIVE: Only treat as date if it's clearly a timestamp or Excel serial
+      if (typeof dateString === 'number') {
+        const numValue = dateString;
+        
+        // Check if it's a Unix timestamp (milliseconds since epoch)
+        // Timestamps for 2025 are around 1735689600000 (milliseconds)
+        // Timestamps for 2000-2100 are typically 946684800000 - 4102444800000
+        if (numValue > 946684800000 && numValue < 4102444800000) {
+          const date = new Date(numValue);
+          if (!isNaN(date.getTime()) && date.getFullYear() >= 1900 && date.getFullYear() <= 2100) {
+            const formatted = date.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            console.log(`formatDate: Converted timestamp ${numValue} to ${formatted}`);
+            return formatted;
+          }
+        }
+        
+        // If it looks like a year (1900-2100), don't treat as Excel serial
+        if (numValue >= 1900 && numValue <= 2100) {
+          console.warn(`formatDate: Number ${numValue} looks like a year, not treating as date`);
+          return null;
+        }
+        
+        // Only treat as Excel serial if it's clearly in the Excel serial range
+        // Excel serial dates for dates from 2000-2100 are typically 36526-73050
+        // But to be safe, we'll use a wider range: 1-100000, but exclude year-like numbers
+        if (numValue >= 1 && numValue <= 100000 && numValue < 1900) {
+          let excelDate: Date;
+          if (numValue < 61) {
+            excelDate = new Date(1900, 0, numValue - 1);
+          } else {
+            excelDate = new Date(1900, 0, numValue - 2);
+          }
+          
+          const resultYear = excelDate.getFullYear();
+          // Only return if the resulting year is reasonable (1900-2100)
+          if (!isNaN(excelDate.getTime()) && resultYear >= 1900 && resultYear <= 2100) {
+            const formatted = excelDate.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            console.log(`formatDate: Converted Excel serial ${numValue} to ${formatted}`);
+            return formatted;
+          } else {
+            console.warn(`formatDate: Number ${numValue} produced invalid date year ${resultYear}, not treating as Excel serial`);
+          }
+        } else {
+          console.warn(`formatDate: Number ${numValue} is not a valid date format (not timestamp, not Excel serial, not year)`);
+        }
+      }
+      
+      // If we reach here, we couldn't parse the date
+      // For strings that look like dates, return them as-is (fallback)
+      if (typeof dateString === 'string') {
+        const trimmed = String(dateString).trim();
+        // If it looks like a date string (contains numbers and separators), return it
+        if (/^\d{1,2}[-\/\.]\d{1,2}[-\/\.]\d{4}$/.test(trimmed)) {
+          console.warn('formatDate: Could not parse date, returning original:', trimmed);
+          return trimmed;
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error formatting date:', error, dateString);
+      // Return original value if it's a string that looks like a date, otherwise null
+      if (typeof dateString === 'string') {
+        const trimmed = String(dateString).trim();
+        if (/^\d{1,2}[-\/\.]\d{1,2}[-\/\.]\d{4}$/.test(trimmed)) {
+          return trimmed;
+        }
+      }
       return null;
     }
   };
 
-  const downloadPDF = () => {
+  const downloadPDF = async () => {
     if (!inspectionData) return;
+
+    // Fetch logo with better error handling
+    let logoHtml = '';
+    let logoDataUrl = '';
+    try {
+      const token = localStorage.getItem('token');
+      const logoApiUrl = API_BASE ? `${API_BASE}/api/admin/uploads/logo` : '/api/admin/uploads/logo';
+      const headers: HeadersInit = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      console.log('PDF: Loading logo from:', logoApiUrl);
+      const logoResponse = await fetch(logoApiUrl, { headers });
+      console.log('PDF: Logo response status:', logoResponse.status);
+      
+      if (logoResponse.ok) {
+        const contentType = logoResponse.headers.get('content-type') || '';
+        if (contentType.startsWith('image/')) {
+          const logoBlob = await logoResponse.blob();
+          if (logoBlob.size > 0) {
+            logoDataUrl = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                if (reader.result) {
+                  resolve(reader.result as string);
+                } else {
+                  reject(new Error('Failed to read logo'));
+                }
+              };
+              reader.onerror = reject;
+              reader.readAsDataURL(logoBlob);
+            });
+            // No centered logo - only left corner logo
+            logoHtml = '';
+            console.log('PDF: Logo loaded successfully');
+          } else {
+            console.warn('PDF: Logo blob is empty');
+            logoHtml = '<div style="text-align: center; margin-bottom: 10px;"><strong style="font-size: 24px; color: #1e40af;">BESCOM</strong></div>';
+          }
+        } else {
+          console.warn('PDF: Logo response is not an image. Content-Type:', contentType);
+          logoHtml = '<div style="text-align: center; margin-bottom: 10px;"><strong style="font-size: 24px; color: #1e40af;">BESCOM</strong></div>';
+        }
+      } else {
+        console.warn('PDF: Logo response not OK:', logoResponse.status);
+        logoHtml = '<div style="text-align: center; margin-bottom: 10px;"><strong style="font-size: 24px; color: #1e40af;">BESCOM</strong></div>';
+      }
+    } catch (error) {
+      console.error('PDF: Error loading logo:', error);
+      // Fallback: Use text logo if image fails
+      logoHtml = '<div style="text-align: center; margin-bottom: 10px;"><strong style="font-size: 24px; color: #1e40af;">BESCOM</strong></div>';
+    }
 
     // Create a printable version of the inspection report
     const printWindow = window.open('', '_blank');
@@ -193,6 +490,33 @@ export default function EquipmentStatus() {
 
     // Helper function to check if value exists
     const hasValue = (val: any) => val && val.toString().trim() !== '' && val !== 'N/A';
+    
+    // Helper function to check if value should be red (predefined conditions)
+    const isRedCondition = (val: any) => {
+      if (!val) return false;
+      const str = val.toString().toLowerCase();
+      return str.includes('red') || 
+             str.includes('not available') || 
+             str.includes('not working') || 
+             str.includes('faulty') || 
+             str.includes('defective') || 
+             str.includes('damaged') ||
+             str.includes('damage') ||
+             str.includes('removed') ||
+             str === 'no' || 
+             str === 'n';
+    };
+    
+    // Helper function to format value with red color if needed
+    const formatValue = (val: any) => {
+      if (!hasValue(val)) return '';
+      const value = val.toString();
+      if (isRedCondition(val)) {
+        // Use inline style to ensure red color is always applied
+        return `<span class="red-condition" style="color: #dc2626 !important; font-weight: bold !important;">${value.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>`;
+      }
+      return value.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    };
     
     // Generate terminal table in the same format as web view (parameters as rows, terminals as columns)
     let terminalTable = '';
@@ -234,7 +558,7 @@ export default function EquipmentStatus() {
                   const rowCells = terminalKeys.map(prefix => {
                     const terminalData = inspectionData.terminals[prefix];
                     const value = terminalData?.[field.key];
-                    const displayValue = hasValue(value) ? value : '';
+                    const displayValue = hasValue(value) ? formatValue(value) : '';
                     return `<td style="padding: 8px; border: 2px solid #000; text-align: center;">${displayValue}</td>`;
                   }).join('');
 
@@ -262,9 +586,10 @@ export default function EquipmentStatus() {
             body { margin: 0; }
             .no-print { display: none; }
           }
-          body { font-family: Arial, sans-serif; padding: 20px; }
-          .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #1e40af; padding-bottom: 20px; }
+          body { font-family: Arial, sans-serif; padding: 20px; position: relative; }
+          .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #1e40af; padding-bottom: 20px; position: relative; }
           .header h1 { color: #1e40af; margin: 0; }
+          .logo-left { position: absolute; top: -20px; left: 0; max-height: 100px; max-width: 250px; z-index: 10; }
           .section { margin-bottom: 25px; }
           .section-title { background-color: #1e40af; color: white; padding: 10px; font-weight: bold; margin-bottom: 15px; }
           table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
@@ -272,10 +597,14 @@ export default function EquipmentStatus() {
           th { background-color: #f3f4f6; font-weight: bold; }
           .label { font-weight: bold; color: #374151; }
           .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #6b7280; }
+          .red-condition { color: #dc2626 !important; font-weight: bold !important; }
+          span.red-condition { color: #dc2626 !important; font-weight: bold !important; }
         </style>
       </head>
       <body>
         <div class="header">
+          ${logoDataUrl ? `<img src="${logoDataUrl}" alt="BESCOM Logo" class="logo-left" style="position: absolute; top: -20px; left: 0; max-height: 100px; max-width: 250px; z-index: 10;" />` : ''}
+          ${logoHtml}
           <h1>RMU INSPECTION REPORT</h1>
           <p>BANGALORE ELECTRICITY SUPPLY COMPANY LIMITED</p>
           <p style="font-size: 12px;">O/o. The General Manager (Ele.), DAS & Smart Grid, BESCOM, BICC-1 Bldg, 2nd Sector, 24th Main, 17th Cross, HSR layout, Bangalore – 560102</p>
@@ -312,9 +641,9 @@ export default function EquipmentStatus() {
                 const field1 = basicFields[i];
                 const field2 = basicFields[i + 1];
                 if (field2) {
-                  rows.push(`<tr><td class="label">${field1.label}</td><td>${field1.value}</td><td class="label">${field2.label}</td><td>${field2.value}</td></tr>`);
+                  rows.push(`<tr><td class="label">${field1.label}</td><td>${formatValue(field1.value)}</td><td class="label">${field2.label}</td><td>${formatValue(field2.value)}</td></tr>`);
                 } else {
-                  rows.push(`<tr><td class="label">${field1.label}</td><td colspan="3">${field1.value}</td></tr>`);
+                  rows.push(`<tr><td class="label">${field1.label}</td><td colspan="3">${formatValue(field1.value)}</td></tr>`);
                 }
               }
               return rows.join('');
@@ -342,9 +671,9 @@ export default function EquipmentStatus() {
                 const field1 = additionalFields[i];
                 const field2 = additionalFields[i + 1];
                 if (field2) {
-                  rows.push(`<tr><td class="label">${field1.label}</td><td>${field1.value}</td><td class="label">${field2.label}</td><td>${field2.value}</td></tr>`);
+                  rows.push(`<tr><td class="label">${field1.label}</td><td>${formatValue(field1.value)}</td><td class="label">${field2.label}</td><td>${formatValue(field2.value)}</td></tr>`);
                 } else {
-                  rows.push(`<tr><td class="label">${field1.label}</td><td colspan="3">${field1.value}</td></tr>`);
+                  rows.push(`<tr><td class="label">${field1.label}</td><td colspan="3">${formatValue(field1.value)}</td></tr>`);
                 }
               }
               return rows.join('');
@@ -392,14 +721,14 @@ export default function EquipmentStatus() {
               for (let i = 0; i < statusFields.length; i++) {
                 const field = statusFields[i];
                 if (field.fullWidth) {
-                  rows.push(`<tr><td class="label">${field.label}</td><td colspan="3">${field.value}</td></tr>`);
+                  rows.push(`<tr><td class="label">${field.label}</td><td colspan="3">${formatValue(field.value)}</td></tr>`);
                 } else {
                   const field2 = statusFields[i + 1];
                   if (field2 && !field2.fullWidth) {
-                    rows.push(`<tr><td class="label">${field.label}</td><td>${field.value}</td><td class="label">${field2.label}</td><td>${field2.value}</td></tr>`);
+                    rows.push(`<tr><td class="label">${field.label}</td><td>${formatValue(field.value)}</td><td class="label">${field2.label}</td><td>${formatValue(field2.value)}</td></tr>`);
                     i++; // Skip next field as we used it
                   } else {
-                    rows.push(`<tr><td class="label">${field.label}</td><td colspan="3">${field.value}</td></tr>`);
+                    rows.push(`<tr><td class="label">${field.label}</td><td colspan="3">${formatValue(field.value)}</td></tr>`);
                   }
                 }
               }
@@ -415,7 +744,7 @@ export default function EquipmentStatus() {
         <div class="section">
           <div class="section-title">Additional Information</div>
           <table>
-            ${hasValue(inspectionData.remarks) ? `<tr><td class="label">Remarks/Issues</td><td colspan="3" style="height: 80px; vertical-align: top;">${inspectionData.remarks}</td></tr>` : ''}
+            ${hasValue(inspectionData.remarks) ? `<tr><td class="label">Remarks/Issues</td><td colspan="3" style="height: 80px; vertical-align: top;">${formatValue(inspectionData.remarks)}</td></tr>` : ''}
           </table>
         </div>
         ` : ''}
@@ -519,6 +848,31 @@ export default function EquipmentStatus() {
         {/* Results Section */}
         {inspectionData && (
           <div className="bg-white rounded-lg shadow-lg p-6">
+            {/* Logo and Header */}
+            <div className="text-center mb-6 pb-4 border-b-2 border-blue-700 relative">
+              {/* Logo in top left (moved to adjacent right) */}
+              {logoUrl ? (
+                <img 
+                  src={logoUrl} 
+                  alt="BESCOM Logo" 
+                  className="absolute left-0 z-10"
+                  style={{ top: '-20px', maxHeight: '100px', maxWidth: '250px' }}
+                  onError={(e) => {
+                    console.error('Logo image failed to load');
+                    // Hide image if it fails to load
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+              ) : (
+                <div className="absolute left-0 z-10" style={{ top: '-20px' }}>
+                  <strong className="text-2xl text-blue-700">BESCOM</strong>
+                </div>
+              )}
+              <h1 className="text-2xl font-bold text-blue-700 mb-2">RMU INSPECTION REPORT</h1>
+              <p className="text-gray-700 font-semibold">BANGALORE ELECTRICITY SUPPLY COMPANY LIMITED</p>
+              <p className="text-xs text-gray-600 mt-1">O/o. The General Manager (Ele.), DAS & Smart Grid, BESCOM, BICC-1 Bldg, 2nd Sector, 24th Main, 17th Cross, HSR layout, Bangalore – 560102</p>
+            </div>
+            
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 pb-4 border-b-2 border-gray-200">
               <h2 className="text-2xl font-bold text-gray-800">
                 Inspection Report - {inspectionData.siteCode}
@@ -679,8 +1033,23 @@ export default function EquipmentStatus() {
                               const terminalData = inspectionData.terminals[prefix];
                               const value = terminalData?.[field.key];
                               const displayValue = value && value.toString().trim() !== '' && value !== 'N/A' ? value : '';
+                              
+                              // Check if value should be red (predefined conditions)
+                              const isRedCondition = displayValue && (
+                                displayValue.toString().toLowerCase().includes('red') ||
+                                displayValue.toString().toLowerCase().includes('not available') ||
+                                displayValue.toString().toLowerCase().includes('not working') ||
+                                displayValue.toString().toLowerCase().includes('faulty') ||
+                                displayValue.toString().toLowerCase().includes('defective') ||
+                                displayValue.toString().toLowerCase().includes('damaged') ||
+                                displayValue.toString().toLowerCase().includes('damage') ||
+                                displayValue.toString().toLowerCase().includes('removed') ||
+                                displayValue.toString().toLowerCase() === 'no' ||
+                                displayValue.toString().toLowerCase() === 'n'
+                              );
+                              
                               return (
-                                <td key={prefix} className="border-2 border-gray-400 px-4 py-2 text-center text-sm">
+                                <td key={prefix} className={`border-2 border-gray-400 px-4 py-2 text-center text-sm ${isRedCondition ? 'text-red-600 font-bold' : ''}`}>
                                   {displayValue}
                                 </td>
                               );
@@ -898,10 +1267,24 @@ function InfoCard({ label, value, fullWidth }: { label: string; value: string | 
     return null;
   }
   
+  // Check if value should be displayed in red (predefined conditions like "Red", "Not Available", etc.)
+  const isRedCondition = value && (
+    value.toString().toLowerCase().includes('red') ||
+    value.toString().toLowerCase().includes('not available') ||
+    value.toString().toLowerCase().includes('not working') ||
+    value.toString().toLowerCase().includes('faulty') ||
+    value.toString().toLowerCase().includes('defective') ||
+    value.toString().toLowerCase().includes('damaged') ||
+    value.toString().toLowerCase().includes('damage') ||
+    value.toString().toLowerCase().includes('removed') ||
+    value.toString().toLowerCase() === 'no' ||
+    value.toString().toLowerCase() === 'n'
+  );
+  
   return (
     <div className={`bg-gray-50 p-4 rounded-lg ${fullWidth ? 'col-span-2' : ''}`}>
       <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-      <p className="text-gray-800 font-semibold">{value}</p>
+      <p className={`font-semibold ${isRedCondition ? 'text-red-600' : 'text-gray-800'}`}>{value}</p>
     </div>
   );
 }

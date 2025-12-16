@@ -4,6 +4,118 @@ import { API_BASE } from '../utils/api';
 import { compressImage } from '../utils/imageCompression';
 import { compressVideo } from '../utils/videoCompression';
 
+// Helper function to format date for input field (handles Excel serial dates and various date formats)
+const formatDateForInput = (dateValue: any): string => {
+  if (!dateValue && dateValue !== 0) return '';
+  
+  try {
+    console.log('formatDateForInput called with:', dateValue, 'type:', typeof dateValue);
+    
+    // If it's already a string in YYYY-MM-DD format, return it
+    if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+      return dateValue;
+    }
+    
+    // FIRST: If it's a string in DD-MM-YYYY or DD/MM/YYYY format, parse it FIRST (before Excel serial check)
+    // This handles formats like "18-03-2025" or "28-10-2025"
+    if (typeof dateValue === 'string') {
+      const trimmed = dateValue.trim();
+      const parts = trimmed.split(/[-\/\.]/);
+      if (parts.length === 3) {
+        // Try DD-MM-YYYY or DD/MM/YYYY
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10);
+        const year = parseInt(parts[2], 10);
+        if (day > 0 && day <= 31 && month > 0 && month <= 12 && year >= 1900 && year <= 2100) {
+          const parsedDate = new Date(year, month - 1, day);
+          if (!isNaN(parsedDate.getTime()) && parsedDate.getFullYear() === year && parsedDate.getMonth() === month - 1 && parsedDate.getDate() === day) {
+            const formatted = parsedDate.toISOString().split('T')[0];
+            console.log('formatDateForInput: Parsed DD-MM-YYYY format:', trimmed, 'to:', formatted);
+            return formatted;
+          }
+        }
+      }
+    }
+    
+    // Try parsing as regular date (handles Date objects, ISO strings, etc.)
+    if (dateValue instanceof Date) {
+      if (!isNaN(dateValue.getTime())) {
+        const year = dateValue.getFullYear();
+        const month = String(dateValue.getMonth() + 1).padStart(2, '0');
+        const day = String(dateValue.getDate()).padStart(2, '0');
+        const formatted = `${year}-${month}-${day}`;
+        console.log('formatDateForInput: Parsed Date object to:', formatted);
+        return formatted;
+      }
+    } else if (typeof dateValue === 'string') {
+      // Try parsing as ISO date string
+      const date = new Date(dateValue);
+      if (!isNaN(date.getTime()) && date.getFullYear() >= 1900 && date.getFullYear() <= 2100) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const formatted = `${year}-${month}-${day}`;
+        console.log('formatDateForInput: Parsed date string/object:', dateValue, 'to:', formatted);
+        return formatted;
+      }
+    }
+    
+    // LAST: Check if it's a numeric string or number (could be Excel serial date)
+    // BE VERY CONSERVATIVE: Only treat as Excel serial if it's clearly a serial number
+    // Numbers like 2005, 2016, etc. are likely years or other identifiers, NOT Excel serial dates
+    const numValue = typeof dateValue === 'number' ? dateValue : 
+                     (typeof dateValue === 'string' && /^\d+$/.test(dateValue.trim())) ? parseFloat(dateValue.trim()) : null;
+    
+    if (numValue !== null && !isNaN(numValue)) {
+      // If it looks like a year (1900-2100), don't treat as Excel serial
+      if (numValue >= 1900 && numValue <= 2100) {
+        console.warn('formatDateForInput: Number', numValue, 'looks like a year, not treating as Excel serial date');
+        return '';
+      }
+      
+      // Excel serial date conversion (days since 1900-01-01)
+      // Excel serial numbers for dates from 2000-2100 are typically 36526-73050
+      // But to be safe, we'll use a wider range: 1-100000, but exclude year-like numbers
+      // Only treat as Excel serial if it's clearly in the Excel serial range
+      if (numValue >= 1 && numValue <= 100000 && numValue < 1900) {
+        let excelDate: Date;
+        // Excel incorrectly treats 1900 as a leap year
+        // For dates >= 61 (March 1, 1900 onwards), subtract 2 to account for fake leap day
+        // For dates < 61, subtract 1
+        if (numValue < 61) {
+          excelDate = new Date(1900, 0, numValue - 1);
+        } else {
+          excelDate = new Date(1900, 0, numValue - 2);
+        }
+        
+        if (!isNaN(excelDate.getTime())) {
+          const resultYear = excelDate.getFullYear();
+          // Only return if the resulting year is reasonable (1900-2100)
+          // This prevents converting small numbers that aren't actually Excel serial dates
+          if (resultYear >= 1900 && resultYear <= 2100) {
+            const year = excelDate.getFullYear();
+            const month = String(excelDate.getMonth() + 1).padStart(2, '0');
+            const day = String(excelDate.getDate()).padStart(2, '0');
+            const formatted = `${year}-${month}-${day}`;
+            console.log('formatDateForInput: Converted Excel serial date:', numValue, 'to:', formatted);
+            return formatted;
+          } else {
+            console.warn('formatDateForInput: Number', numValue, 'produced invalid year', resultYear, ', not treating as Excel serial');
+          }
+        }
+      } else {
+        console.warn('formatDateForInput: Number', numValue, 'is not a valid Excel serial date (expected 1-100000, excluding 1900-2100)');
+      }
+    }
+    
+    console.warn('Could not format date:', dateValue);
+    return '';
+  } catch (error) {
+    console.error('Error formatting date:', error, dateValue);
+    return '';
+  }
+};
+
 export default function SurveyForm() {
   const [images, setImages] = useState<string[]>([]);
   const [isCameraActive, setIsCameraActive] = useState(false);
@@ -240,6 +352,12 @@ export default function SurveyForm() {
       if (data.success && data.data) {
         const inspection = data.data;
         
+        console.log('Loading inspection data:', {
+          dateOfCommission: inspection.dateOfCommission,
+          inspectionDate: inspection.inspectionDate,
+          previousAMCDate: inspection.previousAMCDate
+        });
+        
         // Populate form fields
         const formFields: any = {
           siteCode: inspection.siteCode || '',
@@ -247,16 +365,16 @@ export default function SurveyForm() {
           division: inspection.division || '',
           subDivision: inspection.subDivision || '',
           om: inspection.om || '',
-          dateOfCommission: inspection.dateOfCommission ? new Date(inspection.dateOfCommission).toISOString().split('T')[0] : '',
+          dateOfCommission: formatDateForInput(inspection.dateOfCommission),
           feederNumberAndName: inspection.feederNumberAndName || '',
-          inspectionDate: inspection.inspectionDate ? new Date(inspection.inspectionDate).toISOString().split('T')[0] : '',
+          inspectionDate: formatDateForInput(inspection.inspectionDate),
           rmuMakeType: inspection.rmuMakeType || '',
           locationHRN: inspection.locationHRN || '',
           serialNo: inspection.serialNo || '',
           latLong: inspection.latLong || '',
           warrantyStatus: inspection.warrantyStatus || '',
           coFeederName: inspection.coFeederName || '',
-          previousAMCDate: inspection.previousAMCDate ? new Date(inspection.previousAMCDate).toISOString().split('T')[0] : '',
+          previousAMCDate: formatDateForInput(inspection.previousAMCDate),
           mfmMake: inspection.mfmMake || '',
           relayMakeModelNo: inspection.relayMakeModelNo || '',
           fpiMakeModelNo: inspection.fpiMakeModelNo || '',

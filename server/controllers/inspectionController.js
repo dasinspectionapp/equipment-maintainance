@@ -7,6 +7,86 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Helper function to parse date fields from form submissions
+// Handles various date formats: Date objects, ISO strings, DD-MM-YYYY, etc.
+function parseDateField(dateValue) {
+  if (!dateValue) return null;
+  
+  try {
+    // If it's already a Date object, return it
+    if (dateValue instanceof Date) {
+      if (!isNaN(dateValue.getTime())) {
+        return dateValue;
+      }
+      return null;
+    }
+    
+    // If it's a string, try parsing it
+    if (typeof dateValue === 'string') {
+      const trimmed = dateValue.trim();
+      if (!trimmed || trimmed === 'null' || trimmed === 'undefined') return null;
+      
+      // Try DD-MM-YYYY or DD/MM/YYYY format first (common in forms)
+      const parts = trimmed.split(/[-\/\.]/);
+      if (parts.length === 3) {
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10);
+        const year = parseInt(parts[2], 10);
+        
+        if (!isNaN(day) && !isNaN(month) && !isNaN(year) && 
+            day > 0 && day <= 31 && month > 0 && month <= 12 && 
+            year >= 1900 && year <= 2100) {
+          const date = new Date(year, month - 1, day);
+          if (!isNaN(date.getTime()) && 
+              date.getFullYear() === year && 
+              date.getMonth() === month - 1 && 
+              date.getDate() === day) {
+            return date;
+          }
+        }
+      }
+      
+      // Try ISO format (YYYY-MM-DD)
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+        const date = new Date(trimmed);
+        if (!isNaN(date.getTime()) && date.getFullYear() >= 1900 && date.getFullYear() <= 2100) {
+          return date;
+        }
+      }
+      
+      // Try parsing as general date string
+      const date = new Date(trimmed);
+      if (!isNaN(date.getTime()) && date.getFullYear() >= 1900 && date.getFullYear() <= 2100) {
+        return date;
+      }
+    }
+    
+    // If it's a number, be very conservative - only treat as Excel serial if clearly in range
+    if (typeof dateValue === 'number') {
+      const numValue = dateValue;
+      
+      // If it looks like a year, don't convert
+      if (numValue >= 1900 && numValue <= 2100) {
+        console.warn(`parseDateField: Number ${numValue} looks like a year, not converting`);
+        return null;
+      }
+      
+      // Only convert if it's clearly an Excel serial date (36526-73050 for 2000-2100 dates)
+      if (numValue >= 36526 && numValue <= 73050) {
+        const date = new Date(1900, 0, numValue - 2);
+        if (!isNaN(date.getTime()) && date.getFullYear() >= 1900 && date.getFullYear() <= 2100) {
+          return date;
+        }
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error parsing date field:', error, dateValue);
+    return null;
+  }
+}
+
 /**
  * Create or update RMU Inspection based on Site Code
  * If Site Code exists, update the existing record
@@ -56,16 +136,16 @@ export const submitInspection = async (req, res) => {
       division: inspectionData.division || '',
       subDivision: inspectionData.subDivision || '',
       om: inspectionData.om || '',
-      dateOfCommission: inspectionData.dateOfCommission || null,
+      dateOfCommission: parseDateField(inspectionData.dateOfCommission),
       feederNumberAndName: inspectionData.feederNumberAndName || '',
-      inspectionDate: inspectionData.inspectionDate || new Date(),
+      inspectionDate: parseDateField(inspectionData.inspectionDate) || new Date(),
       rmuMakeType: inspectionData.rmuMakeType || '',
       locationHRN: inspectionData.locationHRN || '',
       serialNo: inspectionData.serialNo || '',
       latLong: inspectionData.latLong || '',
       warrantyStatus: inspectionData.warrantyStatus || '',
       coFeederName: inspectionData.coFeederName || '',
-      previousAMCDate: inspectionData.previousAMCDate || null,
+      previousAMCDate: parseDateField(inspectionData.previousAMCDate),
       mfmMake: inspectionData.mfmMake || '',
       relayMakeModelNo: inspectionData.relayMakeModelNo || '',
       fpiMakeModelNo: inspectionData.fpiMakeModelNo || '',
@@ -419,10 +499,10 @@ export const massUploadInspections = async (req, res) => {
     await file.mv(tempFilePath);
 
     try {
-      const workbook = XLSX.readFile(tempFilePath);
+      const workbook = XLSX.readFile(tempFilePath, { cellDates: true, cellNF: false, cellText: false });
       const sheetName = workbook.SheetNames[0];
       const sheet = workbook.Sheets[sheetName];
-      const data = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+      const data = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null, raw: false, dateNF: 'yyyy-mm-dd' });
 
       if (data.length < 2) {
         throw new Error('Excel file must contain at least a header row and one data row');
@@ -552,23 +632,149 @@ export const massUploadInspections = async (req, res) => {
 
           const inspectionData = { siteCode: String(siteCode).trim() };
 
-          Object.keys(fieldMapping).forEach(normalizedKey => {
+            Object.keys(fieldMapping).forEach(normalizedKey => {
             const dbField = fieldMapping[normalizedKey];
             const colIndex = columnMap[dbField];
             if (colIndex !== undefined && row[colIndex] !== null && row[colIndex] !== undefined) {
-              let value = String(row[colIndex]).trim();
+              let rawValue = row[colIndex];
+              let value = String(rawValue).trim();
               if (value === '') return;
               
-              if (dbField.includes('Date') && value) {
+              if (dbField.includes('Date') && (rawValue || value)) {
                 try {
-                  const date = new Date(value);
-                  if (!isNaN(date.getTime())) {
-                    inspectionData[dbField] = date;
-                  } else {
-                    inspectionData[dbField] = value;
+                  // Check if raw value is already a Date object (from XLSX with cellDates: true)
+                  if (rawValue instanceof Date) {
+                    if (!isNaN(rawValue.getTime())) {
+                      inspectionData[dbField] = rawValue;
+                      console.log(`Date field ${dbField}: Using Date object:`, rawValue);
+                      return;
+                    }
                   }
-                } catch {
-                  inspectionData[dbField] = value;
+                  
+                  // FIRST: Try parsing as date string (DD-MM-YYYY, DD/MM/YYYY, etc.)
+                  // This should be checked BEFORE Excel serial conversion
+                  if (typeof value === 'string') {
+                    const trimmed = value.trim();
+                    const parts = trimmed.split(/[-\/\.]/);
+                    if (parts.length === 3) {
+                      const day = parseInt(parts[0], 10);
+                      const month = parseInt(parts[1], 10);
+                      const year = parseInt(parts[2], 10);
+                      
+                      if (!isNaN(day) && !isNaN(month) && !isNaN(year) && 
+                          day > 0 && day <= 31 && month > 0 && month <= 12 && 
+                          year >= 1900 && year <= 2100) {
+                        const date = new Date(year, month - 1, day);
+                        if (!isNaN(date.getTime()) && 
+                            date.getFullYear() === year && 
+                            date.getMonth() === month - 1 && 
+                            date.getDate() === day) {
+                          inspectionData[dbField] = date;
+                          console.log(`Date field ${dbField}: Parsed DD-MM-YYYY format "${trimmed}" to:`, date);
+                          return;
+                        }
+                      }
+                    }
+                    
+                    // Try ISO format (YYYY-MM-DD)
+                    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+                      const date = new Date(trimmed);
+                      if (!isNaN(date.getTime()) && date.getFullYear() >= 1900 && date.getFullYear() <= 2100) {
+                        inspectionData[dbField] = date;
+                        console.log(`Date field ${dbField}: Parsed ISO format "${trimmed}" to:`, date);
+                        return;
+                      }
+                    }
+                  }
+                  
+                  // THEN: Check if value is an Excel serial date (numeric)
+                  // BE VERY CONSERVATIVE: Only treat as Excel serial if it's clearly a serial number
+                  // Excel serial dates for dates in 2000-2100 are typically 36526-73050
+                  // Numbers like 2005, 2016, etc. are likely years or other values, NOT Excel serial dates
+                  const numValue = typeof rawValue === 'number' ? rawValue : 
+                                  (typeof value === 'string' && /^\d+$/.test(value)) ? parseFloat(value) : 
+                                  (!isNaN(parseFloat(value)) && isFinite(parseFloat(value))) ? parseFloat(value) : null;
+                  
+                  if (numValue !== null && !isNaN(numValue)) {
+                    // If it looks like a year (1900-2100), don't treat as Excel serial
+                    if (numValue >= 1900 && numValue <= 2100) {
+                      console.warn(`Date field ${dbField}: Number ${numValue} looks like a year, not treating as Excel serial date`);
+                      // Don't return - continue to try parsing as date string below
+                    } else if (numValue >= 36526 && numValue <= 73050) {
+                      // This is clearly in the Excel serial range for dates 2000-2100
+                      // Excel incorrectly treats 1900 as a leap year, so we adjust
+                      const date = new Date(1900, 0, numValue - 2);
+                      
+                      // Validate the converted date
+                      if (!isNaN(date.getTime()) && date.getFullYear() >= 1900 && date.getFullYear() <= 2100) {
+                        inspectionData[dbField] = date;
+                        console.log(`Date field ${dbField}: Converted Excel serial ${numValue} to:`, date);
+                        return;
+                      }
+                    } else if (numValue > 0 && numValue < 36526) {
+                      // Numbers less than 36526 (before year 2000) - could be Excel serial but be careful
+                      // Only convert if it produces a reasonable date
+                      let date;
+                      if (numValue <= 60) {
+                        date = new Date(1900, 0, numValue - 1);
+                      } else {
+                        date = new Date(1900, 0, numValue - 2);
+                      }
+                      
+                      const resultYear = date.getFullYear();
+                      // Only use if it produces a date in 1900-2100 range
+                      if (!isNaN(date.getTime()) && resultYear >= 1900 && resultYear <= 2100) {
+                        inspectionData[dbField] = date;
+                        console.log(`Date field ${dbField}: Converted Excel serial ${numValue} to:`, date);
+                        return;
+                      } else {
+                        console.warn(`Date field ${dbField}: Number ${numValue} produced invalid year ${resultYear}, not treating as Excel serial`);
+                      }
+                    } else {
+                      console.warn(`Date field ${dbField}: Number ${numValue} is outside Excel serial range, not treating as date`);
+                    }
+                  }
+                  
+                  let date;
+                  
+                  // Try parsing as regular date string
+                  // First, try DD-MM-YYYY or DD/MM/YYYY format (common in Excel)
+                  if (typeof value === 'string') {
+                    const trimmed = value.trim();
+                    const parts = trimmed.split(/[-\/\.]/);
+                    if (parts.length === 3) {
+                      const day = parseInt(parts[0], 10);
+                      const month = parseInt(parts[1], 10);
+                      const year = parseInt(parts[2], 10);
+                      
+                      if (!isNaN(day) && !isNaN(month) && !isNaN(year) && 
+                          day > 0 && day <= 31 && month > 0 && month <= 12 && 
+                          year >= 1900 && year <= 2100) {
+                        date = new Date(year, month - 1, day);
+                        if (!isNaN(date.getTime()) && 
+                            date.getFullYear() === year && 
+                            date.getMonth() === month - 1 && 
+                            date.getDate() === day) {
+                          inspectionData[dbField] = date;
+                          console.log(`Date field ${dbField}: Parsed DD-MM-YYYY format "${trimmed}" to:`, date);
+                          return;
+                        }
+                      }
+                    }
+                  }
+                  
+                  // Then try parsing as ISO date string or other standard formats
+                  date = new Date(value);
+                  if (!isNaN(date.getTime()) && date.getFullYear() >= 1900 && date.getFullYear() <= 2100) {
+                    inspectionData[dbField] = date;
+                    console.log(`Date field ${dbField}: Parsed date string "${value}" to:`, date);
+                    return;
+                  }
+                  
+                  // If all parsing fails, log and skip
+                  console.warn(`Date field ${dbField}: Could not parse value:`, rawValue, 'as:', value, 'type:', typeof rawValue);
+                } catch (error) {
+                  console.error(`Error parsing date for ${dbField}:`, error, 'value:', rawValue);
                 }
               } else {
                 inspectionData[dbField] = value;
