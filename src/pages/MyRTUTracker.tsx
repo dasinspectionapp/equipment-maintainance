@@ -150,12 +150,33 @@ export default function MyRTUTracker() {
   });
   const [siteObservationsStatus, setSiteObservationsStatus] = useState<string>('');
   const [_isTypeOfSpareDropdownOpen, _setIsTypeOfSpareDropdownOpen] = useState(false);
-  const [_showSiteObservationsCameraPreview, setShowSiteObservationsCameraPreview] = useState(false);
-  const [_siteObservationsCameraStream, setSiteObservationsCameraStream] = useState<MediaStream | null>(null);
-  const [_siteObservationsCapturedImageData, _setSiteObservationsCapturedImageData] = useState<string | null>(null);
-  const [_capturedPhotoMetadata, _setCapturedPhotoMetadata] = useState<{ latitude?: number; longitude?: number; timestamp?: string; location?: string } | null>(null);
-  // const _siteObservationsCameraStreamRef = useRef<MediaStream | null>(null); // Reserved for future use
+  const [showSiteObservationsCameraPreview, setShowSiteObservationsCameraPreview] = useState(false);
+  const [siteObservationsCameraStream, setSiteObservationsCameraStream] = useState<MediaStream | null>(null);
+  const [siteObservationsCapturedImageData, setSiteObservationsCapturedImageData] = useState<string | null>(null);
+  const [capturedPhotoMetadata, setCapturedPhotoMetadata] = useState<{ latitude?: number; longitude?: number; timestamp?: string; location?: string } | null>(null);
+  const siteObservationsCameraStreamRef = useRef<MediaStream | null>(null);
   const [_isSubmittingSiteObservations, _setIsSubmittingSiteObservations] = useState(false);
+  
+  // Handle video element for Site Observations camera stream
+  useEffect(() => {
+    if (siteObservationsCameraStream && showSiteObservationsCameraPreview) {
+      const video = document.getElementById('site-observations-camera-preview-video-rtu') as HTMLVideoElement;
+      if (video) {
+        video.srcObject = siteObservationsCameraStream;
+        video.play().catch(err => console.error('Error playing video:', err));
+      }
+      siteObservationsCameraStreamRef.current = siteObservationsCameraStream;
+    }
+    
+    // Cleanup: stop camera when component unmounts or dialog closes
+    return () => {
+      if (!showSiteObservationsCameraPreview && siteObservationsCameraStreamRef.current) {
+        siteObservationsCameraStreamRef.current.getTracks().forEach(track => track.stop());
+        siteObservationsCameraStreamRef.current = null;
+        setSiteObservationsCameraStream(null);
+      }
+    };
+  }, [siteObservationsCameraStream, showSiteObservationsCameraPreview]);
   
   // Function to save data to RTU Tracker Sites collection in database
   const saveToRTUTrackerSitesDB = useCallback(async () => {
@@ -1693,11 +1714,50 @@ export default function MyRTUTracker() {
                     type="button"
                     onClick={async () => {
                       try {
-                        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                        let stream: MediaStream;
+                        try {
+                          // Try to get back camera on mobile devices
+                          stream = await navigator.mediaDevices.getUserMedia({
+                            video: { facingMode: 'environment' } // Prefer back camera on mobile
+                          });
+                        } catch (e) {
+                          // Fallback to any available camera
+                          stream = await navigator.mediaDevices.getUserMedia({
+                            video: true
+                          });
+                        }
                         setSiteObservationsCameraStream(stream);
-                        setShowSiteObservationsCameraPreview(true); // Used for future camera preview feature
+                        setShowSiteObservationsCameraPreview(true);
+                        setSiteObservationsCapturedImageData(null); // Reset any previous capture
                       } catch (error) {
-                        alert('Could not access camera');
+                        console.error('Error accessing camera:', error);
+                        alert('Could not access camera. Please check permissions or use Upload Photo instead.');
+                        // Fallback to file input if getUserMedia fails
+                        const input = document.createElement('input');
+                        input.type = 'file';
+                        input.accept = 'image/*';
+                        input.capture = 'environment';
+                        input.onchange = async (e: any) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            try {
+                              // Compress image to less than 1 MB
+                              const compressedImage = await compressImage(file);
+                              setSiteObservationsCapturedImageData(compressedImage);
+                              setShowSiteObservationsCameraPreview(true);
+                            } catch (error) {
+                              console.error('Error compressing captured image:', error);
+                              // Fallback to original if compression fails
+                              const reader = new FileReader();
+                              reader.onload = (event) => {
+                                setSiteObservationsCapturedImageData(event.target?.result as string);
+                                setShowSiteObservationsCameraPreview(true);
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }
+                        };
+                        input.click();
                       }
                     }}
                     className="px-3 py-1 bg-blue-500 text-white rounded text-sm"
@@ -2035,6 +2095,275 @@ export default function MyRTUTracker() {
               >
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Site Observations Camera Preview Dialog */}
+      {showSiteObservationsCameraPreview && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-75 z-[200] flex items-center justify-center"
+          style={{ padding: '20px' }}
+        >
+          <div 
+            className="bg-white rounded-lg shadow-xl"
+            style={{ 
+              width: '90%',
+              maxWidth: '600px',
+              maxHeight: '90vh',
+              display: 'flex',
+              flexDirection: 'column'
+            }}
+          >
+            {/* Camera Preview */}
+            <div className="p-4 flex-1 flex items-center justify-center" style={{ minHeight: '400px', backgroundColor: '#000' }}>
+              {siteObservationsCapturedImageData ? (
+                <img
+                  src={siteObservationsCapturedImageData}
+                  alt="Captured"
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: '400px',
+                    objectFit: 'contain'
+                  }}
+                />
+              ) : siteObservationsCameraStream ? (
+                <video
+                  id="site-observations-camera-preview-video-rtu"
+                  autoPlay
+                  playsInline
+                  muted
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: '400px',
+                    objectFit: 'contain'
+                  }}
+                />
+              ) : null}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="p-4 border-t border-gray-200 flex gap-3 justify-center">
+              {siteObservationsCapturedImageData ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      // Get geolocation before saving (if not already captured)
+                      let latitude: number | undefined = capturedPhotoMetadata?.latitude;
+                      let longitude: number | undefined = capturedPhotoMetadata?.longitude;
+                      let locationName: string | undefined = capturedPhotoMetadata?.location;
+                      const timestamp = capturedPhotoMetadata?.timestamp || new Date().toISOString();
+                      
+                      // If metadata not available, get it now
+                      if (!latitude || !longitude) {
+                        try {
+                          const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+                            navigator.geolocation.getCurrentPosition(resolve, reject, {
+                              enableHighAccuracy: true,
+                              timeout: 10000,
+                              maximumAge: 0
+                            });
+                          });
+                          
+                          latitude = position.coords.latitude;
+                          longitude = position.coords.longitude;
+                          
+                          // Try to get location name using reverse geocoding
+                          if (!locationName) {
+                            try {
+                              const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`);
+                              const data = await response.json();
+                              if (data.display_name) {
+                                locationName = data.display_name;
+                              }
+                            } catch (geoError) {
+                              console.log('Could not get location name:', geoError);
+                            }
+                          }
+                        } catch (geoError: any) {
+                          console.log('Could not get geolocation:', geoError);
+                          // Continue without location if permission denied
+                        }
+                      }
+                      
+                      // Save photo with metadata
+                      setSiteObservationsDialogData(prev => ({
+                        ...prev,
+                        capturedPhotos: [...prev.capturedPhotos, {
+                          data: siteObservationsCapturedImageData!,
+                          latitude,
+                          longitude,
+                          timestamp,
+                          location: locationName
+                        }]
+                      }));
+                      setShowSiteObservationsCameraPreview(false);
+                      setSiteObservationsCapturedImageData(null);
+                      setCapturedPhotoMetadata(null);
+                      // Stop camera stream when closing
+                      if (siteObservationsCameraStreamRef.current) {
+                        siteObservationsCameraStreamRef.current.getTracks().forEach((track: MediaStreamTrack) => track.stop());
+                        siteObservationsCameraStreamRef.current = null;
+                        setSiteObservationsCameraStream(null);
+                      }
+                    }}
+                    style={{
+                      backgroundColor: '#10b981',
+                      color: '#ffffff',
+                      padding: '10px 24px',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      minWidth: '120px'
+                    }}
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowSiteObservationsCameraPreview(false);
+                      setSiteObservationsCapturedImageData(null);
+                      setCapturedPhotoMetadata(null);
+                      if (siteObservationsCameraStreamRef.current) {
+                        siteObservationsCameraStreamRef.current.getTracks().forEach((track: MediaStreamTrack) => track.stop());
+                        siteObservationsCameraStreamRef.current = null;
+                        setSiteObservationsCameraStream(null);
+                      }
+                    }}
+                    style={{
+                      backgroundColor: '#ef4444',
+                      color: '#ffffff',
+                      padding: '10px 24px',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      minWidth: '120px'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : siteObservationsCameraStream ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const video = document.getElementById('site-observations-camera-preview-video-rtu') as HTMLVideoElement;
+                      if (video && video.videoWidth > 0 && video.videoHeight > 0) {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        const ctx = canvas.getContext('2d');
+                        if (ctx) {
+                          // Draw video frame to canvas
+                          ctx.drawImage(video, 0, 0);
+                          
+                          // Get geolocation when capturing
+                          let latitude: number | undefined;
+                          let longitude: number | undefined;
+                          let locationName: string | undefined;
+                          const timestamp = new Date().toISOString();
+                          
+                          try {
+                            const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+                              navigator.geolocation.getCurrentPosition(resolve, reject, {
+                                enableHighAccuracy: true,
+                                timeout: 10000,
+                                maximumAge: 0
+                              });
+                            });
+                            
+                            latitude = position.coords.latitude;
+                            longitude = position.coords.longitude;
+                            
+                            // Try to get location name using reverse geocoding
+                            try {
+                              const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`);
+                              const data = await response.json();
+                              if (data.display_name) {
+                                locationName = data.display_name;
+                              }
+                            } catch (geoError) {
+                              console.log('Could not get location name:', geoError);
+                            }
+                          } catch (geoError: any) {
+                            console.log('Could not get geolocation:', geoError);
+                            // Continue without location if permission denied
+                          }
+                          
+                          // Get the image data
+                          const imageData = canvas.toDataURL('image/jpeg', 0.9);
+                          
+                          // Compress image to less than 1 MB
+                          let compressedImageData = imageData;
+                          try {
+                            compressedImageData = await compressImage(imageData);
+                          } catch (error) {
+                            console.error('Error compressing captured image:', error);
+                            // Fallback to original if compression fails
+                          }
+                          
+                          setSiteObservationsCapturedImageData(compressedImageData);
+                          setCapturedPhotoMetadata({
+                            latitude,
+                            longitude,
+                            timestamp,
+                            location: locationName
+                          });
+                          // Keep camera running for multiple captures
+                        }
+                      }
+                    }}
+                    style={{
+                      backgroundColor: '#10b981',
+                      color: '#ffffff',
+                      padding: '10px 24px',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      minWidth: '120px'
+                    }}
+                  >
+                    Capture
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Stop camera stream
+                      if (siteObservationsCameraStreamRef.current) {
+                        siteObservationsCameraStreamRef.current.getTracks().forEach((track: MediaStreamTrack) => track.stop());
+                        siteObservationsCameraStreamRef.current = null;
+                        setSiteObservationsCameraStream(null);
+                      }
+                      setShowSiteObservationsCameraPreview(false);
+                      setSiteObservationsCapturedImageData(null);
+                      setCapturedPhotoMetadata(null);
+                    }}
+                    style={{
+                      backgroundColor: '#ef4444',
+                      color: '#ffffff',
+                      padding: '10px 24px',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      minWidth: '120px'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : null}
             </div>
           </div>
         </div>
