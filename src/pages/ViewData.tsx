@@ -2424,7 +2424,7 @@ export default function ViewData() {
           
           // Convert Excel serial dates in date columns to proper date format
           // This handles both new uploads and existing data in the database
-          const rowsWithConvertedDates = fileRows.map((row: any, idx: number) => {
+          const rowsWithConvertedDates = fileRows.map((row: any) => {
             const convertedRow: any = { ...row };
             // Convert dates in all date columns - check both headers array and row keys
             // This ensures we catch all date columns even if headers aren't fully set
@@ -2573,8 +2573,8 @@ export default function ViewData() {
               // Convert Excel serial dates in date columns before assigning IDs
               const savedRowsWithConvertedDates = savedRows.map((row: any) => {
                 const convertedRow: any = { ...row };
-                // Convert dates in all date columns - check both headers array and row keys
-                const allKeys = new Set([...hdrs, ...Object.keys(row)]);
+                // Convert dates in all date columns - check both headers state and row keys
+                const allKeys = new Set([...headers, ...Object.keys(row)]);
                 allKeys.forEach((header: string) => {
                   if (isDateColumn(header) && convertedRow.hasOwnProperty(header)) {
                     const originalValue = convertedRow[header];
@@ -2726,8 +2726,8 @@ export default function ViewData() {
           // Convert Excel serial dates in date columns before assigning IDs
           const savedRowsWithConvertedDates = savedRows.map((row: any) => {
             const convertedRow: any = { ...row };
-            // Convert dates in all date columns - check both headers array and row keys
-            const allKeys = new Set([...hdrs, ...Object.keys(row)]);
+            // Convert dates in all date columns - check both headers state and row keys
+            const allKeys = new Set([...headers, ...Object.keys(row)]);
             allKeys.forEach((header: string) => {
               if (isDateColumn(header) && convertedRow.hasOwnProperty(header)) {
                 const originalValue = convertedRow[header];
