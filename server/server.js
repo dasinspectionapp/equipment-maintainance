@@ -1,4 +1,4 @@
-﻿import express from 'express';
+import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import path from 'path';
@@ -77,7 +77,8 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma', 'Expires']
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma', 'Expires'],
+  exposedHeaders: ['Content-Disposition', 'Content-Type', 'Content-Length']
 }));
 
 // Static assets for uploaded files

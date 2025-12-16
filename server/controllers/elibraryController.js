@@ -1,6 +1,7 @@
 import ELibraryResource from '../models/ELibraryResource.js';
 import path from 'path';
 import fs from 'fs/promises';
+import { createReadStream } from 'fs';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -429,15 +430,22 @@ export const downloadResource = async (req, res) => {
     resource.downloadCount += 1;
     await resource.save();
 
+    // Use res.download which handles headers properly
+    // It automatically sets Content-Disposition and handles file streaming
     res.download(filePath, resource.file.fileName, (err) => {
       if (err) {
         console.error('Error downloading file:', err);
+        console.error('File path:', filePath);
+        console.error('File exists check:', fs.access(filePath).then(() => 'exists').catch(() => 'not found'));
         if (!res.headersSent) {
           res.status(500).json({
             success: false,
-            error: 'Failed to download file'
+            error: 'Failed to download file',
+            details: process.env.NODE_ENV === 'development' ? err.message : undefined
           });
         }
+      } else {
+        console.log('File downloaded successfully:', resource.file.fileName);
       }
     });
   } catch (error) {

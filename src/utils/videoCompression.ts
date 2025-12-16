@@ -194,3 +194,4 @@ export async function videoBlobToBase64(videoBlob: Blob): Promise<string> {
     reader.readAsDataURL(videoBlob);
   });
 }
+

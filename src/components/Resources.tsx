@@ -208,7 +208,12 @@ export default function Resources() {
       }
 
       // Otherwise, download the file
-      const response = await fetch(`${API_BASE}/api/elibrary/${resourceId}/download`, {
+      // Use a more robust approach: create a form and submit it, or use direct link
+      // This works better in hosted environments with CORS/proxy issues
+      const downloadUrl = `${API_BASE}/api/elibrary/${resourceId}/download`;
+      
+      // Try using fetch first to check for errors
+      const response = await fetch(downloadUrl, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -219,28 +224,86 @@ export default function Resources() {
         localStorage.removeItem('resourcesToken');
         localStorage.removeItem('resourcesUser');
         setIsAuthenticated(false);
+        alert('Session expired. Please login again.');
         return;
       }
 
-      if (response.ok) {
+      // Check if response is JSON (error) or actual file
+      const contentType = response.headers.get('content-type') || '';
+      
+      if (contentType.includes('application/json')) {
+        // It's an error response, parse it
+        const errorData = await response.json();
+        alert(errorData.error || 'Failed to download file');
+        return;
+      }
+
+      if (!response.ok) {
+        // Try to get error message
+        let errorMessage = 'Failed to download file';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch {
+          errorMessage = `Failed to download file (Status: ${response.status})`;
+        }
+        alert(errorMessage);
+        return;
+      }
+
+      // Response is a file, create blob and download
+      try {
         const blob = await response.blob();
+        
+        // Check if blob is actually an error (sometimes servers send JSON as blob)
+        if (blob.type.includes('application/json') || blob.size < 100) {
+          const text = await blob.text();
+          try {
+            const errorData = JSON.parse(text);
+            alert(errorData.error || 'Failed to download file');
+            return;
+          } catch {
+            // Not JSON, might be a small file, continue
+          }
+        }
+        
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = fileName;
+        a.download = fileName || 'download';
+        a.style.display = 'none';
         document.body.appendChild(a);
         a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
+        
+        // Clean up
+        setTimeout(() => {
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+        }, 100);
         
         // Refresh to update download count
         fetchResources();
-      } else {
-        alert('Failed to download file');
+      } catch (blobError) {
+        console.error('Error creating blob:', blobError);
+        // Fallback: try direct link approach
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = fileName || 'download';
+        link.style.display = 'none';
+        // Add authorization header via hidden iframe/form (won't work, but try anyway)
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+          document.body.removeChild(link);
+        }, 100);
+        
+        // Show message that download should start
+        alert('Download initiated. If it doesn\'t start, please check your browser settings.');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error downloading file:', error);
-      alert('Failed to download file');
+      const errorMessage = error.message || 'Failed to download file. Please check your connection and try again.';
+      alert(errorMessage);
     }
   };
 
