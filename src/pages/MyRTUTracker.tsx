@@ -1032,7 +1032,7 @@ export default function MyRTUTracker() {
           console.log('MY RTU TRACKER - DIVISION key:', divisionKey);
           console.log('MY RTU TRACKER - Total rows before filtering:', fileRows.length);
           
-          // Remove unwanted columns from display: CIRCLE, RTU MAKE, ATTRIBUTE
+          // Remove unwanted columns from display: CIRCLE, RTU MAKE, ATTRIBUTE, NO OF DAYS OFFLINE, DEVICE TYPE, RTU L/R SWITCH STATUS_3, EQUIPEMNT L/R SWITCH STATUS_3
           hdrs = hdrs.filter((h: string) => {
             const normalized = normalize(h);
             
@@ -1049,6 +1049,38 @@ export default function MyRTUTracker() {
             
             // Remove ATTRIBUTE (from display, but we keep it in data for filtering)
             if (normalized === 'attribute' || normalized === 'attributes') {
+              return false;
+            }
+            
+            // Remove NO OF DAYS OFFLINE (handles all variations including with _3 suffix)
+            if ((normalized.includes('days') && normalized.includes('offline')) ||
+                normalized === 'noofdaysoffline' || normalized === 'no_of_days_offline' ||
+                normalized === 'numberofdaysoffline' || normalized === 'number_of_days_offline' ||
+                normalized === 'no of days offline' || normalized === 'number of days offline') {
+              return false;
+            }
+            
+            // Remove DEVICE TYPE
+            if ((normalized.includes('device') && normalized.includes('type')) ||
+                normalized === 'devicetype' || normalized === 'device_type' ||
+                normalized === 'device type') {
+              return false;
+            }
+            
+            // Remove RTU L/R SWITCH STATUS_3 (handles variations with _3 suffix)
+            if ((normalized.includes('rtu') && normalized.includes('l') && normalized.includes('r') && 
+                 normalized.includes('switch') && normalized.includes('status') && normalized.includes('3')) ||
+                (normalized.includes('rtu') && normalized.includes('switch') && normalized.includes('status') && normalized.includes('3'))) {
+              return false;
+            }
+            
+            // Remove EQUIPEMNT L/R SWITCH STATUS_3 (note: handles typo "EQUIPEMNT" as well as "EQUIPMENT")
+            if ((normalized.includes('equipemnt') && normalized.includes('l') && normalized.includes('r') && 
+                 normalized.includes('switch') && normalized.includes('status') && normalized.includes('3')) ||
+                (normalized.includes('equipment') && normalized.includes('l') && normalized.includes('r') && 
+                 normalized.includes('switch') && normalized.includes('status') && normalized.includes('3')) ||
+                (normalized.includes('equipemnt') && normalized.includes('switch') && normalized.includes('status') && normalized.includes('3')) ||
+                (normalized.includes('equipment') && normalized.includes('switch') && normalized.includes('status') && normalized.includes('3'))) {
               return false;
             }
             
@@ -1099,6 +1131,86 @@ export default function MyRTUTracker() {
           });
           
           console.log('MY RTU TRACKER - Headers after adding last five columns:', hdrs);
+          
+          // Remove duplicate columns for Equipment role
+          // Remove duplicate DEVICE STATUS_3 and NO OF DAYS OFFLINE_3 columns
+          if (userRole === 'Equipment') {
+            const columnsToRemove: number[] = [];
+            
+            // First pass: Find all DEVICE STATUS and NO OF DAYS OFFLINE columns
+            const deviceStatusColumns: Array<{ index: number; header: string; hasSuffix: boolean }> = [];
+            const noOfDaysOfflineColumns: Array<{ index: number; header: string; hasSuffix: boolean }> = [];
+            
+            hdrs.forEach((header: string, index: number) => {
+              const normalized = normalize(header);
+              
+              // Check for DEVICE STATUS columns
+              if ((normalized.includes('device') && normalized.includes('status')) ||
+                  normalized === 'devicestatus' || normalized === 'device_status') {
+                const hasSuffix = normalized.includes('3') || header.includes('_3');
+                deviceStatusColumns.push({ index, header, hasSuffix });
+              }
+              
+              // Check for NO OF DAYS OFFLINE columns
+              if ((normalized.includes('days') && normalized.includes('offline')) ||
+                  normalized === 'noofdaysoffline' || normalized === 'no_of_days_offline' ||
+                  normalized === 'numberofdaysoffline' || normalized === 'number_of_days_offline') {
+                const hasSuffix = normalized.includes('3') || header.includes('_3');
+                noOfDaysOfflineColumns.push({ index, header, hasSuffix });
+              }
+            });
+            
+            // Remove DEVICE STATUS_3 if we have DEVICE STATUS without _3
+            const hasDeviceStatusWithoutSuffix = deviceStatusColumns.some(col => !col.hasSuffix);
+            if (hasDeviceStatusWithoutSuffix) {
+              deviceStatusColumns.forEach(col => {
+                if (col.hasSuffix) {
+                  console.log(`MY RTU TRACKER - Removing duplicate DEVICE STATUS_3 column: ${col.header}`);
+                  columnsToRemove.push(col.index);
+                }
+              });
+            } else {
+              // If we only have _3 versions, keep only the first one
+              const _3Columns = deviceStatusColumns.filter(col => col.hasSuffix);
+              if (_3Columns.length > 1) {
+                _3Columns.slice(1).forEach(col => {
+                  console.log(`MY RTU TRACKER - Removing duplicate DEVICE STATUS_3 column: ${col.header}`);
+                  columnsToRemove.push(col.index);
+                });
+              }
+            }
+            
+            // Remove NO OF DAYS OFFLINE_3 if we have NO OF DAYS OFFLINE without _3
+            const hasNoOfDaysOfflineWithoutSuffix = noOfDaysOfflineColumns.some(col => !col.hasSuffix);
+            if (hasNoOfDaysOfflineWithoutSuffix) {
+              noOfDaysOfflineColumns.forEach(col => {
+                if (col.hasSuffix) {
+                  console.log(`MY RTU TRACKER - Removing duplicate NO OF DAYS OFFLINE_3 column: ${col.header}`);
+                  columnsToRemove.push(col.index);
+                }
+              });
+            } else {
+              // If we only have _3 versions, keep only the first one
+              const _3Columns = noOfDaysOfflineColumns.filter(col => col.hasSuffix);
+              if (_3Columns.length > 1) {
+                _3Columns.slice(1).forEach(col => {
+                  console.log(`MY RTU TRACKER - Removing duplicate NO OF DAYS OFFLINE_3 column: ${col.header}`);
+                  columnsToRemove.push(col.index);
+                });
+              }
+            }
+            
+            // Remove duplicate columns (in reverse order to maintain indices)
+            if (columnsToRemove.length > 0) {
+              columnsToRemove.sort((a, b) => b - a);
+              columnsToRemove.forEach(index => {
+                const removedHeader = hdrs[index];
+                hdrs.splice(index, 1);
+                console.log(`MY RTU TRACKER - Removed duplicate column at index ${index}: ${removedHeader}`);
+              });
+              console.log('MY RTU TRACKER - Headers after removing duplicates:', hdrs);
+            }
+          }
           
           // Apply filters
           let filteredRows = fileRows;
