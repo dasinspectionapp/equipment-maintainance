@@ -44,6 +44,97 @@ export default function Uploads() {
     }
   }, [selectedOption]);
 
+  // Helper function to convert Excel serial date to DD-MM-YYYY format
+  const convertExcelSerialToDate = (value: any): string | any => {
+    // If value is null, undefined, or empty string, return as is
+    if (value === null || value === undefined || value === '') {
+      return value;
+    }
+
+    // If it's already a string that looks like a date (DD-MM-YYYY, etc.), return as is
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      // Check if it's already in a date format (contains dashes or slashes)
+      if (trimmed.includes('-') || trimmed.includes('/') || trimmed.includes('.')) {
+        return trimmed;
+      }
+      // Check if it's a numeric string (Excel serial)
+      if (/^\d+$/.test(trimmed)) {
+        const numValue = parseFloat(trimmed);
+        // If it looks like a year (1900-2100), don't treat as Excel serial
+        if (numValue >= 1900 && numValue <= 2100) {
+          return trimmed;
+        }
+        // Check if it's in Excel serial range (1-1000000)
+        // Excel serial dates: 1 = Jan 1, 1900, ~36526 = Jan 1, 2000, ~45975 = Nov 14, 2025
+        if (numValue >= 1 && numValue <= 1000000) {
+          // Exclude numbers that look like years (1900-2100)
+          if (numValue >= 1900 && numValue <= 2100) {
+            return trimmed;
+          }
+          let excelDate: Date;
+          // Excel serial dates: 1 = Jan 1, 1900 (day 1 of year 1900)
+          // For serial < 60: dates are before the false leap day, so use serial directly
+          // For serial >= 60: Excel incorrectly includes Feb 29, 1900, so subtract 1
+          if (numValue < 60) {
+            excelDate = new Date(1900, 0, numValue);
+          } else {
+            excelDate = new Date(1900, 0, numValue - 1);
+          }
+          const resultYear = excelDate.getFullYear();
+          if (!isNaN(excelDate.getTime()) && resultYear >= 1900 && resultYear <= 2100) {
+            return excelDate.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+          }
+        }
+      }
+      return trimmed;
+    }
+
+    // If it's a number, check if it's an Excel serial date
+    if (typeof value === 'number') {
+      const numValue = value;
+      // If it looks like a year (1900-2100), don't treat as Excel serial
+      if (numValue >= 1900 && numValue <= 2100) {
+        return numValue;
+      }
+      // Check if it's in Excel serial range (1-1000000)
+      // Excel serial dates: 1 = Jan 1, 1900, ~36526 = Jan 1, 2000, ~45975 = Nov 14, 2025
+      if (numValue >= 1 && numValue <= 1000000) {
+        // Exclude numbers that look like years (1900-2100)
+        if (numValue >= 1900 && numValue <= 2100) {
+          return numValue;
+        }
+        let excelDate: Date;
+        // Excel serial dates: 1 = Jan 1, 1900 (day 1 of year 1900)
+        // For serial < 60: dates are before the false leap day, so use serial directly
+        // For serial >= 60: Excel incorrectly includes Feb 29, 1900, so subtract 1
+        if (numValue < 60) {
+          excelDate = new Date(1900, 0, numValue);
+        } else {
+          excelDate = new Date(1900, 0, numValue - 1);
+        }
+        const resultYear = excelDate.getFullYear();
+        if (!isNaN(excelDate.getTime()) && resultYear >= 1900 && resultYear <= 2100) {
+          return excelDate.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        }
+      }
+    }
+
+    // Return as is if no conversion needed
+    return value;
+  };
+
+  // Helper function to check if a column header indicates a date column
+  const isDateColumn = (header: string): boolean => {
+    const headerLower = header.toLowerCase();
+    return (
+      headerLower.includes('date') ||
+      headerLower.includes('ccr date of observation') ||
+      headerLower.includes('observation date') ||
+      headerLower.includes('inspection date')
+    );
+  };
+
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
@@ -74,7 +165,13 @@ export default function Uploads() {
               const values = lines[i].split(',');
               const row: any = { id: `${fileObj.id}-${i}` };
               headers.forEach((header, index) => {
-                row[header.trim()] = values[index]?.trim() || '';
+                const headerTrimmed = header.trim();
+                let cellValue = values[index]?.trim() || '';
+                // Convert Excel serial dates in date columns
+                if (isDateColumn(headerTrimmed)) {
+                  cellValue = convertExcelSerialToDate(cellValue);
+                }
+                row[headerTrimmed] = cellValue;
               });
               fileRows.push(row);
             }
@@ -102,7 +199,12 @@ export default function Uploads() {
               const values = jsonData[i] as any[];
               const row: any = { id: `${fileObj.id}-${i}` };
               headers.forEach((header, index) => {
-                row[header] = values[index] !== undefined && values[index] !== null ? values[index] : '';
+                let cellValue = values[index] !== undefined && values[index] !== null ? values[index] : '';
+                // Convert Excel serial dates in date columns (especially for RTU TRACKER uploads)
+                if (isDateColumn(header)) {
+                  cellValue = convertExcelSerialToDate(cellValue);
+                }
+                row[header] = cellValue;
               });
               fileRows.push(row);
             }

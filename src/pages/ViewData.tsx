@@ -25,6 +25,97 @@ function normalize(str: string): string {
   return str.trim().toLowerCase();
 }
 
+// Helper function to convert Excel serial date to DD-MM-YYYY format
+function convertExcelSerialToDate(value: any): string | any {
+  // If value is null, undefined, or empty string, return as is
+  if (value === null || value === undefined || value === '') {
+    return value;
+  }
+
+  // If it's already a string that looks like a date (DD-MM-YYYY, etc.), return as is
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    // Check if it's already in a date format (contains dashes or slashes)
+    if (trimmed.includes('-') || trimmed.includes('/') || trimmed.includes('.')) {
+      return trimmed;
+    }
+    // Check if it's a numeric string (Excel serial)
+    if (/^\d+$/.test(trimmed)) {
+      const numValue = parseFloat(trimmed);
+      // If it looks like a year (1900-2100), don't treat as Excel serial
+      if (numValue >= 1900 && numValue <= 2100) {
+        return trimmed;
+      }
+      // Check if it's in Excel serial range (1-1000000)
+      // Excel serial dates: 1 = Jan 1, 1900, ~36526 = Jan 1, 2000, ~45975 = Nov 14, 2025
+      if (numValue >= 1 && numValue <= 1000000) {
+        // Exclude numbers that look like years (1900-2100)
+        if (numValue >= 1900 && numValue <= 2100) {
+          return trimmed;
+        }
+        let excelDate: Date;
+        // Excel serial dates: 1 = Jan 1, 1900 (day 1 of year 1900)
+        // For serial < 60: dates are before the false leap day, so use serial directly
+        // For serial >= 60: Excel incorrectly includes Feb 29, 1900, so subtract 1
+        if (numValue < 60) {
+          excelDate = new Date(1900, 0, numValue);
+        } else {
+          excelDate = new Date(1900, 0, numValue - 1);
+        }
+        const resultYear = excelDate.getFullYear();
+        if (!isNaN(excelDate.getTime()) && resultYear >= 1900 && resultYear <= 2100) {
+          return excelDate.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        }
+      }
+    }
+    return trimmed;
+  }
+
+  // If it's a number, check if it's an Excel serial date
+  if (typeof value === 'number') {
+    const numValue = value;
+    // If it looks like a year (1900-2100), don't treat as Excel serial
+    if (numValue >= 1900 && numValue <= 2100) {
+      return numValue;
+    }
+    // Check if it's in Excel serial range (1-1000000)
+    // Excel serial dates: 1 = Jan 1, 1900, ~36526 = Jan 1, 2000, ~45975 = Nov 14, 2025
+    if (numValue >= 1 && numValue <= 1000000) {
+      // Exclude numbers that look like years (1900-2100)
+      if (numValue >= 1900 && numValue <= 2100) {
+        return numValue;
+      }
+      let excelDate: Date;
+      // Excel serial dates: 1 = Jan 1, 1900 (day 1 of year 1900)
+      // For serial < 60: dates are before the false leap day, so use serial directly
+      // For serial >= 60: Excel incorrectly includes Feb 29, 1900, so subtract 1
+      if (numValue < 60) {
+        excelDate = new Date(1900, 0, numValue);
+      } else {
+        excelDate = new Date(1900, 0, numValue - 1);
+      }
+      const resultYear = excelDate.getFullYear();
+      if (!isNaN(excelDate.getTime()) && resultYear >= 1900 && resultYear <= 2100) {
+        return excelDate.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      }
+    }
+  }
+
+  // Return as is if no conversion needed
+  return value;
+}
+
+// Helper function to check if a column header indicates a date column
+function isDateColumn(header: string): boolean {
+  const headerLower = header.toLowerCase();
+  return (
+    headerLower.includes('date') ||
+    headerLower.includes('ccr date of observation') ||
+    headerLower.includes('observation date') ||
+    headerLower.includes('inspection date')
+  );
+}
+
 type FilterDef = { label: string; keys: string[] };
 const FILTER_DEFS: FilterDef[] = [
   { label: "CIRCLE", keys: [
@@ -2331,8 +2422,28 @@ export default function ViewData() {
             console.log('Single EQUIPMENT L/R SWITCH STATUS column found, no deduplication needed:', equipmentLRSwitchColumns[0]);
           }
           
+          // Convert Excel serial dates in date columns to proper date format
+          // This handles both new uploads and existing data in the database
+          const rowsWithConvertedDates = fileRows.map((row: any, idx: number) => {
+            const convertedRow: any = { ...row };
+            // Convert dates in all date columns - check both headers array and row keys
+            // This ensures we catch all date columns even if headers aren't fully set
+            const allKeys = new Set([...hdrs, ...Object.keys(row)]);
+            allKeys.forEach((header: string) => {
+              if (isDateColumn(header) && convertedRow.hasOwnProperty(header)) {
+                const originalValue = convertedRow[header];
+                const convertedValue = convertExcelSerialToDate(originalValue);
+                if (originalValue !== convertedValue) {
+                  console.log(`[Date Conversion] Converting "${header}": ${originalValue} -> ${convertedValue}`);
+                }
+                convertedRow[header] = convertedValue;
+              }
+            });
+            return convertedRow;
+          });
+          
           // Ensure all rows have an id field for tracking (use index if not present)
-          const rowsWithId = fileRows.map((row: any, idx: number) => ({
+          const rowsWithId = rowsWithConvertedDates.map((row: any, idx: number) => ({
             ...row,
             id: row.id || `${selectedFile}-${idx}`
           }));
@@ -2459,8 +2570,26 @@ export default function ViewData() {
               const savedRows = Array.isArray(verifyJson.file.rows) ? verifyJson.file.rows : [];
               console.log(`[BULK SAVE] Verified: Database now contains ${savedRows.length} rows`);
               
+              // Convert Excel serial dates in date columns before assigning IDs
+              const savedRowsWithConvertedDates = savedRows.map((row: any) => {
+                const convertedRow: any = { ...row };
+                // Convert dates in all date columns - check both headers array and row keys
+                const allKeys = new Set([...hdrs, ...Object.keys(row)]);
+                allKeys.forEach((header: string) => {
+                  if (isDateColumn(header) && convertedRow.hasOwnProperty(header)) {
+                    const originalValue = convertedRow[header];
+                    const convertedValue = convertExcelSerialToDate(originalValue);
+                    if (originalValue !== convertedValue) {
+                      console.log(`[Date Conversion] Converting "${header}": ${originalValue} -> ${convertedValue}`);
+                    }
+                    convertedRow[header] = convertedValue;
+                  }
+                });
+                return convertedRow;
+              });
+              
               // Reassign id fields to saved rows for frontend tracking
-              const savedRowsWithId = savedRows.map((row: any, idx: number) => ({
+              const savedRowsWithId = savedRowsWithConvertedDates.map((row: any, idx: number) => ({
                 ...row,
                 id: row.id || `${selectedFile}-${idx}`
               }));
@@ -2594,8 +2723,26 @@ export default function ViewData() {
           const savedRows = Array.isArray(verifyJson.file.rows) ? verifyJson.file.rows : [];
           console.log(`Verified: Database now contains ${savedRows.length} rows`);
           
+          // Convert Excel serial dates in date columns before assigning IDs
+          const savedRowsWithConvertedDates = savedRows.map((row: any) => {
+            const convertedRow: any = { ...row };
+            // Convert dates in all date columns - check both headers array and row keys
+            const allKeys = new Set([...hdrs, ...Object.keys(row)]);
+            allKeys.forEach((header: string) => {
+              if (isDateColumn(header) && convertedRow.hasOwnProperty(header)) {
+                const originalValue = convertedRow[header];
+                const convertedValue = convertExcelSerialToDate(originalValue);
+                if (originalValue !== convertedValue) {
+                  console.log(`[Date Conversion] Converting "${header}": ${originalValue} -> ${convertedValue}`);
+                }
+                convertedRow[header] = convertedValue;
+              }
+            });
+            return convertedRow;
+          });
+          
           // Reassign id fields to saved rows for frontend tracking
-          const savedRowsWithId = savedRows.map((row: any, idx: number) => ({
+          const savedRowsWithId = savedRowsWithConvertedDates.map((row: any, idx: number) => ({
             ...row,
             id: row.id || `${selectedFile}-${idx}`
           }));
