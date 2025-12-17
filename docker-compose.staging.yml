@@ -4,6 +4,9 @@ services:
       context: ./server
     container_name: backend-staging
     restart: always
+    volumes:
+      # Persist uploaded e-library files across container restarts/deploys
+      - ./server/uploads:/app/uploads
     environment:
       MONGODB_URI: mongodb://admin:password@192.168.29.14:27017/das?authSource=admin&authMechanism=SCRAM-SHA-256
       PORT: 4000

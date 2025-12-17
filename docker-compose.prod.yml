@@ -4,6 +4,9 @@ services:
       context: ./server
     container_name: backend-prod
     restart: always
+    volumes:
+      # Persist uploaded e-library files across container restarts/deploys
+      - ./server/uploads:/app/uploads
     # Try without host network - use bridge network like other containers that work
     # network_mode: "host"  # Commented out - try bridge network instead
     environment:
