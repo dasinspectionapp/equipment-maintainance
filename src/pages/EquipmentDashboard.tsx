@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
+import { API_BASE } from '../utils/api';
 
 type UploadedFile = {
   fileId: string;
@@ -56,11 +57,14 @@ export default function EquipmentDashboard() {
   const navigate = useNavigate();
   const user = getCurrentUser();
   const role = user?.role || '';
+  const normalizedRole = (role || '').toLowerCase().trim();
   const userDivisions: string[] = Array.isArray(user?.division)
     ? user.division
     : user?.division
     ? [user.division]
     : [];
+  // Normalize API base so it works in production (nginx proxy) and local dev
+  const apiBase = (API_BASE || '').replace(/\/$/, '');
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -90,7 +94,7 @@ export default function EquipmentDashboard() {
   useEffect(() => {
     (async () => {
       // Allow both Equipment and CCR roles
-      if (role !== 'Equipment' && role !== 'CCR') {
+      if (normalizedRole !== 'equipment' && normalizedRole !== 'ccr') {
         setIsLoading(false);
         return;
       }
@@ -105,7 +109,7 @@ export default function EquipmentDashboard() {
         }
 
         // 1) Fetch all uploads
-        const uploadsRes = await fetch('http://localhost:5000/api/uploads', {
+        const uploadsRes = await fetch(`${apiBase}/api/uploads`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -192,7 +196,7 @@ export default function EquipmentDashboard() {
         if (deviceStatusFile) {
           console.log('CCR Dashboard - Fetching Device Status Upload file:', deviceStatusFile.name);
           try {
-            const dsRes = await fetch(`http://localhost:5000/api/uploads/${deviceStatusFile.fileId}`, {
+            const dsRes = await fetch(`${apiBase}/api/uploads/${deviceStatusFile.fileId}`, {
               headers: {
                 Authorization: `Bearer ${token}`,
               },
@@ -222,7 +226,7 @@ export default function EquipmentDashboard() {
         }
 
         // 4) Fetch ONLINE-OFFLINE file data
-        const ooRes = await fetch(`http://localhost:5000/api/uploads/${onlineOfflineFile.fileId}`, {
+        const ooRes = await fetch(`${apiBase}/api/uploads/${onlineOfflineFile.fileId}`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
