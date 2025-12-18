@@ -44,10 +44,7 @@ export default function TicketStatus() {
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      const userData = JSON.parse(storedUser);
-      setUser(userData);
-    } else {
+    if (!storedUser) {
       navigate('/signin');
       return;
     }

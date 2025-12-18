@@ -183,30 +183,42 @@ export default function RaiseTicket() {
       // Process attachments
       const attachmentData = [];
       for (const file of attachments) {
-        let processedFile = file;
+        let base64: string;
         
         // Compress images
         if (file.type.startsWith('image/')) {
           try {
-            processedFile = await compressImage(file, 0.8);
+            // compressImage returns a data URL string directly
+            base64 = await compressImage(file, 0.8);
           } catch (err) {
             console.warn('Failed to compress image, using original:', err);
+            // Fallback: convert original file to base64
+            const reader = new FileReader();
+            base64 = await new Promise<string>((resolve, reject) => {
+              reader.onload = () => {
+                const result = reader.result as string;
+                resolve(result);
+              };
+              reader.onerror = reject;
+              reader.readAsDataURL(file);
+            });
           }
+        } else {
+          // For non-image files, convert to base64
+          const reader = new FileReader();
+          base64 = await new Promise<string>((resolve, reject) => {
+            reader.onload = () => {
+              const result = reader.result as string;
+              resolve(result);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
         }
 
-        const reader = new FileReader();
-        const base64 = await new Promise<string>((resolve, reject) => {
-          reader.onload = () => {
-            const result = reader.result as string;
-            resolve(result);
-          };
-          reader.onerror = reject;
-          reader.readAsDataURL(processedFile);
-        });
-
         attachmentData.push({
-          fileName: processedFile.name,
-          fileType: processedFile.type,
+          fileName: file.name,
+          fileType: file.type,
           data: base64
         });
       }

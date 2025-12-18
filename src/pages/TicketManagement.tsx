@@ -31,7 +31,6 @@ interface User {
 
 export default function TicketManagement() {
   const navigate = useNavigate();
-  const [user, setUser] = useState<any>(null);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -61,7 +60,6 @@ export default function TicketManagement() {
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
       const userData = JSON.parse(storedUser);
-      setUser(userData);
       
       if (userData.role !== 'Admin') {
         navigate('/dashboard');
