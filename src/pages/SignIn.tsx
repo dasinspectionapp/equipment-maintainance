@@ -48,11 +48,20 @@ export default function SignIn() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-electrical-blue-dark via-electrical-blue to-blue-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen bg-gradient-to-br from-electrical-blue-dark via-electrical-blue to-blue-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+      {/* Electrical Power System Network/Grid/Distribution Background Image */}
+      <div className="absolute inset-0 overflow-hidden bg-cover bg-center bg-no-repeat" 
+           style={{
+             backgroundImage: 'url(https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1920&h=1080&fit=crop)',
+             opacity: 0.4
+           }}>
+      </div>
+      
+      {/* Content */}
+      <div className="w-full max-w-md relative z-10">
         <button
           onClick={() => navigate('/')}
-          className="mb-6 flex items-center text-white hover:text-blue-200 transition-colors"
+          className="mb-6 flex items-center text-white hover:text-blue-200 transition-colors relative z-20"
         >
           <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -64,4 +73,3 @@ export default function SignIn() {
     </div>
   );
 }
-
