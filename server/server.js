@@ -34,6 +34,7 @@ import rtuTrackerSitesRoutes from './routes/rtuTrackerSitesRoutes.js';
 import rtuTrackerApprovalRoutes from './routes/rtuTrackerApprovalRoutes.js';
 import approvalRoutes from './routes/approvalRoutes.js';
 import elibraryRoutes from './routes/elibraryRoutes.js';
+import ticketRoutes from './routes/ticketRoutes.js';
 import { getLocationsBySiteCodes } from './controllers/locationController.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -152,6 +153,7 @@ app.post('/api/locations/by-site-codes', protect, getLocationsBySiteCodes);
 
 app.use('/api/landing', landingPageRoutes);
 app.use('/api/elibrary', elibraryRoutes);
+app.use('/api/tickets', ticketRoutes);
 
 // Error handling middleware
 app.use(notFound);

@@ -1,0 +1,776 @@
+import Ticket from '../models/Ticket.js';
+import User from '../models/User.js';
+import EmailConfig from '../models/EmailConfig.js';
+import nodemailer from 'nodemailer';
+import path from 'path';
+import fs from 'fs/promises';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const uploadsDir = path.join(__dirname, '..', 'uploads', 'tickets');
+
+// Ensure uploads directory exists
+const ensureUploadsDir = async () => {
+  try {
+    await fs.mkdir(uploadsDir, { recursive: true });
+  } catch (error) {
+    console.error('Error creating tickets uploads directory:', error);
+  }
+};
+
+// Helper function to send email notifications
+const sendEmailNotification = async (to, subject, htmlContent) => {
+  try {
+    const emailConfig = await EmailConfig.findOne();
+    
+    if (!emailConfig || !emailConfig.enabled) {
+      console.log('Email notifications disabled or not configured');
+      return { success: false, message: 'Email not configured' };
+    }
+
+    const transporter = nodemailer.createTransport({
+      host: emailConfig.host,
+      port: parseInt(emailConfig.port),
+      secure: emailConfig.secure,
+      auth: {
+        user: emailConfig.auth.user,
+        pass: emailConfig.auth.pass
+      }
+    });
+
+    const mailOptions = {
+      from: `"${emailConfig.fromName}" <${emailConfig.fromEmail}>`,
+      to: to,
+      subject: subject,
+      html: htmlContent
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log('Email sent:', info.messageId);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error('Error sending email:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// @desc    Create a new ticket
+// @route   POST /api/tickets
+// @access  Protected (all users except admin)
+export const createTicket = async (req, res) => {
+  try {
+    await ensureUploadsDir();
+
+    const {
+      application,
+      category,
+      subject,
+      description,
+      priority,
+      attachments: attachmentData
+    } = req.body;
+
+    // Validation
+    if (!application || !category || !subject || !description) {
+      return res.status(400).json({
+        success: false,
+        error: 'Application, category, subject, and description are required'
+      });
+    }
+
+    const user = req.user;
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        error: 'User not authenticated'
+      });
+    }
+
+    // req.user is already the full user document from the database (set by protect middleware)
+    // Use it directly - no need to query again
+    const userDetails = user;
+    
+    // Ensure userId exists (it should be in the User model)
+    if (!userDetails.userId) {
+      console.error('User object missing userId. User object:', {
+        _id: userDetails._id,
+        email: userDetails.email,
+        fullName: userDetails.fullName,
+        keys: Object.keys(userDetails)
+      });
+      return res.status(400).json({
+        success: false,
+        error: 'User data incomplete. Please contact administrator.'
+      });
+    }
+
+    // Auto-capture browser/OS info from request headers
+    const userAgent = req.headers['user-agent'] || '';
+    let browser = 'Unknown';
+    let os = 'Unknown';
+
+    // Simple browser detection
+    if (userAgent.includes('Chrome')) browser = 'Chrome';
+    else if (userAgent.includes('Firefox')) browser = 'Firefox';
+    else if (userAgent.includes('Safari')) browser = 'Safari';
+    else if (userAgent.includes('Edge')) browser = 'Edge';
+
+    // Simple OS detection
+    if (userAgent.includes('Windows')) os = 'Windows';
+    else if (userAgent.includes('Mac')) os = 'macOS';
+    else if (userAgent.includes('Linux')) os = 'Linux';
+    else if (userAgent.includes('Android')) os = 'Android';
+    else if (userAgent.includes('iOS')) os = 'iOS';
+
+    // Handle file attachments
+    const attachments = [];
+    if (attachmentData && Array.isArray(attachmentData)) {
+      for (const att of attachmentData) {
+        if (att.data && att.fileName) {
+          // Handle base64 file upload
+          const base64Data = att.data.replace(/^data:.*,/, '');
+          const buffer = Buffer.from(base64Data, 'base64');
+          const timestamp = Date.now();
+          const sanitizedFileName = att.fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+          const fileName = `${timestamp}-${sanitizedFileName}`;
+          const filePath = path.join(uploadsDir, fileName);
+
+          await fs.writeFile(filePath, buffer);
+
+          attachments.push({
+            fileName: att.fileName,
+            fileUrl: `uploads/tickets/${fileName}`,
+            fileSize: buffer.length,
+            fileType: att.fileType || 'application/octet-stream',
+            uploadedAt: new Date()
+          });
+        }
+      }
+    }
+
+    // Create ticket (ticketNumber will be auto-generated by pre-save hook)
+    const ticketData = {
+      userId: userDetails.userId,
+      userName: userDetails.fullName || userDetails.userId || 'Unknown User',
+      email: userDetails.email || '',
+      mobile: userDetails.mobile || '',
+      application,
+      category,
+      subject,
+      description,
+      priority: priority || 'Medium',
+      status: 'Open',
+      attachments,
+      userIP: req.ip || req.connection?.remoteAddress || req.headers['x-forwarded-for'] || 'Unknown',
+      browser,
+      os,
+      statusHistory: [
+        {
+          status: 'Open',
+          changedBy: {
+            userId: userDetails.userId,
+            userName: userDetails.fullName || userDetails.userId || 'Unknown User'
+          },
+          changedAt: new Date(),
+          note: 'Ticket created'
+        }
+      ]
+    };
+
+    // Create ticket instance first to trigger pre-save hook
+    const ticket = new Ticket(ticketData);
+    await ticket.save();
+
+    // Send email notification to admins
+    try {
+      const admins = await User.find({ role: 'Admin', isActive: true });
+      const adminEmails = admins.map(admin => admin.email).filter(Boolean);
+
+      if (adminEmails.length > 0) {
+        const emailSubject = `New Support Ticket: ${ticket.ticketNumber} - ${subject}`;
+        const emailHtml = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #2563eb;">New Support Ticket Created</h2>
+            <p><strong>Ticket Number:</strong> ${ticket.ticketNumber}</p>
+            <p><strong>User:</strong> ${ticket.userName} (${ticket.userId})</p>
+            <p><strong>Application:</strong> ${application}</p>
+            <p><strong>Category:</strong> ${category}</p>
+            <p><strong>Priority:</strong> ${priority || 'Medium'}</p>
+            <p><strong>Subject:</strong> ${subject}</p>
+            <p><strong>Description:</strong></p>
+            <p style="background: #f3f4f6; padding: 15px; border-radius: 5px;">${description.replace(/\n/g, '<br>')}</p>
+            <p style="margin-top: 20px;">
+              <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard/tickets" 
+                 style="background: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+                View Ticket
+              </a>
+            </p>
+          </div>
+        `;
+
+        await sendEmailNotification(adminEmails.join(', '), emailSubject, emailHtml);
+      }
+    } catch (emailError) {
+      console.error('Error sending email notification:', emailError);
+      // Don't fail ticket creation if email fails
+    }
+
+    // Send confirmation email to user
+    try {
+      const userEmailSubject = `Support Ticket Created: ${ticket.ticketNumber}`;
+      const userEmailHtml = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #2563eb;">Your Support Ticket Has Been Created</h2>
+          <p>Thank you for contacting support. We have received your ticket and will respond soon.</p>
+          <p><strong>Ticket Number:</strong> ${ticket.ticketNumber}</p>
+          <p><strong>Subject:</strong> ${subject}</p>
+          <p><strong>Status:</strong> Open</p>
+          <p><strong>Priority:</strong> ${priority || 'Medium'}</p>
+          <p>You will receive email updates when your ticket status changes.</p>
+        </div>
+      `;
+
+      await sendEmailNotification(ticket.email, userEmailSubject, userEmailHtml);
+    } catch (emailError) {
+      console.error('Error sending confirmation email:', emailError);
+    }
+
+    res.status(201).json({
+      success: true,
+      data: ticket
+    });
+  } catch (error) {
+    console.error('Error creating ticket:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Request body:', req.body);
+    console.error('User:', req.user ? { userId: req.user.userId, email: req.user.email } : 'No user');
+    
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to create ticket',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// @desc    Get all tickets (with filters)
+// @route   GET /api/tickets
+// @access  Protected
+export const getTickets = async (req, res) => {
+  try {
+    const {
+      status,
+      priority,
+      category,
+      assignedTo,
+      userId,
+      page = 1,
+      limit = 50
+    } = req.query;
+
+    const user = req.user;
+    const query = {};
+
+    // Non-admin users can only see their own tickets
+    if (user.role !== 'Admin') {
+      query.userId = user.userId;
+    } else {
+      // Admin can filter by userId if provided
+      if (userId) {
+        query.userId = userId;
+      }
+    }
+
+    // Apply filters
+    if (status) query.status = status;
+    if (priority) query.priority = priority;
+    if (category) query.category = category;
+    if (assignedTo) query['assignedTo.userId'] = assignedTo;
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const tickets = await Ticket.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await Ticket.countDocuments(query);
+
+    res.json({
+      success: true,
+      count: tickets.length,
+      total,
+      page: parseInt(page),
+      pages: Math.ceil(total / parseInt(limit)),
+      data: tickets
+    });
+  } catch (error) {
+    console.error('Error fetching tickets:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch tickets'
+    });
+  }
+};
+
+// @desc    Get single ticket
+// @route   GET /api/tickets/:id
+// @access  Protected
+export const getTicket = async (req, res) => {
+  try {
+    const ticket = await Ticket.findById(req.params.id);
+
+    if (!ticket) {
+      return res.status(404).json({
+        success: false,
+        error: 'Ticket not found'
+      });
+    }
+
+    const user = req.user;
+    // Non-admin users can only view their own tickets
+    if (user.role !== 'Admin' && ticket.userId !== user.userId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: ticket
+    });
+  } catch (error) {
+    console.error('Error fetching ticket:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch ticket'
+    });
+  }
+};
+
+// @desc    Update ticket (Admin only)
+// @route   PUT /api/tickets/:id
+// @access  Protected (Admin only)
+export const updateTicket = async (req, res) => {
+  try {
+    const ticket = await Ticket.findById(req.params.id);
+
+    if (!ticket) {
+      return res.status(404).json({
+        success: false,
+        error: 'Ticket not found'
+      });
+    }
+
+    const user = req.user;
+    if (user.role !== 'Admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Only admins can update tickets'
+      });
+    }
+
+    const {
+      status,
+      priority,
+      assignedTo,
+      resolutionNote
+    } = req.body;
+
+    const oldStatus = ticket.status;
+    const oldPriority = ticket.priority;
+
+    // Update fields
+    if (status && status !== ticket.status) {
+      ticket.status = status;
+      ticket.addStatusHistory(status, {
+        userId: user.userId,
+        userName: user.fullName || user.userId
+      }, `Status changed from ${oldStatus} to ${status}`);
+
+      // Set resolved/closed timestamps
+      if (status === 'Resolved' && !ticket.resolvedAt) {
+        ticket.resolvedAt = new Date();
+        ticket.resolvedBy = {
+          userId: user.userId,
+          userName: user.fullName || user.userId
+        };
+      }
+      if (status === 'Closed' && !ticket.closedAt) {
+        ticket.closedAt = new Date();
+        ticket.closedBy = {
+          userId: user.userId,
+          userName: user.fullName || user.userId
+        };
+      }
+    }
+
+    if (priority) ticket.priority = priority;
+
+    if (assignedTo) {
+      const assignedUser = await User.findOne({ userId: assignedTo });
+      if (assignedUser) {
+        ticket.assignedTo = {
+          userId: assignedTo,
+          userName: assignedUser.fullName || assignedTo,
+          assignedAt: new Date()
+        };
+        if (ticket.status === 'Open') {
+          ticket.status = 'Assigned';
+          ticket.addStatusHistory('Assigned', {
+            userId: user.userId,
+            userName: user.fullName || user.userId
+          }, `Ticket assigned to ${assignedUser.fullName}`);
+        }
+      }
+    }
+
+    if (resolutionNote) ticket.resolutionNote = resolutionNote;
+
+    await ticket.save();
+
+    // Send email notification on status change
+    try {
+      if (status && status !== oldStatus) {
+        const emailSubject = `Ticket ${ticket.ticketNumber} Status Updated: ${status}`;
+        const emailHtml = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #2563eb;">Ticket Status Updated</h2>
+            <p><strong>Ticket Number:</strong> ${ticket.ticketNumber}</p>
+            <p><strong>Subject:</strong> ${ticket.subject}</p>
+            <p><strong>Previous Status:</strong> ${oldStatus}</p>
+            <p><strong>New Status:</strong> ${status}</p>
+            ${resolutionNote ? `<p><strong>Resolution Note:</strong> ${resolutionNote}</p>` : ''}
+            <p style="margin-top: 20px;">
+              <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard/raise-ticket/${ticket._id}" 
+                 style="background: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+                View Ticket
+              </a>
+            </p>
+          </div>
+        `;
+
+        await sendEmailNotification(ticket.email, emailSubject, emailHtml);
+      }
+    } catch (emailError) {
+      console.error('Error sending status change email:', emailError);
+    }
+
+    res.json({
+      success: true,
+      data: ticket
+    });
+  } catch (error) {
+    console.error('Error updating ticket:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update ticket'
+    });
+  }
+};
+
+// @desc    Add comment to ticket
+// @route   POST /api/tickets/:id/comments
+// @access  Protected
+export const addComment = async (req, res) => {
+  try {
+    const ticket = await Ticket.findById(req.params.id);
+
+    if (!ticket) {
+      return res.status(404).json({
+        success: false,
+        error: 'Ticket not found'
+      });
+    }
+
+    const user = req.user;
+    const { comment, isInternal = false, attachments: attachmentData } = req.body;
+
+    if (!comment || !comment.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Comment is required'
+      });
+    }
+
+    // Non-admin users cannot add internal comments
+    const finalIsInternal = user.role === 'Admin' ? isInternal : false;
+
+    // Handle file attachments
+    const attachments = [];
+    if (attachmentData && Array.isArray(attachmentData)) {
+      await ensureUploadsDir();
+      for (const att of attachmentData) {
+        if (att.data && att.fileName) {
+          const base64Data = att.data.replace(/^data:.*,/, '');
+          const buffer = Buffer.from(base64Data, 'base64');
+          const timestamp = Date.now();
+          const sanitizedFileName = att.fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+          const fileName = `${timestamp}-${sanitizedFileName}`;
+          const filePath = path.join(uploadsDir, fileName);
+
+          await fs.writeFile(filePath, buffer);
+
+          attachments.push({
+            fileName: att.fileName,
+            fileUrl: `uploads/tickets/${fileName}`,
+            fileSize: buffer.length,
+            fileType: att.fileType || 'application/octet-stream'
+          });
+        }
+      }
+    }
+
+    // Add comment
+    ticket.comments.push({
+      userId: user.userId,
+      userName: user.fullName || user.userId,
+      userRole: user.role,
+      comment: comment.trim(),
+      isInternal: finalIsInternal,
+      attachments,
+      createdAt: new Date()
+    });
+
+    // Update status if admin replies
+    if (user.role === 'Admin' && ticket.status === 'Waiting for User') {
+      ticket.status = 'In Progress';
+      ticket.addStatusHistory('In Progress', {
+        userId: user.userId,
+        userName: user.fullName || user.userId
+      }, 'Admin replied');
+    } else if (user.role !== 'Admin' && ticket.status !== 'Waiting for User') {
+      ticket.status = 'Waiting for User';
+      ticket.addStatusHistory('Waiting for User', {
+        userId: user.userId,
+        userName: user.fullName || user.userId
+      }, 'User replied');
+    }
+
+    await ticket.save();
+
+    // Send email notification
+    try {
+      if (!finalIsInternal) {
+        // Notify the other party
+        const recipientEmail = user.role === 'Admin' ? ticket.email : null;
+        const adminEmails = user.role !== 'Admin' 
+          ? (await User.find({ role: 'Admin', isActive: true })).map(a => a.email).filter(Boolean)
+          : [];
+
+        const emails = recipientEmail ? [recipientEmail] : adminEmails;
+        if (emails.length > 0) {
+          const emailSubject = `New Reply on Ticket ${ticket.ticketNumber}`;
+          const emailHtml = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #2563eb;">New Reply on Ticket</h2>
+              <p><strong>Ticket Number:</strong> ${ticket.ticketNumber}</p>
+              <p><strong>Subject:</strong> ${ticket.subject}</p>
+              <p><strong>From:</strong> ${user.fullName || user.userId}</p>
+              <p><strong>Reply:</strong></p>
+              <p style="background: #f3f4f6; padding: 15px; border-radius: 5px;">${comment.replace(/\n/g, '<br>')}</p>
+              <p style="margin-top: 20px;">
+                <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard/raise-ticket/${ticket._id}" 
+                   style="background: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+                  View Ticket
+                </a>
+              </p>
+            </div>
+          `;
+
+          await sendEmailNotification(emails.join(', '), emailSubject, emailHtml);
+        }
+      }
+    } catch (emailError) {
+      console.error('Error sending comment email:', emailError);
+    }
+
+    res.json({
+      success: true,
+      data: ticket
+    });
+  } catch (error) {
+    console.error('Error adding comment:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to add comment'
+    });
+  }
+};
+
+// @desc    Add internal note (Admin only)
+// @route   POST /api/tickets/:id/internal-notes
+// @access  Protected (Admin only)
+export const addInternalNote = async (req, res) => {
+  try {
+    const ticket = await Ticket.findById(req.params.id);
+
+    if (!ticket) {
+      return res.status(404).json({
+        success: false,
+        error: 'Ticket not found'
+      });
+    }
+
+    const user = req.user;
+    if (user.role !== 'Admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Only admins can add internal notes'
+      });
+    }
+
+    const { note } = req.body;
+
+    if (!note || !note.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Note is required'
+      });
+    }
+
+    ticket.internalNotes.push({
+      userId: user.userId,
+      userName: user.fullName || user.userId,
+      note: note.trim(),
+      createdAt: new Date()
+    });
+
+    await ticket.save();
+
+    res.json({
+      success: true,
+      data: ticket
+    });
+  } catch (error) {
+    console.error('Error adding internal note:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to add internal note'
+    });
+  }
+};
+
+// @desc    Download ticket attachment
+// @route   GET /api/tickets/:id/attachments/:attachmentId
+// @access  Protected
+export const downloadAttachment = async (req, res) => {
+  try {
+    const ticket = await Ticket.findById(req.params.id);
+
+    if (!ticket) {
+      return res.status(404).json({
+        success: false,
+        error: 'Ticket not found'
+      });
+    }
+
+    const user = req.user;
+    // Non-admin users can only download attachments from their own tickets
+    if (user.role !== 'Admin' && ticket.userId !== user.userId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied'
+      });
+    }
+
+    const attachment = ticket.attachments.id(req.params.attachmentId);
+    if (!attachment) {
+      return res.status(404).json({
+        success: false,
+        error: 'Attachment not found'
+      });
+    }
+
+    const filePath = path.join(__dirname, '..', attachment.fileUrl);
+
+    try {
+      await fs.access(filePath);
+    } catch {
+      return res.status(404).json({
+        success: false,
+        error: 'File not found'
+      });
+    }
+
+    res.download(filePath, attachment.fileName, (err) => {
+      if (err) {
+        console.error('Error downloading file:', err);
+        if (!res.headersSent) {
+          res.status(500).json({
+            success: false,
+            error: 'Failed to download file'
+          });
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error downloading attachment:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to download attachment'
+    });
+  }
+};
+
+// @desc    Get ticket statistics
+// @route   GET /api/tickets/stats
+// @access  Protected (Admin only)
+export const getTicketStats = async (req, res) => {
+  try {
+    const user = req.user;
+    if (user.role !== 'Admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Only admins can view statistics'
+      });
+    }
+
+    const stats = {
+      total: await Ticket.countDocuments(),
+      open: await Ticket.countDocuments({ status: 'Open' }),
+      assigned: await Ticket.countDocuments({ status: 'Assigned' }),
+      inProgress: await Ticket.countDocuments({ status: 'In Progress' }),
+      waitingForUser: await Ticket.countDocuments({ status: 'Waiting for User' }),
+      resolved: await Ticket.countDocuments({ status: 'Resolved' }),
+      closed: await Ticket.countDocuments({ status: 'Closed' }),
+      byPriority: {
+        low: await Ticket.countDocuments({ priority: 'Low' }),
+        medium: await Ticket.countDocuments({ priority: 'Medium' }),
+        high: await Ticket.countDocuments({ priority: 'High' })
+      },
+      byCategory: {}
+    };
+
+    // Get counts by category
+    const categories = [
+      'Login Issue',
+      'Forgot Password',
+      'OTP / Email Not Received',
+      'Application Not Loading',
+      'Feature Not Working',
+      'Data Mismatch',
+      'Performance Issue',
+      'Access / Permission Issue',
+      'Other'
+    ];
+
+    for (const category of categories) {
+      stats.byCategory[category] = await Ticket.countDocuments({ category });
+    }
+
+    res.json({
+      success: true,
+      data: stats
+    });
+  } catch (error) {
+    console.error('Error fetching ticket stats:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch statistics'
+    });
+  }
+};
+

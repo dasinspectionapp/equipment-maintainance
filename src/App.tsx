@@ -37,6 +37,9 @@ import ApprovalReset from './pages/ApprovalReset'
 import ELibraryAdmin from './pages/ELibraryAdmin'
 import ResourcesPage from './pages/Resources'
 import SurveyMassUpload from './pages/SurveyMassUpload'
+import RaiseTicket from './pages/RaiseTicket'
+import TicketManagement from './pages/TicketManagement'
+import TicketStatus from './pages/TicketStatus'
 
 function App() {
   return (
@@ -85,6 +88,11 @@ function App() {
         {/* Profile and Settings routes */}
         <Route path="profile" element={<Profile />} />
         <Route path="settings" element={<Settings />} />
+        {/* Ticket routes */}
+        <Route path="raise-ticket" element={<RaiseTicket />} />
+        <Route path="raise-ticket/:id" element={<RaiseTicket />} />
+        <Route path="ticket-status" element={<TicketStatus />} />
+        <Route path="tickets" element={<TicketManagement />} />
         {/* Default route - show based on role */}
         <Route index element={<Dashboard />} />
       </Route>

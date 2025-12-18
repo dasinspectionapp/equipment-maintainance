@@ -239,10 +239,21 @@ export default function DashboardLayout() {
     { label: 'Admin Uploads', path: '/dashboard/admin-uploads', icon: '📤' },
     { label: 'Location', path: '/dashboard/location', icon: '📍' },
     { label: 'Approval Reset', path: '/dashboard/approval-reset', icon: '🔄' },
+    { label: 'Tickets', path: '/dashboard/tickets', icon: '🎫' },
     surveyAdminMenu,
     landingPageMenu,
   ];
 
+  // Service Request menu with dropdown (for all non-admin users)
+  const serviceRequestMenu: MenuItem = {
+    label: 'Service Request',
+    icon: '🛠️',
+    children: [
+      { label: 'Raise Ticket', path: '/dashboard/raise-ticket', icon: '🎫' },
+      { label: 'Ticket Status', path: '/dashboard/ticket-status', icon: '📋' },
+    ],
+  };
+  
   const menuItems: MenuItem[] = isAdmin
     ? adminMenu
     : isCCR
@@ -255,20 +266,23 @@ export default function DashboardLayout() {
             { label: 'Device Status', path: '/dashboard/device-status', icon: '📊' },
             { label: 'RTU Tracker Status', path: '/dashboard/rtu-tracker-status', icon: '📍' },
             ccrApprovalsMenu,
+            serviceRequestMenu,
           ]
         : [
             { label: 'Upload', path: '/dashboard/upload', icon: '📤' },
             { label: 'RTU Tracker Status', path: '/dashboard/rtu-tracker-status', icon: '📍' },
             ccrApprovalsMenu,
+            serviceRequestMenu,
           ]) as MenuItem[])
     : (isEquipment || isRTUComm) && isEquipmentMaintenance
-    ? (equipmentMaintenanceItems as MenuItem[])
+    ? ([...equipmentMaintenanceItems, serviceRequestMenu] as MenuItem[])
     : isEquipmentSurvey && !isAdmin
     ? ([
         { label: 'Survey Form', path: '/dashboard/survey-form', icon: '📋' },
         { label: 'Equipment Status', path: '/dashboard/equipment-status', icon: '📊' },
+        serviceRequestMenu,
       ] as MenuItem[])
-    : [];
+    : [serviceRequestMenu];
 
   const isItemActive = (item: MenuItem) => {
     if (item.path && isActive(item.path)) {
