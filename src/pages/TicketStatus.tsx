@@ -30,7 +30,6 @@ interface Ticket {
 
 export default function TicketStatus() {
   const navigate = useNavigate();
-  const [user, setUser] = useState<any>(null);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
