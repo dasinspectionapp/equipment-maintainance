@@ -18,6 +18,7 @@ interface Ticket {
   createdAt: string;
   updatedAt: string;
   resolvedAt?: string;
+  resolutionNote?: string;
   comments: Array<{
     _id: string;
     userName: string;
@@ -397,10 +398,25 @@ export default function TicketStatus() {
                 <p className="text-gray-800 whitespace-pre-wrap bg-gray-50 p-4 rounded-lg">{selectedTicket.description}</p>
               </div>
 
-              {/* Comments */}
-              {selectedTicket.comments && selectedTicket.comments.length > 0 && (
+              {/* Resolution Note */}
+              {selectedTicket.resolutionNote && (
                 <div className="mb-6">
-                  <label className="block text-sm font-semibold text-gray-600 mb-2">Comments</label>
+                  <label className="block text-sm font-semibold text-gray-600 mb-2">Resolution Note</label>
+                  <div className="border-l-4 border-green-500 pl-4 py-3 bg-green-50 rounded-r-lg">
+                    <p className="text-gray-800 whitespace-pre-wrap font-medium">{selectedTicket.resolutionNote}</p>
+                    {selectedTicket.resolvedAt && (
+                      <p className="text-xs text-gray-500 mt-2">
+                        Resolved on: {new Date(selectedTicket.resolvedAt).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Comments */}
+              <div className="mb-6">
+                <label className="block text-sm font-semibold text-gray-600 mb-2">Comments</label>
+                {selectedTicket.comments && selectedTicket.comments.length > 0 ? (
                   <div className="space-y-3 max-h-64 overflow-y-auto">
                     {selectedTicket.comments
                       .filter(c => !c.isInternal) // Users can't see internal comments
@@ -412,15 +428,17 @@ export default function TicketStatus() {
                               <p className="text-xs text-gray-500">{new Date(comment.createdAt).toLocaleString()}</p>
                             </div>
                             {comment.userRole === 'Admin' && (
-                              <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">Admin</span>
+                              <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded font-semibold">Admin</span>
                             )}
                           </div>
                           <p className="text-gray-700 whitespace-pre-wrap">{comment.comment}</p>
                         </div>
                       ))}
                   </div>
-                </div>
-              )}
+                ) : (
+                  <p className="text-gray-500 text-sm">No comments yet.</p>
+                )}
+              </div>
 
               {/* Actions */}
               <div className="flex justify-end space-x-4 pt-4 border-t">
