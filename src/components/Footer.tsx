@@ -1,10 +1,10 @@
 'use client'
 
 const quickLinks = [
-  { label: 'Consumer Charter', href: '#about' },
-  { label: 'Tariff Orders', href: '#updates' },
-  { label: 'Tenders', href: '#updates' },
-  { label: 'RTI Disclosure', href: '#about' },
+  { label: 'KPTCL', href: 'https://kptcl.karnataka.gov.in/' },
+  { label: 'BESCOM', href: 'https://bescom.karnataka.gov.in' },
+  { label: 'KREDL', href: 'https://kredl.karnataka.gov.in/' },
+  { label: 'PCKL', href: 'https://pckl.karnataka.gov.in/' },
 ]
 
 const contactInfo = [
@@ -32,7 +32,7 @@ export default function Footer() {
             <ul className="mt-4 space-y-3 text-sm text-white/80">
               {quickLinks.map((link) => (
                 <li key={link.label}>
-                  <a href={link.href} className="transition hover:text-white">
+                  <a href={link.href} target="_blank" rel="noopener noreferrer" className="transition hover:text-white">
                     {link.label}
                   </a>
                 </li>

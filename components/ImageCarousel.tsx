@@ -28,41 +28,11 @@ type ApiSlide = {
   isActive?: boolean;
 };
 
-const FALLBACK_SLIDES: Slide[] = [
-  {
-    src: '/carousel/rmu-service-bay.jpg',
-    alt: 'Technicians servicing a Ring Main Unit cabinet',
-    eyebrow: 'RMU Maintenance',
-    title: 'Efficient upkeep of ring main units across the city',
-    description:
-      'Specialised teams perform scheduled inspections, lubrication, and diagnostic tests to keep RMU networks running optimally in every distribution zone.',
-    backgroundSrc: undefined,
-  },
-  {
-    src: '/carousel/rmu-control-room.jpg',
-    alt: 'Engineers monitoring RMU performance from a control room',
-    eyebrow: 'Remote Monitoring',
-    title: 'Live visibility into RMU performance from the control centre',
-    description:
-      'Centralised dashboards track switchgear status, load patterns, and fault histories, enabling rapid isolation and restoration during outages.',
-    backgroundSrc: undefined,
-  },
-  {
-    src: '/carousel/rmu-installation.jpg',
-    alt: 'Field crew installing a new ring main unit at a distribution point',
-    eyebrow: 'Grid Expansion',
-    title: 'Deploying modern RMU infrastructure for future-ready grids',
-    description:
-      'New installations feature compact switchgear, SCADA integration, and enhanced safety features to support Bengaluru’s growing power demand.',
-    backgroundSrc: undefined,
-  },
-];
-
 const AUTO_PLAY_INTERVAL = 6000;
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:5000';
 
 export default function ImageCarousel() {
-  const [slides, setSlides] = useState<Slide[]>(FALLBACK_SLIDES);
+  const [slides, setSlides] = useState<Slide[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
 
   const actualSlides = useMemo(() => slides.filter(Boolean), [slides]);
