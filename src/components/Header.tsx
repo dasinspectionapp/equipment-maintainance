@@ -7,12 +7,21 @@ const DEFAULT_LOGO = '/bescom-logo.svg'
 type NavItem = {
   label: string
   href?: string
+  dropdownItems?: { label: string; href: string }[]
 }
 
 const navItems: NavItem[] = [
   { label: 'Home', href: '/' },
   { label: 'About DAS', href: '#about' },
-  { label: 'Projects', href: '#updates' },
+  { 
+    label: 'Projects', 
+    href: '#updates',
+    dropdownItems: [
+      { label: 'Single Panel Breaker', href: '#single-panel-breaker' },
+      { label: 'DAS Automation Points', href: '#das-automation-points' },
+      { label: 'DHQ & Peri-Urban', href: '#dhq-peri-urban' },
+    ]
+  },
   { label: 'Resources', href: '/resources' },
   { label: 'Contact', href: '#contact' },
   { label: 'Sign In', href: '/signin' },
@@ -25,6 +34,8 @@ export default function Header() {
   const [isScrolled, setIsScrolled] = useState(false)
   const [isMobileOpen, setIsMobileOpen] = useState(false)
   const [logoSrc, setLogoSrc] = useState(DEFAULT_LOGO)
+  const [isProjectsDropdownOpen, setIsProjectsDropdownOpen] = useState(false)
+  const [isMobileProjectsOpen, setIsMobileProjectsOpen] = useState(false)
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 0)
@@ -157,6 +168,80 @@ export default function Header() {
       >
         <div className="container mx-auto hidden h-12 items-center justify-end gap-1 px-4 sm:px-6 lg:flex lg:px-8">
           {navItems.map((item) => {
+            // Handle dropdown items (Projects)
+            if (item.dropdownItems && item.dropdownItems.length > 0) {
+              return (
+                <div
+                  key={item.label}
+                  className="relative"
+                  onMouseEnter={() => setIsProjectsDropdownOpen(true)}
+                  onMouseLeave={() => setIsProjectsDropdownOpen(false)}
+                >
+                  <button
+                    className="rounded-md px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/15 flex items-center gap-1"
+                  >
+                    {item.label}
+                    <svg
+                      className={`h-4 w-4 transition-transform ${isProjectsDropdownOpen ? 'rotate-180' : ''}`}
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  {isProjectsDropdownOpen && (
+                    <div className="absolute right-0 mt-1 w-56 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 z-50">
+                      <div className="py-1">
+                        {item.dropdownItems.map((dropdownItem) => {
+                          const isDropdownHashLink = dropdownItem.href?.startsWith('#');
+                          const handleDropdownClick = (e: React.MouseEvent) => {
+                            if (isDropdownHashLink && dropdownItem.href) {
+                              e.preventDefault();
+                              setIsProjectsDropdownOpen(false);
+                              const element = document.querySelector(dropdownItem.href);
+                              if (element) {
+                                const headerOffset = 200;
+                                const elementPosition = element.getBoundingClientRect().top;
+                                const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+                                window.scrollTo({
+                                  top: offsetPosition,
+                                  behavior: 'smooth'
+                                });
+                              }
+                            } else {
+                              setIsProjectsDropdownOpen(false);
+                            }
+                          };
+
+                          return isDropdownHashLink ? (
+                            <a
+                              key={dropdownItem.label}
+                              href={dropdownItem.href}
+                              onClick={handleDropdownClick}
+                              className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 transition"
+                            >
+                              {dropdownItem.label}
+                            </a>
+                          ) : (
+                            <Link
+                              key={dropdownItem.label}
+                              to={dropdownItem.href}
+                              onClick={() => setIsProjectsDropdownOpen(false)}
+                              className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 transition"
+                            >
+                              {dropdownItem.label}
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
             // Use regular anchor for hash links, Link for routes
             const isHashLink = item.href?.startsWith('#');
             const handleClick = (e: React.MouseEvent) => {
@@ -205,6 +290,76 @@ export default function Header() {
         <div className="border-b border-[#003768] bg-[#003b73] text-white lg:hidden">
           <div className="container mx-auto space-y-2 px-4 py-4 sm:px-6">
             {navItems.map((item) => {
+              // Handle dropdown items (Projects) in mobile
+              if (item.dropdownItems && item.dropdownItems.length > 0) {
+                return (
+                  <div key={item.label}>
+                    <button
+                      onClick={() => setIsMobileProjectsOpen(!isMobileProjectsOpen)}
+                      className="w-full rounded-lg bg-white/5 px-4 py-3 text-sm font-semibold transition hover:bg-white/10 flex items-center justify-between"
+                    >
+                      {item.label}
+                      <svg
+                        className={`h-4 w-4 transition-transform ${isMobileProjectsOpen ? 'rotate-180' : ''}`}
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    {isMobileProjectsOpen && (
+                      <div className="mt-2 ml-4 space-y-1">
+                        {item.dropdownItems.map((dropdownItem) => {
+                          const isDropdownHashLink = dropdownItem.href?.startsWith('#');
+                          const handleDropdownClick = (e: React.MouseEvent) => {
+                            if (isDropdownHashLink && dropdownItem.href) {
+                              e.preventDefault();
+                              setIsMobileOpen(false);
+                              setIsMobileProjectsOpen(false);
+                              const element = document.querySelector(dropdownItem.href);
+                              if (element) {
+                                const headerOffset = 200;
+                                const elementPosition = element.getBoundingClientRect().top;
+                                const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+                                window.scrollTo({
+                                  top: offsetPosition,
+                                  behavior: 'smooth'
+                                });
+                              }
+                            } else {
+                              setIsMobileOpen(false);
+                              setIsMobileProjectsOpen(false);
+                            }
+                          };
+
+                          return isDropdownHashLink ? (
+                            <a
+                              key={dropdownItem.label}
+                              href={dropdownItem.href}
+                              onClick={handleDropdownClick}
+                              className="block rounded-lg bg-white/5 px-4 py-2 text-sm font-medium transition hover:bg-white/10"
+                            >
+                              {dropdownItem.label}
+                            </a>
+                          ) : (
+                            <Link
+                              key={dropdownItem.label}
+                              to={dropdownItem.href}
+                              onClick={handleDropdownClick}
+                              className="block rounded-lg bg-white/5 px-4 py-2 text-sm font-medium transition hover:bg-white/10"
+                            >
+                              {dropdownItem.label}
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
               // Use regular anchor for hash links, Link for routes
               const isHashLink = item.href?.startsWith('#');
               const handleClick = (e: React.MouseEvent) => {

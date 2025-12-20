@@ -20,7 +20,7 @@ interface ELibraryResource {
   createdAt: string;
 }
 
-const CATEGORIES = ['Manual', 'Guide', 'Documentation', 'Form', 'Policy', 'Procedure', 'Other'];
+const CATEGORIES = ['Manual', 'DPR','DWA', 'Drawings','Technical Specifications', 'Office Formats', 'SOP', 'Training Materials', 'Other'];
 
 export default function ELibraryAdmin() {
   const [resources, setResources] = useState<ELibraryResource[]>([]);
