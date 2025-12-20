@@ -15,7 +15,7 @@ const ELibraryResourceSchema = new mongoose.Schema(
     category: {
       type: String,
       required: [true, 'Category is required'],
-      enum: ['Manual', 'Guide', 'Documentation', 'Form', 'Policy', 'Procedure', 'Other'],
+      enum: ['Manual', 'DPR', 'DWA', 'Drawings', 'Technical Specifications', 'Office Formats', 'SOP', 'Training Materials', 'Other'],
       default: 'Other'
     },
     file: {
