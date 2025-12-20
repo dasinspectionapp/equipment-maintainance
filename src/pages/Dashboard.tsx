@@ -4396,18 +4396,43 @@ export default function Dashboard() {
                             throw new Error('Invalid response from server');
                           }
 
-                          const locationCoordinates = locationsJson.locations
-                            .filter((loc: any) => loc.latitude && loc.longitude)
-                            .map((loc: { latitude: number; longitude: number; name: string }) => ({
-                              lat: loc.latitude,
-                              lng: loc.longitude,
-                              name: loc.name
-                            }));
+                          // Match each site code to its corresponding location, preserving order
+                          const locationCoordinates: Array<{lat: number; lng: number; name: string}> = [];
+                          
+                          console.log(`Matching ${selectedSiteCodes.length} site codes to locations from API response (${locationsJson.locations.length} locations returned)`);
+                          
+                          selectedSiteCodes.forEach((siteCode: string, index: number) => {
+                            // Normalize site code for matching (uppercase, trim)
+                            const normalizedSiteCode = String(siteCode).trim().toUpperCase();
+                            
+                            // Find matching location by name (case-insensitive)
+                            const matchedLocation = locationsJson.locations.find((loc: any) => {
+                              const locName = String(loc.name || '').trim().toUpperCase();
+                              return locName === normalizedSiteCode;
+                            });
+                            
+                            if (matchedLocation && matchedLocation.latitude && matchedLocation.longitude) {
+                              locationCoordinates.push({
+                                lat: matchedLocation.latitude,
+                                lng: matchedLocation.longitude,
+                                name: siteCode // Use original site code for display
+                              });
+                              console.log(`✓ [${index + 1}/${selectedSiteCodes.length}] Matched site code "${siteCode}" to location (${matchedLocation.latitude}, ${matchedLocation.longitude})`);
+                            } else {
+                              console.warn(`✗ [${index + 1}/${selectedSiteCodes.length}] No location found for site code: ${siteCode}`);
+                              console.warn(`  Available location names:`, locationsJson.locations.map((l: any) => l.name));
+                            }
+                          });
+                          
+                          console.log(`Total matched locations: ${locationCoordinates.length} out of ${selectedSiteCodes.length} site codes`);
 
                           if (locationCoordinates.length === 0) {
                             alert(`No location coordinates found for the selected site codes.\n\nPlease check:\n1. Site codes are uploaded in Admin panel Location tab\n2. Site codes match exactly (case-sensitive)\n\nSelected site codes: ${selectedSiteCodes.join(', ')}`);
                             return;
                           }
+
+                          // Log the locations we're about to send to Google Maps for debugging
+                          console.log(`Opening Google Maps with ${locationCoordinates.length} locations:`, locationCoordinates.map(loc => `${loc.name} (${loc.lat}, ${loc.lng})`));
 
                           // Open Google Maps with navigation
                           if (currentLocation) {
@@ -4417,18 +4442,16 @@ export default function Dashboard() {
                               const dest = locationCoordinates[0];
                               window.open(`https://www.google.com/maps/dir/?api=1&origin=${currentLocation.lat},${currentLocation.lng}&destination=${dest.lat},${dest.lng}`, '_blank');
                             } else {
-                              // Multiple destinations: origin (current) to first destination, then waypoints
-                              const firstDest = locationCoordinates[0];
-                              const waypoints = locationCoordinates.slice(1).map((loc: { lat: number; lng: number }) => `${loc.lat},${loc.lng}`).join('|');
+                              // Multiple destinations: include ALL locations as waypoints, use last one as final destination
+                              // Include all locations except the last one as waypoints
+                              const waypoints = locationCoordinates
+                                .slice(0, -1)
+                                .map((loc: { lat: number; lng: number }) => `${loc.lat},${loc.lng}`)
+                                .join('|');
                               const finalDest = locationCoordinates[locationCoordinates.length - 1];
                               
-                              if (waypoints) {
-                                // Multiple waypoints
-                                window.open(`https://www.google.com/maps/dir/?api=1&origin=${currentLocation.lat},${currentLocation.lng}&destination=${finalDest.lat},${finalDest.lng}&waypoints=${waypoints}`, '_blank');
-                              } else {
-                                // Just origin and destination
-                                window.open(`https://www.google.com/maps/dir/?api=1&origin=${currentLocation.lat},${currentLocation.lng}&destination=${firstDest.lat},${firstDest.lng}`, '_blank');
-                              }
+                              // All locations are included: waypoints contain first N-1, destination is the last one
+                              window.open(`https://www.google.com/maps/dir/?api=1&origin=${currentLocation.lat},${currentLocation.lng}&destination=${finalDest.lat},${finalDest.lng}&waypoints=${waypoints}`, '_blank');
                             }
                           } else {
                             // Fallback: no current location, use first location as starting point
@@ -4437,10 +4460,21 @@ export default function Dashboard() {
                               window.open(`https://www.google.com/maps?q=${loc.lat},${loc.lng}`, '_blank');
                             } else {
                               // Multiple locations: create a route with waypoints (first as origin)
+                              // Include all locations except the first and last as waypoints, first as origin, last as destination
                               const firstLoc = locationCoordinates[0];
-                              const waypoints = locationCoordinates.slice(1).map((loc: { lat: number; lng: number }) => `${loc.lat},${loc.lng}`).join('|');
                               const finalDest = locationCoordinates[locationCoordinates.length - 1];
-                              window.open(`https://www.google.com/maps/dir/?api=1&origin=${firstLoc.lat},${firstLoc.lng}&destination=${finalDest.lat},${finalDest.lng}&waypoints=${waypoints}`, '_blank');
+                              
+                              if (locationCoordinates.length === 2) {
+                                // Just two locations: origin to destination, no waypoints
+                                window.open(`https://www.google.com/maps/dir/?api=1&origin=${firstLoc.lat},${firstLoc.lng}&destination=${finalDest.lat},${finalDest.lng}`, '_blank');
+                              } else {
+                                // More than two: include middle locations as waypoints
+                                const waypoints = locationCoordinates
+                                  .slice(1, -1)
+                                  .map((loc: { lat: number; lng: number }) => `${loc.lat},${loc.lng}`)
+                                  .join('|');
+                                window.open(`https://www.google.com/maps/dir/?api=1&origin=${firstLoc.lat},${firstLoc.lng}&destination=${finalDest.lat},${finalDest.lng}&waypoints=${waypoints}`, '_blank');
+                              }
                             }
                           }
 
