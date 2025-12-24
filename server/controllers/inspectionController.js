@@ -891,3 +891,72 @@ export const massUploadInspections = async (req, res) => {
   }
 };
 
+/**
+ * Generate PDF from HTML content
+ * @route POST /api/inspection/generate-pdf
+ * @access Private
+ */
+export const generatePDF = async (req, res) => {
+  try {
+    const { html, siteCode } = req.body;
+
+    if (!html) {
+      return res.status(400).json({
+        success: false,
+        error: 'HTML content is required'
+      });
+    }
+
+    // Try to use puppeteer if available, otherwise return error
+    try {
+      const puppeteer = await import('puppeteer').catch(() => null);
+      
+      if (!puppeteer) {
+        // If puppeteer is not installed, return error with instructions
+        return res.status(501).json({
+          success: false,
+          error: 'PDF generation library not installed. Please install puppeteer: npm install puppeteer'
+        });
+      }
+
+      const browser = await puppeteer.default.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+      });
+      
+      const page = await browser.newPage();
+      await page.setContent(html, { waitUntil: 'networkidle0' });
+      
+      const pdf = await page.pdf({
+        format: 'A4',
+        printBackground: true,
+        margin: {
+          top: '20mm',
+          right: '15mm',
+          bottom: '20mm',
+          left: '15mm'
+        }
+      });
+      
+      await browser.close();
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="RMU_Inspection_${siteCode || 'report'}_${Date.now()}.pdf"`);
+      res.send(pdf);
+    } catch (pdfError) {
+      console.error('PDF generation error:', pdfError);
+      // If puppeteer fails, return error
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to generate PDF. Please ensure puppeteer is installed: npm install puppeteer'
+      });
+    }
+  } catch (error) {
+    console.error('Generate PDF error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to generate PDF'
+    });
+  }
+};
+

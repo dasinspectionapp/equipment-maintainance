@@ -5,7 +5,8 @@ import {
   getInspectionBySiteCode,
   getFieldAutocomplete,
   downloadTemplate,
-  massUploadInspections
+  massUploadInspections,
+  generatePDF
 } from '../controllers/inspectionController.js';
 import { protect, authorize } from '../middleware/authMiddleware.js';
 import fileUpload from 'express-fileupload';
@@ -17,6 +18,7 @@ router.post('/submit', protect, submitInspection);
 router.get('/all', protect, getInspections);
 router.get('/sitecode/:siteCode', protect, getInspectionBySiteCode);
 router.get('/autocomplete', protect, getFieldAutocomplete);
+router.post('/generate-pdf', protect, generatePDF);
 
 // Template download (Admin only)
 router.get('/template', protect, authorize('Admin'), downloadTemplate);
