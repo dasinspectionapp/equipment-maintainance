@@ -3615,9 +3615,70 @@ export default function MyData() {
               const data = await response.json();
               if (data.success && data.data) {
                 // Convert API data format to match localStorage format
-                // API returns: { siteCode1: {...}, siteCode2: {...} }
-                apiObservationsMap = data.data;
-                console.log(`Loaded ${Object.keys(apiObservationsMap).length} site observations from API`);
+                // API can return either: { siteCode1: {...}, siteCode2: {...} } (object) or [{...}, {...}] (array)
+                if (Array.isArray(data.data)) {
+                  // Convert array to map by siteCode
+                  data.data.forEach((obs: any) => {
+                    if (obs.siteCode) {
+                      apiObservationsMap[obs.siteCode.trim().toUpperCase()] = {
+                        status: obs.status,
+                        typeOfIssue: obs.typeOfIssue,
+                        rawTypeOfIssue: obs.rawTypeOfIssue || '',
+                        specifyOther: obs.specifyOther || '',
+                        typeOfSpare: obs.typeOfSpare || [],
+                        specifySpareOther: obs.specifySpareOther || '',
+                        remarks: obs.remarks || '',
+                        // CRITICAL: Preserve all photo arrays from API
+                        capturedPhotos: obs.capturedPhotos || [],
+                        uploadedPhotos: obs.uploadedPhotos || [],
+                        viewPhotos: obs.viewPhotos || [],
+                        timestamp: obs.timestamp || obs.updatedAt || obs.createdAt,
+                        savedFrom: obs.savedFrom || 'API',
+                      };
+                    }
+                  });
+                } else if (typeof data.data === 'object') {
+                  // Already in map format, but ensure photos are preserved
+                  Object.keys(data.data).forEach(siteCode => {
+                    const obs = data.data[siteCode];
+                    apiObservationsMap[siteCode] = {
+                      status: obs.status,
+                      typeOfIssue: obs.typeOfIssue,
+                      rawTypeOfIssue: obs.rawTypeOfIssue || '',
+                      specifyOther: obs.specifyOther || '',
+                      typeOfSpare: obs.typeOfSpare || [],
+                      specifySpareOther: obs.specifySpareOther || '',
+                      remarks: obs.remarks || '',
+                      // CRITICAL: Preserve all photo arrays from API
+                      capturedPhotos: obs.capturedPhotos || [],
+                      uploadedPhotos: obs.uploadedPhotos || [],
+                      viewPhotos: obs.viewPhotos || [],
+                      timestamp: obs.timestamp || obs.updatedAt || obs.createdAt,
+                      savedFrom: obs.savedFrom || 'API',
+                    };
+                  });
+                }
+                
+                // Log photo information for debugging
+                const photoCounts: Record<string, number> = {};
+                Object.keys(apiObservationsMap).forEach(siteCode => {
+                  const obs = apiObservationsMap[siteCode];
+                  const photoCount = (obs.viewPhotos?.length || 0) + (obs.capturedPhotos?.length || 0) + (obs.uploadedPhotos?.length || 0);
+                  if (photoCount > 0) {
+                    photoCounts[siteCode] = photoCount;
+                    console.log(`[MyData] API observation for ${siteCode} has ${photoCount} photos:`, {
+                      viewPhotos: obs.viewPhotos?.length || 0,
+                      capturedPhotos: obs.capturedPhotos?.length || 0,
+                      uploadedPhotos: obs.uploadedPhotos?.length || 0,
+                    });
+                  }
+                });
+                
+                console.log(`Loaded ${Object.keys(apiObservationsMap).length} site observations from API`, {
+                  totalObservations: Object.keys(apiObservationsMap).length,
+                  observationsWithPhotos: Object.keys(photoCounts).length,
+                  photoCounts: photoCounts
+                });
               }
             }
           }
@@ -3645,8 +3706,41 @@ export default function MyData() {
         siteObservationsBySiteCodeRef.current = mergedMap;
         
         // Save merged data back to localStorage for offline access
+        // CRITICAL: Preserve photos when saving to localStorage
         if (Object.keys(mergedMap).length > 0) {
-          localStorage.setItem(globalKey, JSON.stringify(mergedMap));
+          try {
+            // Check total size before saving (localStorage limit is typically 5-10MB)
+            const dataString = JSON.stringify(mergedMap);
+            const sizeInMB = new Blob([dataString]).size / (1024 * 1024);
+            
+            if (sizeInMB > 5) {
+              console.warn(`[MyData] Warning: Site observations data size is ${sizeInMB.toFixed(2)}MB, which may exceed localStorage limits`);
+            }
+            
+            localStorage.setItem(globalKey, dataString);
+            
+            // Verify photos were saved
+            const photoCounts: Record<string, number> = {};
+            Object.keys(mergedMap).forEach(siteCode => {
+              const obs = mergedMap[siteCode];
+              const photoCount = (obs.viewPhotos?.length || 0) + (obs.capturedPhotos?.length || 0) + (obs.uploadedPhotos?.length || 0);
+              if (photoCount > 0) {
+                photoCounts[siteCode] = photoCount;
+              }
+            });
+            
+            console.log('Saved site observations to localStorage:', {
+              totalObservations: Object.keys(mergedMap).length,
+              observationsWithPhotos: Object.keys(photoCounts).length,
+              dataSizeMB: sizeInMB.toFixed(2),
+            });
+          } catch (storageError: any) {
+            if (storageError.name === 'QuotaExceededError') {
+              console.error('[MyData] localStorage quota exceeded. Consider removing old data or reducing photo sizes.');
+            } else {
+              console.error('[MyData] Error saving to localStorage:', storageError);
+            }
+          }
         }
         
         console.log('Loaded site observations by Site Code:', {
@@ -3701,7 +3795,49 @@ export default function MyData() {
         if (response.ok) {
           const data = await response.json();
           if (data.success && data.data) {
-            const apiObservationsMap = data.data;
+            // Process API data to ensure photos are preserved (same logic as loadSiteObservationsBySiteCode)
+            let apiObservationsMap: Record<string, any> = {};
+            if (Array.isArray(data.data)) {
+              data.data.forEach((obs: any) => {
+                if (obs.siteCode) {
+                  apiObservationsMap[obs.siteCode.trim().toUpperCase()] = {
+                    status: obs.status,
+                    typeOfIssue: obs.typeOfIssue,
+                    rawTypeOfIssue: obs.rawTypeOfIssue || '',
+                    specifyOther: obs.specifyOther || '',
+                    typeOfSpare: obs.typeOfSpare || [],
+                    specifySpareOther: obs.specifySpareOther || '',
+                    remarks: obs.remarks || '',
+                    // CRITICAL: Preserve all photo arrays from API
+                    capturedPhotos: obs.capturedPhotos || [],
+                    uploadedPhotos: obs.uploadedPhotos || [],
+                    viewPhotos: obs.viewPhotos || [],
+                    timestamp: obs.timestamp || obs.updatedAt || obs.createdAt,
+                    savedFrom: obs.savedFrom || 'API',
+                  };
+                }
+              });
+            } else if (typeof data.data === 'object') {
+              Object.keys(data.data).forEach(siteCode => {
+                const obs = data.data[siteCode];
+                apiObservationsMap[siteCode] = {
+                  status: obs.status,
+                  typeOfIssue: obs.typeOfIssue,
+                  rawTypeOfIssue: obs.rawTypeOfIssue || '',
+                  specifyOther: obs.specifyOther || '',
+                  typeOfSpare: obs.typeOfSpare || [],
+                  specifySpareOther: obs.specifySpareOther || '',
+                  remarks: obs.remarks || '',
+                  // CRITICAL: Preserve all photo arrays from API
+                  capturedPhotos: obs.capturedPhotos || [],
+                  uploadedPhotos: obs.uploadedPhotos || [],
+                  viewPhotos: obs.viewPhotos || [],
+                  timestamp: obs.timestamp || obs.updatedAt || obs.createdAt,
+                  savedFrom: obs.savedFrom || 'API',
+                };
+              });
+            }
+            
             const currentKeys = Object.keys(siteObservationsBySiteCodeRef.current);
             const newKeys = Object.keys(apiObservationsMap);
             
@@ -3723,10 +3859,22 @@ export default function MyData() {
                 }
               }
               
-              // API data takes priority
+              // API data takes priority (preserves photos from API)
               const mergedMap = { ...localStorageMap, ...apiObservationsMap };
               setSiteObservationsBySiteCode(mergedMap);
               siteObservationsBySiteCodeRef.current = mergedMap;
+              
+              // Save merged data to localStorage (preserves photos)
+              try {
+                localStorage.setItem(globalKey, JSON.stringify(mergedMap));
+                console.log('[MyData] Periodic check: Saved updated observations to localStorage with photos preserved');
+              } catch (storageError: any) {
+                if (storageError.name === 'QuotaExceededError') {
+                  console.error('[MyData] Periodic check: localStorage quota exceeded');
+                } else {
+                  console.error('[MyData] Periodic check: Error saving to localStorage:', storageError);
+                }
+              }
               
               // CRITICAL: If Site Observations from API is "Resolved", update Task Status to "Resolved"
               // This ensures Task Status persists when site observations are reloaded from API
@@ -3855,13 +4003,45 @@ export default function MyData() {
   const getViewPhotosValue = useCallback((rowKey: string, row: any): string[] => {
     // First check Site Code-based observation (from API/mobile app) - takes priority
     const observationData = getObservationDataBySiteCode(row);
-    if (observationData && observationData.viewPhotos && observationData.viewPhotos.length > 0) {
-      return observationData.viewPhotos;
+    if (observationData) {
+      // Check viewPhotos first (combined array)
+      if (observationData.viewPhotos && Array.isArray(observationData.viewPhotos) && observationData.viewPhotos.length > 0) {
+        // Filter to ensure all photos are valid data URLs
+        const validPhotos = observationData.viewPhotos.filter((photo: string) => 
+          typeof photo === 'string' && photo.startsWith('data:image/')
+        );
+        if (validPhotos.length > 0) {
+          console.log(`[MyData] getViewPhotosValue: Found ${validPhotos.length} photos from site code-based observation for rowKey: ${rowKey}`);
+          return validPhotos;
+        }
+      }
+      // Fallback: check capturedPhotos and uploadedPhotos if viewPhotos is empty
+      const allPhotos: string[] = [];
+      if (observationData.capturedPhotos && Array.isArray(observationData.capturedPhotos)) {
+        allPhotos.push(...observationData.capturedPhotos.filter((photo: string) => 
+          typeof photo === 'string' && photo.startsWith('data:image/')
+        ));
+      }
+      if (observationData.uploadedPhotos && Array.isArray(observationData.uploadedPhotos)) {
+        allPhotos.push(...observationData.uploadedPhotos.filter((photo: string) => 
+          typeof photo === 'string' && photo.startsWith('data:image/')
+        ));
+      }
+      if (allPhotos.length > 0) {
+        console.log(`[MyData] getViewPhotosValue: Found ${allPhotos.length} photos from captured/uploaded arrays for rowKey: ${rowKey}`);
+        return allPhotos;
+      }
     }
     
     // Then check rowKey-based view photos (existing behavior)
-    if (viewPhotos[rowKey] && viewPhotos[rowKey].length > 0) {
-      return viewPhotos[rowKey];
+    if (viewPhotos[rowKey] && Array.isArray(viewPhotos[rowKey]) && viewPhotos[rowKey].length > 0) {
+      const validPhotos = viewPhotos[rowKey].filter((photo: string) => 
+        typeof photo === 'string' && photo.startsWith('data:image/')
+      );
+      if (validPhotos.length > 0) {
+        console.log(`[MyData] getViewPhotosValue: Found ${validPhotos.length} photos from rowKey-based state for rowKey: ${rowKey}`);
+        return validPhotos;
+      }
     }
     
     return [];
