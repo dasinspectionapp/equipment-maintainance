@@ -655,8 +655,11 @@ export default function MyData() {
   // Function to load data from EquipmentOfflineSites database
   const loadFromEquipmentOfflineSitesDB = useCallback(async () => {
     if (!selectedFile || isLoadingRef.current || userRole !== 'Equipment') {
+      console.log(`[loadFromEquipmentOfflineSitesDB] Skipping - selectedFile: ${selectedFile}, isLoading: ${isLoadingRef.current}, userRole: ${userRole}`);
       return;
     }
+
+    console.log(`[loadFromEquipmentOfflineSitesDB] 🔄 Starting to load data from database for file: ${selectedFile}`);
 
     try {
       const token = localStorage.getItem('token');
@@ -674,11 +677,27 @@ export default function MyData() {
 
       if (response.ok) {
         const result = await response.json();
+        console.log(`[loadFromEquipmentOfflineSitesDB] ✅ API Response received:`, {
+          success: result.success,
+          hasData: !!result.data,
+          dataKeys: result.data ? Object.keys(result.data).length : 0
+        });
+        
         if (result.success && result.data) {
           const dbData = result.data;
           const excludedRowKeys: string[] = result.excludedRowKeys || []; // RowKeys with ccrStatus === 'Approved'
           const excludedSiteCodes: string[] = result.excludedSiteCodes || []; // SiteCodes that should be excluded
           const excludedCount = result.excludedCount || 0;
+          
+          // Debug: Check if any records have photoMetadata
+          const recordsWithMetadata = Object.entries(dbData).filter(([_, siteData]: [string, any]) => {
+            const data = siteData as any;
+            return data.photoMetadata && Array.isArray(data.photoMetadata) && data.photoMetadata.length > 0;
+          });
+          const recordsWithPhotos = Object.entries(dbData).filter(([_, siteData]: [string, any]) => {
+            const data = siteData as any;
+            return data.viewPhotos && Array.isArray(data.viewPhotos) && data.viewPhotos.length > 0;
+          });
           
           console.log(`[loadFromEquipmentOfflineSitesDB] API Response:`, {
             dataKeys: Object.keys(dbData).length,
@@ -686,7 +705,19 @@ export default function MyData() {
             excludedSiteCodesCount: excludedSiteCodes.length,
             excludedSiteCodes: excludedSiteCodes,
             excludedCount: excludedCount,
-            excludedRowKeysList: excludedRowKeys
+            excludedRowKeysList: excludedRowKeys,
+            recordsWithPhotos: recordsWithPhotos.length,
+            recordsWithMetadata: recordsWithMetadata.length,
+            sampleRecordWithPhotos: recordsWithPhotos.length > 0 ? (() => {
+              const sampleData = recordsWithPhotos[0][1] as any;
+              return {
+                rowKey: recordsWithPhotos[0][0],
+                siteCode: sampleData.siteCode,
+                viewPhotosLength: sampleData.viewPhotos?.length || 0,
+                photoMetadataLength: sampleData.photoMetadata?.length || 0,
+                photoMetadata: sampleData.photoMetadata
+              };
+            })() : null
           });
           
           // Store excludedRowKeys and excludedSiteCodes in sessionStorage so we can use it later to filter rows
@@ -738,14 +769,68 @@ export default function MyData() {
           const loadedRemarks: Record<string, string> = {};
           const loadedSupportDocuments: Record<string, Array<{ name: string; data: string }>> = {};
 
+          // Also populate siteObservationsBySiteCode with photoMetadata for photo viewer access
+          const loadedSiteObservationsBySiteCode: Record<string, any> = {};
+          
           Object.entries(dbData).forEach(([rowKey, siteData]: [string, any]) => {
             if (siteData.siteObservations) loadedSiteObservations[rowKey] = siteData.siteObservations;
             if (siteData.taskStatus) loadedTaskStatus[rowKey] = siteData.taskStatus;
             if (siteData.typeOfIssue) loadedTypeOfIssue[rowKey] = siteData.typeOfIssue;
             if (siteData.viewPhotos && siteData.viewPhotos.length > 0) loadedViewPhotos[rowKey] = siteData.viewPhotos;
-            if (siteData.photoMetadata && siteData.photoMetadata.length > 0) loadedPhotoMetadata[rowKey] = siteData.photoMetadata;
+            if (siteData.photoMetadata && Array.isArray(siteData.photoMetadata) && siteData.photoMetadata.length > 0) {
+              loadedPhotoMetadata[rowKey] = siteData.photoMetadata;
+              console.log(`[loadFromEquipmentOfflineSitesDB] ✅ Loaded photoMetadata for rowKey ${rowKey}:`, {
+                photoMetadataLength: siteData.photoMetadata.length,
+                photoMetadata: siteData.photoMetadata,
+                siteCode: siteData.siteCode
+              });
+            } else {
+              console.log(`[loadFromEquipmentOfflineSitesDB] ⚠️ No photoMetadata for rowKey ${rowKey}:`, {
+                hasPhotoMetadata: !!siteData.photoMetadata,
+                isArray: Array.isArray(siteData.photoMetadata),
+                length: siteData.photoMetadata?.length || 0,
+                siteCode: siteData.siteCode,
+                hasViewPhotos: !!(siteData.viewPhotos && siteData.viewPhotos.length > 0),
+                viewPhotosLength: siteData.viewPhotos?.length || 0
+              });
+            }
             if (siteData.remarks) loadedRemarks[rowKey] = siteData.remarks;
             if (siteData.supportDocuments && siteData.supportDocuments.length > 0) loadedSupportDocuments[rowKey] = siteData.supportDocuments;
+            
+            // CRITICAL: Also populate siteObservationsBySiteCode with photoMetadata for photo viewer
+            // This allows photo viewer to access metadata by siteCode
+            if (siteData.siteCode) {
+              const normalizedSiteCode = String(siteData.siteCode).trim().toUpperCase();
+              if (!loadedSiteObservationsBySiteCode[normalizedSiteCode]) {
+                loadedSiteObservationsBySiteCode[normalizedSiteCode] = {};
+              }
+              // Merge data, prioritizing existing data but adding photoMetadata
+              // CRITICAL: Ensure photoMetadata is properly included
+              const existingPhotoMetadata = loadedSiteObservationsBySiteCode[normalizedSiteCode].photoMetadata || [];
+              const newPhotoMetadata = (siteData.photoMetadata && Array.isArray(siteData.photoMetadata) && siteData.photoMetadata.length > 0)
+                ? siteData.photoMetadata 
+                : existingPhotoMetadata;
+              
+              loadedSiteObservationsBySiteCode[normalizedSiteCode] = {
+                ...loadedSiteObservationsBySiteCode[normalizedSiteCode],
+                status: siteData.siteObservations || loadedSiteObservationsBySiteCode[normalizedSiteCode].status,
+                typeOfIssue: siteData.typeOfIssue || loadedSiteObservationsBySiteCode[normalizedSiteCode].typeOfIssue,
+                remarks: siteData.remarks || loadedSiteObservationsBySiteCode[normalizedSiteCode].remarks,
+                viewPhotos: (siteData.viewPhotos && Array.isArray(siteData.viewPhotos) && siteData.viewPhotos.length > 0)
+                  ? siteData.viewPhotos 
+                  : (loadedSiteObservationsBySiteCode[normalizedSiteCode].viewPhotos || []),
+                photoMetadata: newPhotoMetadata,
+              };
+              
+              // Debug: Log when photoMetadata is found for siteCode
+              if (siteData.photoMetadata && Array.isArray(siteData.photoMetadata) && siteData.photoMetadata.length > 0) {
+                console.log(`[loadFromEquipmentOfflineSitesDB] ✅ Added photoMetadata to siteObservationsBySiteCode for siteCode ${normalizedSiteCode}:`, {
+                  photoMetadataLength: siteData.photoMetadata.length,
+                  photoMetadata: siteData.photoMetadata,
+                  viewPhotosLength: siteData.viewPhotos?.length || 0
+                });
+              }
+            }
             
             // CRITICAL: If Site Observations is "Resolved", ensure Task Status is also "Resolved"
             // This ensures that when data is loaded from database, Task Status shows "Resolved"
@@ -781,6 +866,32 @@ export default function MyData() {
           setRemarks(loadedRemarks);
           setSupportDocuments(loadedSupportDocuments);
           
+          // CRITICAL: Merge photoMetadata into siteObservationsBySiteCode for photo viewer access
+          // This allows photo viewer to access metadata by siteCode when photos are from mobile app
+          if (Object.keys(loadedSiteObservationsBySiteCode).length > 0) {
+            setSiteObservationsBySiteCode(prev => {
+              const merged = { ...prev };
+              Object.entries(loadedSiteObservationsBySiteCode).forEach(([siteCode, data]) => {
+                if (merged[siteCode]) {
+                  // Merge with existing data, prioritizing new photoMetadata
+                  merged[siteCode] = {
+                    ...merged[siteCode],
+                    ...data,
+                    // Ensure photoMetadata is included (prioritize new data)
+                    photoMetadata: data.photoMetadata && data.photoMetadata.length > 0 
+                      ? data.photoMetadata 
+                      : (merged[siteCode].photoMetadata || [])
+                  };
+                } else {
+                  // Create new entry
+                  merged[siteCode] = data;
+                }
+              });
+              siteObservationsBySiteCodeRef.current = merged;
+              return merged;
+            });
+          }
+          
           // Update refs immediately to ensure they're in sync
           siteObservationsRef.current = loadedSiteObservations;
           taskStatusRef.current = loadedTaskStatus;
@@ -789,6 +900,18 @@ export default function MyData() {
           photoMetadataRef.current = loadedPhotoMetadata;
           remarksRef.current = loadedRemarks;
           supportDocumentsRef.current = loadedSupportDocuments;
+          
+          // CRITICAL: Debug log to verify photoMetadata is loaded
+          const photoMetadataKeys = Object.keys(loadedPhotoMetadata);
+          console.log(`[loadFromEquipmentOfflineSitesDB] ✅ Set photoMetadata state with ${photoMetadataKeys.length} entries:`, {
+            keys: photoMetadataKeys.slice(0, 5), // Show first 5 keys
+            totalEntries: photoMetadataKeys.length,
+            sampleEntry: photoMetadataKeys.length > 0 ? {
+              rowKey: photoMetadataKeys[0],
+              metadataCount: loadedPhotoMetadata[photoMetadataKeys[0]]?.length || 0,
+              metadata: loadedPhotoMetadata[photoMetadataKeys[0]]
+            } : null
+          });
 
           // Debug: Log resolved entries
           const resolvedEntries = Object.entries(loadedSiteObservations).filter(([_, status]) => status === 'Resolved');
@@ -3653,6 +3776,7 @@ export default function MyData() {
                       capturedPhotos: obs.capturedPhotos || [],
                       uploadedPhotos: obs.uploadedPhotos || [],
                       viewPhotos: obs.viewPhotos || [],
+                      photoMetadata: obs.photoMetadata || [], // Include photo metadata from API
                       timestamp: obs.timestamp || obs.updatedAt || obs.createdAt,
                       savedFrom: obs.savedFrom || 'API',
                     };
@@ -10168,43 +10292,312 @@ export default function MyData() {
               }}
             >
               {(() => {
-                // Get photos from state first, then check action row if available
-                let photosToShow = viewPhotos[selectedRowKeyForPhotos] || [];
+                // Find the row to get Site Code-based data
+                const actionRow = allRowsForDisplay.find((row: any) => {
+                  const rowKey = generateRowKey(selectedFile, row, headers);
+                  return rowKey === selectedRowKeyForPhotos;
+                });
                 
-                // If no photos in state, check if this is an action row
-                if (photosToShow.length === 0) {
-                  const actionRow = allRowsForDisplay.find((row: any) => {
-                    const rowKey = generateRowKey(selectedFile, row, headers);
-                    return rowKey === selectedRowKeyForPhotos;
-                  });
-                  
-                  if (actionRow && actionRow._photos) {
-                    if (Array.isArray(actionRow._photos)) {
-                      photosToShow = actionRow._photos;
-                    } else if (typeof actionRow._photos === 'string') {
-                      photosToShow = [actionRow._photos];
+                // Get photos and metadata together - priority: Site Code-based (from API/mobile) > rowKey-based > action photos
+                let photosToShow = viewPhotos[selectedRowKeyForPhotos] || [];
+                let metadataToShow: Array<{ latitude?: number; longitude?: number; timestamp?: string; location?: string }> = [];
+                let photosSource = 'rowKey-based';
+                
+                // Try to get from Site Code-based observation data (from mobile app) - CRITICAL: Get both photos AND metadata together
+                if (actionRow) {
+                  const observationData = getObservationDataBySiteCode(actionRow);
+                  if (observationData) {
+                    // Check viewPhotos first (combined array)
+                    if (observationData.viewPhotos && Array.isArray(observationData.viewPhotos) && observationData.viewPhotos.length > 0) {
+                      photosToShow = observationData.viewPhotos.filter((photo: string) => 
+                        typeof photo === 'string' && photo.startsWith('data:image/')
+                      );
+                      photosSource = 'siteCode-viewPhotos';
+                      // Get metadata from same source
+                      if (observationData.photoMetadata && Array.isArray(observationData.photoMetadata) && observationData.photoMetadata.length > 0) {
+                        metadataToShow = observationData.photoMetadata;
+                        console.log(`[PhotoViewer] ✅ Found ${photosToShow.length} photos and ${metadataToShow.length} metadata from observationData.viewPhotos`, {
+                          metadata: metadataToShow
+                        });
+                      } else {
+                        const siteCodeForLog = actionRow['Site Code'] || actionRow['SITE CODE'] || actionRow['SiteCode'] || actionRow['Site_Code'] || actionRow['site code'] || '';
+                        console.log(`[PhotoViewer] ⚠️ Photos found but NO metadata in observationData.photoMetadata`, {
+                          hasPhotoMetadata: !!observationData.photoMetadata,
+                          isArray: Array.isArray(observationData.photoMetadata),
+                          length: observationData.photoMetadata?.length || 0,
+                          observationDataKeys: Object.keys(observationData),
+                          observationData: observationData, // Log full object to see what's there
+                          siteCode: siteCodeForLog,
+                          selectedRowKeyForPhotos,
+                          // CRITICAL: Check if metadata exists in photoMetadata state
+                          photoMetadataStateKeys: Object.keys(photoMetadata),
+                          photoMetadataStateCount: Object.keys(photoMetadata).length,
+                          hasMetadataForRowKey: !!photoMetadata[selectedRowKeyForPhotos]
+                        });
+                        
+                        // CRITICAL: Check if metadata exists in photoMetadata state by rowKey
+                        console.log(`[PhotoViewer] Checking photoMetadata state for rowKey: ${selectedRowKeyForPhotos}`, {
+                          hasMetadataInState: !!photoMetadata[selectedRowKeyForPhotos],
+                          metadataInState: photoMetadata[selectedRowKeyForPhotos],
+                          allPhotoMetadataKeys: Object.keys(photoMetadata),
+                          allPhotoMetadataKeysCount: Object.keys(photoMetadata).length
+                        });
+                        
+                        // CRITICAL FALLBACK: Try to get metadata from photoMetadata state by rowKey
+                        if (photoMetadata[selectedRowKeyForPhotos] && Array.isArray(photoMetadata[selectedRowKeyForPhotos]) && photoMetadata[selectedRowKeyForPhotos].length > 0) {
+                          metadataToShow = photoMetadata[selectedRowKeyForPhotos];
+                          console.log(`[PhotoViewer] ✅ Found metadata from photoMetadata state as fallback: ${metadataToShow.length} entries`, {
+                            metadata: metadataToShow
+                          });
+                        } else {
+                          // Additional fallback: Try to find metadata by siteCode in all photoMetadata entries
+                          const siteCode = actionRow['Site Code'] || actionRow['SITE CODE'] || actionRow['SiteCode'] || actionRow['Site_Code'] || actionRow['site code'] || '';
+                          if (siteCode) {
+                            const normalizedSiteCode = String(siteCode).trim().toUpperCase();
+                            console.log(`[PhotoViewer] Attempting to find metadata by siteCode: ${normalizedSiteCode}`);
+                            
+                            // Search all photoMetadata entries to find one matching this siteCode
+                            const allPhotoMetadataEntries = Object.entries(photoMetadata);
+                            for (const [rowKey, metaArray] of allPhotoMetadataEntries) {
+                              if (Array.isArray(metaArray) && metaArray.length > 0) {
+                                // Check if this rowKey's row has matching siteCode
+                                const matchingRow = allRowsForDisplay.find((row: any) => {
+                                  const rKey = generateRowKey(selectedFile, row, headers);
+                                  return rKey === rowKey;
+                                });
+                                if (matchingRow) {
+                                  const rowSiteCode = (matchingRow['Site Code'] || matchingRow['SITE CODE'] || matchingRow['SiteCode'] || matchingRow['Site_Code'] || matchingRow['site code'] || '').trim().toUpperCase();
+                                  if (rowSiteCode === normalizedSiteCode) {
+                                    metadataToShow = metaArray;
+                                    console.log(`[PhotoViewer] ✅ Found metadata by siteCode search: ${metadataToShow.length} entries from rowKey: ${rowKey}`);
+                                    break;
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    } else {
+                      // Fallback: check capturedPhotos and uploadedPhotos
+                      const allPhotos: string[] = [];
+                      const allMetadata: Array<{ latitude?: number; longitude?: number; timestamp?: string; location?: string }> = [];
+                      
+                      if (observationData.capturedPhotos && Array.isArray(observationData.capturedPhotos)) {
+                        observationData.capturedPhotos.forEach((photo: any, idx: number) => {
+                          // Handle both string (base64) and object formats
+                          const photoString = typeof photo === 'string' ? photo : (photo?.data || photo?.uri || '');
+                          if (photoString && typeof photoString === 'string' && photoString.startsWith('data:image/')) {
+                            allPhotos.push(photoString);
+                            // Try to get metadata for this photo
+                            if (observationData.photoMetadata && Array.isArray(observationData.photoMetadata) && observationData.photoMetadata[idx]) {
+                              allMetadata.push(observationData.photoMetadata[idx]);
+                            } else if (typeof photo === 'object' && (photo.latitude !== undefined || photo.longitude !== undefined)) {
+                              // Photo object might have metadata embedded
+                              allMetadata.push({
+                                latitude: photo.latitude,
+                                longitude: photo.longitude,
+                                timestamp: photo.timestamp,
+                                location: photo.location
+                              });
+                            } else {
+                              allMetadata.push({});
+                            }
+                          }
+                        });
+                      }
+                      if (observationData.uploadedPhotos && Array.isArray(observationData.uploadedPhotos)) {
+                        const capturedCount = allPhotos.length;
+                        observationData.uploadedPhotos.forEach((photo: any, idx: number) => {
+                          // Handle both string (base64) and object formats
+                          const photoString = typeof photo === 'string' ? photo : (photo?.data || photo?.uri || '');
+                          if (photoString && typeof photoString === 'string' && photoString.startsWith('data:image/')) {
+                            allPhotos.push(photoString);
+                            // Try to get metadata for this photo (account for captured photos offset)
+                            const metadataIdx = capturedCount + idx;
+                            if (observationData.photoMetadata && Array.isArray(observationData.photoMetadata) && observationData.photoMetadata[metadataIdx]) {
+                              allMetadata.push(observationData.photoMetadata[metadataIdx]);
+                            } else if (typeof photo === 'object' && (photo.latitude !== undefined || photo.longitude !== undefined)) {
+                              // Photo object might have metadata embedded
+                              allMetadata.push({
+                                latitude: photo.latitude,
+                                longitude: photo.longitude,
+                                timestamp: photo.timestamp,
+                                location: photo.location
+                              });
+                            } else {
+                              allMetadata.push({});
+                            }
+                          }
+                        });
+                      }
+                      if (allPhotos.length > 0) {
+                        photosToShow = allPhotos;
+                        metadataToShow = allMetadata;
+                        photosSource = 'siteCode-captured/uploaded';
+                        console.log(`[PhotoViewer] Found ${photosToShow.length} photos and ${metadataToShow.length} metadata from observationData.capturedPhotos/uploadedPhotos`);
+                      }
                     }
                   }
+                }
+                
+                // If no photos from Site Code, check rowKey-based state
+                if (photosToShow.length === 0) {
+                  photosToShow = viewPhotos[selectedRowKeyForPhotos] || [];
+                  photosSource = 'rowKey-based';
+                  // Get metadata from rowKey-based state
+                  if (photoMetadata[selectedRowKeyForPhotos] && Array.isArray(photoMetadata[selectedRowKeyForPhotos])) {
+                    metadataToShow = photoMetadata[selectedRowKeyForPhotos];
+                    console.log(`[PhotoViewer] Found ${photosToShow.length} photos and ${metadataToShow.length} metadata from rowKey-based state`);
+                  }
+                }
+                
+                // If still no photos, check if this is an action row
+                if (photosToShow.length === 0 && actionRow && actionRow._photos) {
+                  if (Array.isArray(actionRow._photos)) {
+                    photosToShow = actionRow._photos;
+                  } else if (typeof actionRow._photos === 'string') {
+                    photosToShow = [actionRow._photos];
+                  }
+                  photosSource = 'action-row';
+                }
+                
+                // Final fallback: If still no metadata but we have photos, try to find by siteCode in all photoMetadata entries
+                // This handles cases where rowKey might not match exactly (e.g., different fileId or row structure)
+                if (metadataToShow.length === 0 && actionRow && photosToShow.length > 0) {
+                  const siteCode = actionRow['Site Code'] || actionRow['SITE CODE'] || actionRow['SiteCode'] || actionRow['Site_Code'] || actionRow['site code'] || '';
+                  if (siteCode) {
+                    const normalizedSiteCode = String(siteCode).trim().toUpperCase();
+                    console.log(`[PhotoViewer] Attempting siteCode lookup for: ${normalizedSiteCode}`);
+                    
+                    // Search through all rows to find matching siteCode and get its photoMetadata
+                    const matchingRow = allRowsForDisplay.find((row: any) => {
+                      const rowKey = generateRowKey(selectedFile, row, headers);
+                      const rowSiteCode = (row['Site Code'] || row['SITE CODE'] || row['SiteCode'] || row['Site_Code'] || row['site code'] || '').trim().toUpperCase();
+                      const hasMetadata = photoMetadata[rowKey] && Array.isArray(photoMetadata[rowKey]) && photoMetadata[rowKey].length > 0;
+                      return rowSiteCode === normalizedSiteCode && hasMetadata;
+                    });
+                    
+                    if (matchingRow) {
+                      const matchingRowKeyValue = generateRowKey(selectedFile, matchingRow, headers);
+                      if (photoMetadata[matchingRowKeyValue]) {
+                        metadataToShow = photoMetadata[matchingRowKeyValue];
+                        console.log(`[PhotoViewer] ✅ Found ${metadataToShow.length} metadata entries by siteCode lookup for siteCode: ${normalizedSiteCode}, rowKey: ${matchingRowKeyValue}`, {
+                          metadata: metadataToShow
+                        });
+                      }
+                    } else {
+                      console.log(`[PhotoViewer] ❌ No matching row found with metadata for siteCode: ${normalizedSiteCode}`);
+                    }
+                  }
+                }
+                
+                // CRITICAL: If we have photos but metadata array length doesn't match, pad with empty objects
+                // This ensures metadata array aligns with photos array by index
+                if (photosToShow.length > 0 && metadataToShow.length < photosToShow.length) {
+                  console.log(`[PhotoViewer] ⚠️ Metadata array (${metadataToShow.length}) shorter than photos array (${photosToShow.length}), padding with empty objects`);
+                  while (metadataToShow.length < photosToShow.length) {
+                    metadataToShow.push({});
+                  }
+                }
+                
+                // Debug: Log final state
+                console.log(`[PhotoViewer] Final state - Photos: ${photosToShow.length}, Metadata: ${metadataToShow.length}, Source: ${photosSource}`, {
+                  selectedRowKeyForPhotos,
+                  metadataToShow: metadataToShow.slice(0, 2), // Show first 2 for debugging
+                  photoCount: photosToShow.length,
+                  allMetadataEntries: metadataToShow,
+                  photoMetadataStateKeys: Object.keys(photoMetadata).slice(0, 5),
+                  photoMetadataStateSize: Object.keys(photoMetadata).length
+                });
+                
+                // Additional debug: Check if metadata exists in photoMetadata state
+                if (metadataToShow.length === 0 && photoMetadata[selectedRowKeyForPhotos]) {
+                  console.log(`[PhotoViewer] WARNING: metadataToShow is empty but photoMetadata[${selectedRowKeyForPhotos}] exists:`, photoMetadata[selectedRowKeyForPhotos]);
                 }
                 
                 return photosToShow.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {photosToShow.map((photo, idx) => {
+                      // Get metadata for this specific photo (by index)
+                      const photoMeta = metadataToShow[idx] || {};
+                      const hasMetadata = (photoMeta.latitude !== undefined && photoMeta.longitude !== undefined) || 
+                                         photoMeta.location || 
+                                         photoMeta.timestamp;
+                      
+                      // Debug each photo
+                      if (idx === 0) {
+                        console.log(`[PhotoViewer] Photo ${idx + 1} metadata:`, {
+                          photoMeta,
+                          hasMetadata,
+                          latitude: photoMeta.latitude,
+                          longitude: photoMeta.longitude,
+                          location: photoMeta.location,
+                          timestamp: photoMeta.timestamp
+                        });
+                      }
+                      
                       return (
                         <div key={idx} className="relative bg-gray-100 rounded-lg overflow-hidden p-2">
-                          <img
-                            src={photo}
-                            alt={`Photo ${idx + 1}`}
-                            className="w-full h-auto object-contain"
-                            style={{ maxHeight: '400px', display: 'block', margin: '0 auto' }}
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="300"%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dominant-baseline="middle" fill="%23999"%3EImage not available%3C/text%3E%3C/svg%3E';
-                            }}
-                          />
-                          <div className="absolute top-2 right-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-xs">
-                            Photo {idx + 1} of {photosToShow.length}
+                          <div className="relative">
+                            <img
+                              src={photo}
+                              alt={`Photo ${idx + 1}`}
+                              className="w-full h-auto object-contain"
+                              style={{ maxHeight: '400px', display: 'block', margin: '0 auto' }}
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="300"%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dominant-baseline="middle" fill="%23999"%3EImage not available%3C/text%3E%3C/svg%3E';
+                              }}
+                            />
+                            <div className="absolute top-2 right-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-xs">
+                              Photo {idx + 1} of {photosToShow.length}
+                            </div>
+                            
+                            {/* Photo Metadata Overlay - Display at bottom of photo (matching mobile app) */}
+                            {hasMetadata && (
+                              <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-75 text-white p-2 text-xs" style={{ zIndex: 10 }}>
+                                {photoMeta.latitude !== undefined && photoMeta.longitude !== undefined && (
+                                  <div className="mb-1 flex items-center">
+                                    <span className="mr-2">📍</span>
+                                    <span>{photoMeta.latitude.toFixed(6)}, {photoMeta.longitude.toFixed(6)}</span>
+                                  </div>
+                                )}
+                                {photoMeta.location && (
+                                  <div className="mb-1 flex items-center">
+                                    <span className="mr-2">📍</span>
+                                    <span>{photoMeta.location}</span>
+                                  </div>
+                                )}
+                                {photoMeta.timestamp && (
+                                  <div className="flex items-center">
+                                    <span className="mr-2">🕐</span>
+                                    <span>{new Date(photoMeta.timestamp).toLocaleString('en-IN', { 
+                                      day: '2-digit', 
+                                      month: '2-digit', 
+                                      year: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                      second: '2-digit',
+                                      hour12: true
+                                    })}</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            {/* Debug: Log metadata info for troubleshooting */}
+                            {(() => {
+                              if (idx === 0) {
+                                console.log(`[PhotoViewer Render] Photo ${idx + 1}:`, {
+                                  hasMetadata,
+                                  photoMeta,
+                                  willRender: hasMetadata
+                                });
+                              }
+                              return null;
+                            })()}
                           </div>
+                          
                           <div className="mt-2 flex gap-2 justify-center">
                             <button
                               onClick={() => {

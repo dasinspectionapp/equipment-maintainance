@@ -777,10 +777,30 @@ export default function DeviceStatus() {
         let debugCount = 0;
         const statusRows: SiteStatusRow[] = fileRows
           .filter((row: any) => {
+            const siteCode = String(row[mainSiteCodeHeader] || '').trim().toUpperCase();
+            const offlineSite = offlineSitesMap[siteCode]; // Get database data if exists
+            
             // Filter 1: DEVICE STATUS = "OFFLINE" (case-insensitive)
-            const deviceStatus = mergedDeviceStatusColumn ? String(row[mergedDeviceStatusColumn] || '').trim() : '';
+            // CRITICAL: If CCR has approved, check database deviceStatus (should be 'ONLINE')
+            // Otherwise, check file deviceStatus
+            let deviceStatus = mergedDeviceStatusColumn ? String(row[mergedDeviceStatusColumn] || '').trim() : '';
+            if (offlineSite?.ccrStatus === 'Approved' && offlineSite?.deviceStatus) {
+              // CCR has approved - use deviceStatus from database (should be 'ONLINE')
+              deviceStatus = String(offlineSite.deviceStatus).trim().toUpperCase();
+              console.log('[DeviceStatus] Filter: CCR approved site, using database deviceStatus:', {
+                siteCode,
+                fileDeviceStatus: mergedDeviceStatusColumn ? String(row[mergedDeviceStatusColumn] || '').trim() : '',
+                databaseDeviceStatus: deviceStatus,
+                ccrStatus: offlineSite.ccrStatus
+              });
+            }
             const normalizedStatus = normalize(deviceStatus);
             const isOffline = normalizedStatus === 'offline';
+            // If CCR has approved and deviceStatus is 'ONLINE', exclude from list (it's resolved and no longer offline)
+            if (offlineSite?.ccrStatus === 'Approved' && normalizedStatus === 'online') {
+              console.log('[DeviceStatus] Filter: Excluding site (CCR approved, device is ONLINE):', siteCode);
+              return false; // Don't show sites that are ONLINE after CCR approval
+            }
             if (!isOffline) return false;
             
             // Filter 2: NO OF DAYS OFFLINE >= 2
@@ -849,7 +869,19 @@ export default function DeviceStatus() {
           const circle = circleHeader ? String(row[circleHeader] || '').trim() : '';
           
           // Extract DEVICE STATUS, NO OF DAYS OFFLINE, and ATTRIBUTE from merged row
-          const deviceStatus = mergedDeviceStatusColumn ? String(row[mergedDeviceStatusColumn] || '').trim() : '';
+          // CRITICAL: If CCR has approved (ccrStatus === 'Approved'), use deviceStatus from database (should be 'ONLINE')
+          // Otherwise, use deviceStatus from uploaded file
+          let deviceStatus = mergedDeviceStatusColumn ? String(row[mergedDeviceStatusColumn] || '').trim() : '';
+          if (offlineSite?.ccrStatus === 'Approved' && offlineSite?.deviceStatus) {
+            // CCR has approved - use deviceStatus from database (should be 'ONLINE')
+            deviceStatus = String(offlineSite.deviceStatus).trim().toUpperCase();
+            console.log('[DeviceStatus] Using deviceStatus from database (CCR approved):', {
+              siteCode,
+              fileDeviceStatus: mergedDeviceStatusColumn ? String(row[mergedDeviceStatusColumn] || '').trim() : '',
+              databaseDeviceStatus: deviceStatus,
+              ccrStatus: offlineSite.ccrStatus
+            });
+          }
           const noOfDaysOfflineValue = mergedNoOfDaysOfflineColumn ? row[mergedNoOfDaysOfflineColumn] : null;
           let noOfDaysOffline: number | string = '-';
           if (noOfDaysOfflineValue !== null && noOfDaysOfflineValue !== undefined && noOfDaysOfflineValue !== '') {
@@ -887,6 +919,47 @@ export default function DeviceStatus() {
           let dateLabel = '';
           let dateValue: string | Date | null = null;
           
+          // CRITICAL: First check if CCR has approved (regardless of taskStatus)
+          // This ensures PRESENT STATUS updates correctly when CCR approves
+          const ccrApproval = approvals.find((approval: any) => {
+            const approvalSiteCode = String(approval.siteCode || '').trim().toUpperCase();
+            return approvalSiteCode === siteCode &&
+                   approval.approvalType === 'CCR Resolution Approval' &&
+                   approval.assignedToRole === 'CCR';
+          });
+          
+          const approvalAction = actions.find((action: any) => {
+            const actionSiteCode = extractSiteCodeFromAction(action);
+            return actionSiteCode === siteCode && 
+                   (action.typeOfIssue === 'AMC Resolution Approval' || action.typeOfIssue === 'CCR Resolution Approval') &&
+                   action.status === 'Completed' &&
+                   (action.approvedByRole === 'CCR' || action.assignedToRole === 'CCR');
+          });
+          
+          const ccrStatus = offlineSite?.ccrStatus || '';
+          const approvalStatus = ccrApproval?.status || '';
+          const isCCRApproved = ccrStatus === 'Approved' || approvalStatus === 'Approved';
+          const isKeptForMonitoring = ccrStatus === 'Kept for Monitoring' || approvalStatus === 'Kept for Monitoring';
+          const isRecheck = approvalStatus === 'Recheck Requested' ||
+                           ccrStatus === 'Recheck' || 
+                           ccrStatus === 'Recheck Requested';
+          
+          // If CCR has approved, show "Resolved and Approved" regardless of taskStatus
+          if (isCCRApproved && (approvalAction || ccrApproval)) {
+            presentStatus = 'Resolved and Approved';
+            dateValue = ccrApproval?.approvedAt || approvalAction?.completedDate || ccrApproval?.updatedAt || approvalAction?.updatedAt || offlineSite?.updatedAt;
+            dateLabel = 'CCR Approved Date';
+          } else if (isKeptForMonitoring) {
+            presentStatus = 'Kept for Monitoring';
+            dateValue = offlineSite?.updatedAt || offlineSite?.createdAt;
+            dateLabel = 'Date';
+          } else if (isRecheck) {
+            presentStatus = 'Recheck Initiated';
+            dateValue = offlineSite?.updatedAt || offlineSite?.createdAt;
+            dateLabel = 'Date';
+          } else {
+            // If CCR hasn't approved yet, calculate based on taskStatus
+          
           // Check if Task Status is "Resolved" (greyed out)
           // Only consider it Resolved if taskStatus is explicitly "Resolved"
           // Note: Empty siteObservations alone does NOT mean Resolved - it could just be blank/not processed yet
@@ -896,52 +969,8 @@ export default function DeviceStatus() {
                              taskStatus.toLowerCase().includes('resolved'));
           
           if (isResolved) {
-            // Check if CCR has approved it - use helper function to extract siteCode
-            const approvalAction = actions.find((action: any) => {
-              const actionSiteCode = extractSiteCodeFromAction(action);
-              return actionSiteCode === siteCode && 
-                     (action.typeOfIssue === 'AMC Resolution Approval' || action.typeOfIssue === 'CCR Resolution Approval') &&
-                     action.status === 'Completed' &&
-                     (action.approvedByRole === 'CCR' || action.assignedToRole === 'CCR');
-            });
-            
-              // Also check approvals collection for CCR approval (check for any status, not just 'Approved')
-              const ccrApproval = approvals.find((approval: any) => {
-                const approvalSiteCode = String(approval.siteCode || '').trim().toUpperCase();
-                return approvalSiteCode === siteCode &&
-                       approval.approvalType === 'CCR Resolution Approval' &&
-                       approval.assignedToRole === 'CCR';
-              });
-            
-            // Get approval status
-            const approvalStatus = ccrApproval?.status || '';
-            
-            // Also check ccrStatus field in offlineSite
-            const ccrStatus = offlineSite?.ccrStatus || '';
-            const isCCRApproved = ccrStatus === 'Approved';
-            const isKeptForMonitoring = ccrStatus === 'Kept for Monitoring' || approvalStatus === 'Kept for Monitoring';
-            
-            // Check if Recheck - check both ccrStatus and approval status
-            const isRecheck = approvalStatus === 'Recheck Requested' ||
-                             ccrStatus === 'Recheck' || 
-                             ccrStatus === 'Recheck Requested';
-            
-            if (isKeptForMonitoring) {
-              // CCR has marked as "Kept for Monitoring"
-              presentStatus = 'Kept for Monitoring';
-              dateValue = offlineSite?.updatedAt || offlineSite?.createdAt;
-              dateLabel = 'Date';
-            } else if (isRecheck) {
-              // CCR has marked as "Recheck"
-              presentStatus = 'Recheck Initiated';
-              dateValue = offlineSite?.updatedAt || offlineSite?.createdAt;
-              dateLabel = 'Date';
-            } else if (approvalAction || (ccrApproval && approvalStatus === 'Approved') || isCCRApproved) {
-              presentStatus = 'Resolved and Approved';
-              // Get CCR Approved Date
-              dateValue = ccrApproval?.approvedAt || approvalAction?.completedDate || ccrApproval?.updatedAt || approvalAction?.updatedAt || offlineSite?.updatedAt;
-              dateLabel = 'CCR Approved Date';
-            } else {
+            // CCR approval already checked above - if not approved, show waiting status
+            if (!isCCRApproved && !isKeptForMonitoring && !isRecheck) {
               presentStatus = 'Resolved at Equipment Team and Waiting for CCR Approval';
               // Get Resolved Date (when Equipment team resolved it)
               const resolvedAction = actions.find((action: any) => {
@@ -953,70 +982,10 @@ export default function DeviceStatus() {
               dateValue = offlineSite?.updatedAt || resolvedAction?.completedDate || resolvedAction?.updatedAt || offlineSite?.createdAt;
               dateLabel = 'Resolved Date';
             }
+            // If CCR approved/kept for monitoring/recheck, status already set above
           } else if (taskStatus && taskStatus.trim() !== '') {
-            // If Task Status shows "Pending at CCR Team", check if CCR has approved it
-            if (taskStatus.toLowerCase().includes('pending at ccr') || 
-                taskStatus.toLowerCase().includes('ccr team') ||
-                taskStatus.toLowerCase().includes('ccr approval')) {
-              
-              // First, check approvals collection for CCR approval status (this is the source of truth)
-              const ccrApproval = approvals.find((approval: any) => {
-                const approvalSiteCode = String(approval.siteCode || '').trim().toUpperCase();
-                return approvalSiteCode === siteCode &&
-                       approval.approvalType === 'CCR Resolution Approval' &&
-                       approval.assignedToRole === 'CCR';
-              });
-              
-              // Check if CCR has approved it via action
-              const approvalAction = actions.find((action: any) => {
-                const actionSiteCode = extractSiteCodeFromAction(action);
-                return actionSiteCode === siteCode && 
-                       (action.typeOfIssue === 'AMC Resolution Approval' || action.typeOfIssue === 'CCR Resolution Approval') &&
-                       action.status === 'Completed' &&
-                       (action.approvedByRole === 'CCR' || action.assignedToRole === 'CCR');
-              });
-              
-              // Also check ccrStatus field in offlineSite
-              const ccrStatus = offlineSite?.ccrStatus || '';
-              const isCCRApproved = ccrStatus === 'Approved';
-              const isKeptForMonitoring = ccrStatus === 'Kept for Monitoring';
-              
-              // Check if Recheck - check approval status first (this is the source of truth)
-              const approvalStatus = ccrApproval?.status || '';
-              const isRecheck = approvalStatus === 'Recheck Requested' ||
-                               ccrStatus === 'Recheck' || 
-                               ccrStatus === 'Recheck Requested';
-              
-              if (isKeptForMonitoring || approvalStatus === 'Kept for Monitoring') {
-                // CCR has marked as "Kept for Monitoring"
-                presentStatus = 'Kept for Monitoring';
-                dateValue = offlineSite?.updatedAt || offlineSite?.createdAt;
-                dateLabel = 'Date';
-              } else if (isRecheck) {
-                // CCR has marked as "Recheck" - show as "Recheck Initiated"
-                presentStatus = 'Recheck Initiated';
-                dateValue = offlineSite?.updatedAt || offlineSite?.createdAt;
-                dateLabel = 'Date';
-              } else if (approvalAction || (ccrApproval && approvalStatus === 'Approved') || isCCRApproved) {
-                // CCR has approved it - show as "Resolved"
-                presentStatus = 'Resolved';
-                // Get CCR Approved Date
-                dateValue = ccrApproval?.approvedAt || approvalAction?.completedDate || ccrApproval?.updatedAt || approvalAction?.updatedAt || offlineSite?.updatedAt;
-                dateLabel = 'CCR Approved Date';
-              } else {
-                // Still waiting for CCR approval
-                presentStatus = 'Resolved at Equipment Team and Waiting for CCR Approval';
-                // Get Resolved Date (when Equipment team resolved it)
-                const resolvedAction = actions.find((action: any) => {
-                  const actionSiteCode = extractSiteCodeFromAction(action);
-                  return actionSiteCode === siteCode && 
-                         action.status === 'Completed' &&
-                         (action.assignedByRole === 'Equipment' || action.assignedByRole === 'AMC');
-                });
-                dateValue = offlineSite?.updatedAt || resolvedAction?.completedDate || resolvedAction?.updatedAt || offlineSite?.createdAt;
-                dateLabel = 'Date of Resolved';
-              }
-            } else if (taskStatus.toLowerCase().includes('pending at')) {
+            // CCR approval already checked above - if not approved, use taskStatus
+            if (taskStatus.toLowerCase().includes('pending at')) {
               // For other "Pending at..." statuses, use the same value
               presentStatus = taskStatus;
               // If it's "Pending at Equipment Team", use most recent OFFLINE date
@@ -1097,6 +1066,7 @@ export default function DeviceStatus() {
               }
             }
           }
+          } // Close the else block for CCR approval check
 
           return {
             siteCode,

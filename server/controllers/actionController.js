@@ -2855,15 +2855,24 @@ export async function updateActionStatus(req, res, next) {
                   newCCRStatus = 'Kept for Monitoring';
                 }
                 
+                // Prepare update data
+                const previousDeviceStatus = equipmentSite.deviceStatus || '';
+                const updateData = {
+                  ccrStatus: newCCRStatus,
+                  lastSyncedAt: new Date()
+                };
+                
+                // CRITICAL: When CCR approves, also update deviceStatus to 'ONLINE'
+                if (newCCRStatus === 'Approved') {
+                  updateData.deviceStatus = 'ONLINE';
+                }
+                
                 // Update CCR status (FINAL APPROVAL - CCR is the final approval authority)
                 // When CCR approves, the record will be hidden from MY OFFLINE SITES tab but remains in database
                 const updateResult = await EquipmentOfflineSites.updateOne(
                   { _id: equipmentSite._id },
                   { 
-                    $set: { 
-                      ccrStatus: newCCRStatus,
-                      lastSyncedAt: new Date()
-                    } 
+                    $set: updateData
                   }
                 );
                 
@@ -2875,6 +2884,8 @@ export async function updateActionStatus(req, res, next) {
                   fileId: equipmentSite.fileId,
                   previousCCRStatus: equipmentSite.ccrStatus,
                   newCCRStatus: newCCRStatus,
+                  previousDeviceStatus: previousDeviceStatus,
+                  newDeviceStatus: newCCRStatus === 'Approved' ? 'ONLINE' : previousDeviceStatus,
                   willBeHiddenFromMyOfflineSites: newCCRStatus === 'Approved',
                   updateResult: {
                     matchedCount: updateResult.matchedCount,
@@ -2887,8 +2898,17 @@ export async function updateActionStatus(req, res, next) {
                 console.log('[updateActionStatus] Verification - Record after update:', {
                   _id: verifyRecord?._id,
                   ccrStatus: verifyRecord?.ccrStatus,
+                  deviceStatus: verifyRecord?.deviceStatus,
                   siteCode: verifyRecord?.siteCode
                 });
+                
+                if (newCCRStatus === 'Approved' && verifyRecord?.deviceStatus !== 'ONLINE') {
+                  console.error('[updateActionStatus] ❌ WARNING: deviceStatus update verification failed!', {
+                    expected: 'ONLINE',
+                    actual: verifyRecord?.deviceStatus,
+                    equipmentSiteId: equipmentSite._id
+                  });
+                }
               } else {
                 console.warn('[updateActionStatus] ❌ EquipmentOfflineSites record not found for CCR approval:', {
                   actionId: action._id,

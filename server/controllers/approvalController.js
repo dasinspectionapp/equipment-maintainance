@@ -387,11 +387,14 @@ export const updateApprovalStatus = async (req, res) => {
           const previousCCRStatus = equipmentSite.ccrStatus;
           
           if (newStatus === 'Approved') {
+            const previousDeviceStatus = equipmentSite.deviceStatus || '';
+            
             const updateResult = await EquipmentOfflineSites.findByIdAndUpdate(
               equipmentSite._id,
               { 
                 $set: { 
                   ccrStatus: 'Approved',
+                  deviceStatus: 'ONLINE', // Update device status to ONLINE when CCR approves
                   lastSyncedAt: new Date()
                 } 
               },
@@ -401,7 +404,7 @@ export const updateApprovalStatus = async (req, res) => {
             // Verify the update
             const verifyRecord = await EquipmentOfflineSites.findById(equipmentSite._id).lean();
             
-            console.log('[ApprovalController] ✅ Updated EquipmentOfflineSites ccrStatus to Approved (FINAL APPROVAL - will be hidden from MY OFFLINE SITES):', {
+            console.log('[ApprovalController] ✅ Updated EquipmentOfflineSites ccrStatus to Approved and deviceStatus to ONLINE (FINAL APPROVAL - will be hidden from MY OFFLINE SITES):', {
               equipmentSiteId: equipmentSite._id,
               siteCode: approval.siteCode,
               fileId: equipmentSite.fileId,
@@ -409,7 +412,9 @@ export const updateApprovalStatus = async (req, res) => {
               rowKey: equipmentSite.rowKey,
               previousCCRStatus: previousCCRStatus,
               newCCRStatus: verifyRecord?.ccrStatus,
-              updateSuccess: verifyRecord?.ccrStatus === 'Approved',
+              previousDeviceStatus: previousDeviceStatus,
+              newDeviceStatus: verifyRecord?.deviceStatus,
+              updateSuccess: verifyRecord?.ccrStatus === 'Approved' && verifyRecord?.deviceStatus === 'ONLINE',
               willBeHidden: verifyRecord?.ccrStatus === 'Approved'
             });
             
@@ -417,6 +422,14 @@ export const updateApprovalStatus = async (req, res) => {
               console.error('[ApprovalController] ❌ WARNING: ccrStatus update verification failed!', {
                 expected: 'Approved',
                 actual: verifyRecord?.ccrStatus,
+                equipmentSiteId: equipmentSite._id
+              });
+            }
+            
+            if (verifyRecord?.deviceStatus !== 'ONLINE') {
+              console.error('[ApprovalController] ❌ WARNING: deviceStatus update verification failed!', {
+                expected: 'ONLINE',
+                actual: verifyRecord?.deviceStatus,
                 equipmentSiteId: equipmentSite._id
               });
             }

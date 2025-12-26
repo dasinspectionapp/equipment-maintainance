@@ -403,11 +403,27 @@ export const saveEquipmentOfflineSite = async (req, res) => {
     // When a routed document is resolved, update the related action to "Completed"
     // This will trigger the approval creation logic in updateActionStatus
     // ===================================================================
+    console.log('[saveEquipmentOfflineSite] 🔍 Checking if approval should be triggered:', {
+      finalSiteObservations,
+      originalSiteObservations: siteObservations,
+      hasOfflineSite: !!offlineSite,
+      offlineSiteId: offlineSite?._id?.toString(),
+      willTriggerApproval: finalSiteObservations === '' && !!offlineSite
+    });
+    
     if (finalSiteObservations === '' && offlineSite) {
       try {
         // Get current user role first to check if this is a routed user resolving
         const currentUserDoc = await User.findOne({ userId: userId }).lean();
         const currentUserRole = currentUserDoc?.role || '';
+        
+        console.log('[saveEquipmentOfflineSite] ✅ Entered approval creation block:', {
+          userId,
+          currentUserRole,
+          siteCode: siteCode.trim().toUpperCase(),
+          finalSiteObservations,
+          originalSiteObservations: siteObservations
+        });
         
         // Check if this is a routed document (has routing suffix in rowKey)
         // OR if ownership was transferred (savedFrom indicates routing)
@@ -431,8 +447,11 @@ export const saveEquipmentOfflineSite = async (req, res) => {
           shouldCreateApproval: isRoutedDocument || hasOwnershipTransfer || isRoutedUser
         });
         
-        // Handle routed documents, ownership-transferred documents, OR routed users resolving
-        if (isRoutedDocument || hasOwnershipTransfer || isRoutedUser) {
+        // Handle routed documents, ownership-transferred documents, routed users resolving, OR Equipment role resolving
+        // CRITICAL: Equipment role resolving should also trigger approval creation
+        const shouldTriggerApproval = isRoutedDocument || hasOwnershipTransfer || isRoutedUser || currentUserRole === 'Equipment';
+        
+        if (shouldTriggerApproval) {
           console.log('[saveEquipmentOfflineSite] 🔍 Resolved routed/transferred document detected - finding related action:', {
             rowKey: rowKey,
             siteCode: siteCode.trim().toUpperCase(),
@@ -899,27 +918,375 @@ export const saveEquipmentOfflineSite = async (req, res) => {
                   } else {
                     console.error('[saveEquipmentOfflineSite] ❌ No CCR user found - Cannot create approval');
                   }
-                } else {
+                } 
+                // ===================================================================
+                // CASE 3: EQUIPMENT ROLE RESOLVES → Create CCR Approval
+                // ===================================================================
+                else if (currentUserRole === 'Equipment') {
+                  // Check both finalSiteObservations (empty = Resolved) and original siteObservations value
+                  const isResolvedStatus = finalSiteObservations === '' || 
+                                         (siteObservations !== undefined && 
+                                          siteObservations !== null && 
+                                          String(siteObservations).trim() === 'Resolved');
+                  
+                  if (isResolvedStatus) {
+                    console.log('[saveEquipmentOfflineSite] 🔄 Equipment user resolved (with action) - Creating CCR approval:', {
+                      userRole: currentUserRole,
+                      userId: userId,
+                      actionId: action._id.toString(),
+                      finalSiteObservations,
+                      originalSiteObservations: siteObservations,
+                      isResolved: isResolvedStatus
+                    });
+                  
+                  // Find CCR user
+                  const allCCRUsers = await User.find({
+                    role: 'CCR',
+                    status: 'approved',
+                    isActive: true
+                  }).lean();
+                  
+                  const ccrUser = allCCRUsers[0];
+                  
+                  if (ccrUser) {
+                    const siteCodeUpper = siteCode.trim().toUpperCase();
+                    
+                    // Check if CCR approval already exists
+                    const existingCCRAction = await Action.findOne({
+                      typeOfIssue: 'CCR Resolution Approval',
+                      sourceFileId: fileId,
+                      $or: [
+                        { 'rowData.Site Code': siteCodeUpper },
+                        { 'rowData.SITE CODE': siteCodeUpper }
+                      ],
+                      status: { $in: ['Pending', 'In Progress'] }
+                    }).lean();
+                    
+                    const existingCCRApproval = await Approval.findOne({
+                      approvalType: 'CCR Resolution Approval',
+                      siteCode: siteCodeUpper,
+                      status: { $in: ['Pending', 'In Progress'] }
+                    }).lean();
+                    
+                    if (!existingCCRAction && !existingCCRApproval) {
+                      // Get division from action or offlineSite
+                      const division = action.assignedToDivision || 
+                        offlineSite.division ||
+                        offlineSite.originalRowData?.['DIVISION'] || 
+                        offlineSite.originalRowData?.['Division'] || 
+                        offlineSite.originalRowData?.['division'] || 
+                        offlineSite.originalRowData?.['CIRCLE'] ||
+                        offlineSite.circle || 
+                        'General';
+                      
+                      // Create CCR approval action
+                      const ccrApproval = await Action.create({
+                        rowData: {
+                          ...(action.rowData || {}),
+                          _actionId: action._id.toString(),
+                          __siteObservationStatus: 'Resolved'
+                        },
+                        headers: action.headers || [],
+                        routing: 'CCR Team',
+                        typeOfIssue: 'CCR Resolution Approval',
+                        remarks: remarks || `Resolution completed by Equipment team; pending CCR approval`,
+                        photo: action.photo || null,
+                        assignedToUserId: ccrUser.userId,
+                        assignedToRole: 'CCR',
+                        assignedToDivision: division,
+                        assignedByUserId: action.assignedByUserId || userId,
+                        assignedByRole: 'Equipment',
+                        sourceFileId: fileId,
+                        originalRowIndex: action.originalRowIndex || null,
+                        status: 'Pending',
+                        priority: action.priority || 'Medium',
+                        assignedDate: new Date()
+                      });
+                      
+                      // Create Approval document
+                      // CRITICAL: Use offlineSite._id to link approval to the EquipmentOfflineSites record
+                      const approval = await Approval.create({
+                        actionId: ccrApproval._id,
+                        siteCode: siteCodeUpper,
+                        equipmentOfflineSiteId: offlineSite._id,
+                        approvalType: 'CCR Resolution Approval',
+                        status: 'Pending',
+                        submittedByUserId: action.assignedByUserId || userId,
+                        submittedByRole: 'Equipment',
+                        assignedToUserId: ccrUser.userId,
+                        assignedToRole: 'CCR',
+                        submissionRemarks: remarks || `Resolution completed by Equipment team; pending CCR approval`,
+                        photos: action.photo ? (Array.isArray(action.photo) ? action.photo : [action.photo]) : [],
+                        supportDocuments: [],
+                        fileId: fileId,
+                        rowKey: rowKey,
+                        originalRowData: action.rowData || {},
+                        metadata: {
+                          createdFrom: 'Mobile App',
+                          savedFrom: offlineSite.savedFrom || 'MY OFFLINE SITES'
+                        }
+                      });
+                      
+                      console.log('[saveEquipmentOfflineSite] ✅ Approval document created (with action) with details:', {
+                        approvalId: approval._id.toString(),
+                        equipmentOfflineSiteId: approval.equipmentOfflineSiteId?.toString(),
+                        siteCode: approval.siteCode,
+                        status: approval.status,
+                        approvalType: approval.approvalType,
+                        assignedToUserId: approval.assignedToUserId,
+                        assignedToRole: approval.assignedToRole
+                      });
+                      
+                      console.log('[saveEquipmentOfflineSite] ✅✅✅ CCR approval created for Equipment role (with action):', {
+                        approvalId: approval._id.toString(),
+                        actionId: ccrApproval._id.toString(),
+                        siteCode: siteCodeUpper,
+                        assignedToUserId: approval.assignedToUserId
+                      });
+                      
+                      // Send notification to all CCR users
+                      try {
+                        const allCCRUsersForNotif = await User.find({
+                          role: 'CCR',
+                          status: 'approved',
+                          isActive: true
+                        }).select('userId fullName').lean();
+                        
+                        const notifications = allCCRUsersForNotif.map(ccrUser => ({
+                          userId: ccrUser.userId,
+                          title: 'New Resolution Approval Required',
+                          message: `Site ${siteCodeUpper} resolution requires CCR approval.`,
+                          type: 'info',
+                          category: 'approval',
+                          application: 'Equipment Maintenance',
+                          link: '/dashboard/my-approvals',
+                          metadata: {
+                            approvalId: approval._id.toString(),
+                            actionId: ccrApproval._id.toString(),
+                            siteCode: siteCodeUpper
+                          }
+                        }));
+                        
+                        await Notification.insertMany(notifications);
+                        console.log('[saveEquipmentOfflineSite] ✅ Notifications sent to all CCR users:', {
+                          ccrUsersCount: allCCRUsersForNotif.length,
+                          siteCode: siteCodeUpper
+                        });
+                      } catch (notifError) {
+                        console.error('[saveEquipmentOfflineSite] Error sending notifications to CCR users:', notifError.message);
+                      }
+                    } else {
+                      console.log('[saveEquipmentOfflineSite] CCR approval already exists for Equipment resolution:', {
+                        existingActionId: existingCCRAction?._id?.toString(),
+                        existingApprovalId: existingCCRApproval?._id?.toString()
+                      });
+                    }
+                  } else {
+                    console.error('[saveEquipmentOfflineSite] ❌ No CCR user found - Cannot create approval for Equipment resolution');
+                  }
+                  } else {
+                    console.log('[saveEquipmentOfflineSite] Equipment resolved but status is not Resolved, skipping CCR approval:', {
+                      finalSiteObservations,
+                      originalSiteObservations: siteObservations
+                    });
+                  }
+                } else if (currentUserRole === 'CCR') {
                   console.log('[saveEquipmentOfflineSite] Skipping approval creation:', {
-                    reason: currentUserRole === 'CCR' ? 'CCR users cannot create approvals for themselves' : 
-                            currentUserRole === 'Equipment' ? 'Equipment users resolve through different workflow' : 'Unknown role',
+                    reason: 'CCR users cannot create approvals for themselves',
                     userRole: currentUserRole
                   });
                 }
               }
             }
           } else {
-            // No action found - but we still need to create approval for routed users
+            // No action found - but we still need to create approval for routed users AND Equipment role
             console.log('[saveEquipmentOfflineSite] ⚠️ No related action found, but checking if we can create approval directly:', {
               rowKey: rowKey,
               siteCode: siteCode.trim().toUpperCase(),
               userId: userId,
               currentUserRole: currentUserRole,
-              isRoutedUser: isRoutedUser
+              isRoutedUser: isRoutedUser,
+              siteObservations: siteObservations
             });
             
+            // CRITICAL: When Equipment role resolves directly (without routing), create CCR approval
+            // This handles the case where Equipment user sets Site Observations to "Resolved" in MY OFFLINE SITES
+            // Check both finalSiteObservations (empty = Resolved) and original siteObservations value
+            const isResolvedStatus = finalSiteObservations === '' || 
+                                   (siteObservations !== undefined && 
+                                    siteObservations !== null && 
+                                    String(siteObservations).trim() === 'Resolved');
+            
+            console.log('[saveEquipmentOfflineSite] 🔍 Checking Equipment resolution (no action):', {
+              currentUserRole,
+              finalSiteObservations,
+              siteObservations,
+              isEquipment: currentUserRole === 'Equipment',
+              isResolved: isResolvedStatus,
+              siteCode: siteCode.trim().toUpperCase()
+            });
+            
+            if (currentUserRole === 'Equipment' && isResolvedStatus) {
+              console.log('[saveEquipmentOfflineSite] ✅✅✅ Equipment role + Resolved status confirmed - Proceeding with CCR approval creation');
+              console.log('[saveEquipmentOfflineSite] 🔄 Equipment role resolved directly (no action) - Creating CCR approval:', {
+                siteCode: siteCode.trim().toUpperCase(),
+                resolvedByUserId: userId,
+                finalSiteObservations,
+                originalSiteObservations: siteObservations,
+                offlineSiteId: offlineSite?._id?.toString(),
+                hasOfflineSite: !!offlineSite
+              });
+              
+              try {
+                // Find CCR user
+                const allCCRUsers = await User.find({
+                  role: 'CCR',
+                  status: 'approved',
+                  isActive: true
+                }).lean();
+                
+                const ccrUser = allCCRUsers[0];
+                
+                if (ccrUser) {
+                  const siteCodeUpper = siteCode.trim().toUpperCase();
+                  
+                  // Check if CCR approval already exists
+                  const existingCCRApproval = await Approval.findOne({
+                    approvalType: 'CCR Resolution Approval',
+                    siteCode: siteCodeUpper,
+                    status: { $in: ['Pending', 'In Progress'] }
+                  }).lean();
+                  
+                  if (!existingCCRApproval) {
+                    // Get division from offlineSite or originalRowData
+                    const division = offlineSite.division || 
+                      offlineSite.originalRowData?.['DIVISION'] || 
+                      offlineSite.originalRowData?.['Division'] || 
+                      offlineSite.originalRowData?.['division'] || 
+                      offlineSite.originalRowData?.['CIRCLE'] ||
+                      offlineSite.circle || 
+                      'General';
+                    
+                    // Create CCR approval action first
+                    const ccrApprovalAction = await Action.create({
+                      rowData: offlineSite.originalRowData || {},
+                      headers: offlineSite.headers || [],
+                      routing: 'CCR Team',
+                      typeOfIssue: 'CCR Resolution Approval',
+                      remarks: remarks || `Resolution completed by Equipment team; pending CCR approval`,
+                      photo: offlineSite.viewPhotos || null,
+                      assignedToUserId: ccrUser.userId,
+                      assignedToRole: 'CCR',
+                      assignedToDivision: division || 'General',
+                      assignedByUserId: userId,
+                      assignedByRole: 'Equipment',
+                      sourceFileId: fileId,
+                      status: 'Pending',
+                      priority: 'Medium',
+                      assignedDate: new Date()
+                    });
+                    
+                    // Create Approval document
+                    // CRITICAL: Use offlineSite._id to link approval to the EquipmentOfflineSites record
+                    const approval = await Approval.create({
+                      actionId: ccrApprovalAction._id,
+                      siteCode: siteCodeUpper,
+                      equipmentOfflineSiteId: offlineSite._id,
+                      approvalType: 'CCR Resolution Approval',
+                      status: 'Pending',
+                      submittedByUserId: userId,
+                      submittedByRole: 'Equipment',
+                      assignedToUserId: ccrUser.userId,
+                      assignedToRole: 'CCR',
+                      submissionRemarks: remarks || `Resolution completed by Equipment team; pending CCR approval`,
+                      photos: offlineSite.viewPhotos || [],
+                      supportDocuments: offlineSite.supportDocuments || [],
+                      fileId: fileId,
+                      rowKey: rowKey,
+                      originalRowData: offlineSite.originalRowData || {},
+                      metadata: {
+                        createdFrom: 'Mobile App',
+                        savedFrom: offlineSite.savedFrom || 'MY OFFLINE SITES'
+                      }
+                    });
+                    
+                    console.log('[saveEquipmentOfflineSite] ✅ Approval document created with details:', {
+                      approvalId: approval._id.toString(),
+                      equipmentOfflineSiteId: approval.equipmentOfflineSiteId?.toString(),
+                      siteCode: approval.siteCode,
+                      status: approval.status,
+                      approvalType: approval.approvalType,
+                      assignedToUserId: approval.assignedToUserId,
+                      assignedToRole: approval.assignedToRole
+                    });
+                    
+                    console.log('[saveEquipmentOfflineSite] ✅✅✅ CCR approval created for Equipment role (no action):', {
+                      approvalId: approval._id.toString(),
+                      actionId: ccrApprovalAction._id.toString(),
+                      siteCode: siteCodeUpper,
+                      assignedToUserId: approval.assignedToUserId,
+                      assignedToRole: approval.assignedToRole,
+                      status: approval.status,
+                      approvalType: approval.approvalType,
+                      equipmentOfflineSiteId: approval.equipmentOfflineSiteId?.toString(),
+                      willBeVisibleToCCR: true
+                    });
+                    
+                    // Send notification to all CCR users
+                    try {
+                      const allCCRUsersForNotif = await User.find({
+                        role: 'CCR',
+                        status: 'approved',
+                        isActive: true
+                      }).select('userId fullName').lean();
+                      
+                      const notifications = allCCRUsersForNotif.map(ccrUser => ({
+                        userId: ccrUser.userId,
+                        title: 'New Resolution Approval Required',
+                        message: `Site ${siteCodeUpper} resolution requires CCR approval.`,
+                        type: 'info',
+                        category: 'approval',
+                        application: 'Equipment Maintenance',
+                        link: '/dashboard/my-approvals',
+                        metadata: {
+                          approvalId: approval._id.toString(),
+                          actionId: ccrApprovalAction._id.toString(),
+                          siteCode: siteCodeUpper
+                        }
+                      }));
+                      
+                      await Notification.insertMany(notifications);
+                      console.log('[saveEquipmentOfflineSite] ✅ Notifications sent to all CCR users:', {
+                        ccrUsersCount: allCCRUsersForNotif.length,
+                        siteCode: siteCodeUpper
+                      });
+                    } catch (notifError) {
+                      console.error('[saveEquipmentOfflineSite] Error sending notifications to CCR users:', notifError.message);
+                    }
+                  } else {
+                    console.log('[saveEquipmentOfflineSite] CCR approval already exists for Equipment resolution:', {
+                      existingApprovalId: existingCCRApproval._id.toString()
+                    });
+                  }
+                } else {
+                  console.error('[saveEquipmentOfflineSite] ❌ No CCR user found - Cannot create approval for Equipment resolution');
+                }
+              } catch (equipmentCCRError) {
+                console.error('[saveEquipmentOfflineSite] ❌❌❌ CRITICAL ERROR creating CCR approval for Equipment resolution:', {
+                  error: equipmentCCRError.message,
+                  stack: equipmentCCRError.stack,
+                  siteCode: siteCode.trim().toUpperCase(),
+                  userId: userId,
+                  currentUserRole: currentUserRole,
+                  finalSiteObservations: finalSiteObservations,
+                  originalSiteObservations: siteObservations,
+                  offlineSiteId: offlineSite?._id?.toString(),
+                  hasOfflineSite: !!offlineSite
+                });
+              }
+            }
             // If this is a routed user resolving and no action found, create action and approval directly
-            if (isRoutedUser && currentUserRole && !['Equipment', 'AMC', 'CCR'].includes(currentUserRole)) {
+            else if (isRoutedUser && currentUserRole && !['Equipment', 'AMC', 'CCR'].includes(currentUserRole)) {
               console.log('[saveEquipmentOfflineSite] Creating CCR approval directly (no action found, but routed user resolved):', {
                 siteCode: siteCode.trim().toUpperCase(),
                 resolvedByRole: currentUserRole,
@@ -1057,10 +1424,20 @@ export const saveEquipmentOfflineSite = async (req, res) => {
           siteCode: siteCode,
           rowKey: rowKey,
           userId: userId,
+          finalSiteObservations: finalSiteObservations,
+          originalSiteObservations: siteObservations,
+          hasOfflineSite: !!offlineSite,
           message: 'Document was saved successfully, but approval trigger failed'
         });
-        // Don't fail the save operation
+        // Don't fail the save operation, but log the error for debugging
       }
+    } else {
+      console.log('[saveEquipmentOfflineSite] ⚠️ Approval creation skipped:', {
+        finalSiteObservations,
+        originalSiteObservations: siteObservations,
+        hasOfflineSite: !!offlineSite,
+        reason: finalSiteObservations === '' ? 'offlineSite is missing' : 'finalSiteObservations is not empty'
+      });
     }
 
     res.status(200).json({
@@ -1376,11 +1753,19 @@ export const getAllEquipmentOfflineSites = async (req, res) => {
     console.log('[getAllEquipmentOfflineSites] Query conditions count:', queryConditions.length);
 
     const offlineSites = await EquipmentOfflineSites.find(query)
-      .sort({ updatedAt: -1 });
+      .sort({ updatedAt: -1 })
+      .lean(); // Use lean() to get plain JavaScript objects with all fields
     
+    // Debug: Check if viewPhotos are included
+    const sitesWithPhotos = offlineSites.filter(s => s.viewPhotos && Array.isArray(s.viewPhotos) && s.viewPhotos.length > 0);
     console.log('[getAllEquipmentOfflineSites] Found offline sites:', {
       count: offlineSites.length,
-      siteCodes: offlineSites.map(s => s.siteCode)
+      sitesWithPhotos: sitesWithPhotos.length,
+      siteCodes: offlineSites.map(s => s.siteCode),
+      sampleSiteWithPhotos: sitesWithPhotos.length > 0 ? {
+        siteCode: sitesWithPhotos[0].siteCode,
+        photoCount: sitesWithPhotos[0].viewPhotos?.length || 0
+      } : null
     });
     
     // CRITICAL: Also return excluded siteCodes for frontend filtering (if includeApproved is not true)
