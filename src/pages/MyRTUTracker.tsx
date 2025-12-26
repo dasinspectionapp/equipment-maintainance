@@ -166,6 +166,7 @@ export default function MyRTUTracker() {
   const [dateOfInspection, setDateOfInspection] = useState<Record<string, string>>({});
   // const _dataLoadedRef = useRef<string>(''); // Reserved for future use
   const isLoadingRef = useRef<boolean>(false);
+  const [dataLoadTrigger, setDataLoadTrigger] = useState(0);
   
   // Refs to track latest state values for reliable saving
   const siteObservationsRef = useRef<Record<string, string>>({});
@@ -401,6 +402,10 @@ export default function MyRTUTracker() {
           const loadedPhotoMetadata: Record<string, any[]> = {};
           const loadedDateOfInspection: Record<string, string> = {};
 
+          // Get sitesBySiteCode for fallback matching
+          const sitesBySiteCode = data._bySiteCode || {};
+          delete data._bySiteCode; // Remove from main data object
+          
           Object.entries(data).forEach(([rowKey, siteData]: [string, any]) => {
             if (siteData.siteObservations) loadedSiteObservations[rowKey] = siteData.siteObservations;
             if (siteData.taskStatus) loadedTaskStatus[rowKey] = siteData.taskStatus;
@@ -410,6 +415,65 @@ export default function MyRTUTracker() {
             if (siteData.photoMetadata) loadedPhotoMetadata[rowKey] = siteData.photoMetadata;
             if (siteData.dateOfInspection) loadedDateOfInspection[rowKey] = siteData.dateOfInspection;
           });
+          
+          // Then, for each site in sitesBySiteCode, find matching rows by siteCode and populate data
+          // This handles cases where rowKeys don't match due to header order differences
+          const currentRows = rowsRef.current;
+          const currentHeaders = headers.length > 0 ? headers : (currentRows[0] ? Object.keys(currentRows[0]) : []);
+          
+          if (currentRows.length > 0 && currentHeaders.length > 0) {
+            const siteCodeHeader = currentHeaders.find((h: string) => {
+              const normalized = normalize(h);
+              return normalized === 'sitecode' || normalized === 'site_code' || normalized === 'site code';
+            });
+            
+            if (siteCodeHeader) {
+              let fallbackMatches = 0;
+              currentRows.forEach((row: any) => {
+                const siteCode = String(row[siteCodeHeader] || '').trim().toUpperCase();
+                if (siteCode && sitesBySiteCode[siteCode]) {
+                  const savedData = sitesBySiteCode[siteCode];
+                  const currentRowKey = generateRowKey(selectedFile, row, currentHeaders);
+                  
+                  // Only use fallback if current rowKey doesn't have data
+                  if (!loadedSiteObservations[currentRowKey] && savedData.siteObservations) {
+                    fallbackMatches++;
+                    console.log(`[loadFromRTUTrackerSitesDB] Fallback match: Site Code ${siteCode}, Current RowKey: ${currentRowKey}, Saved RowKey: ${savedData.rowKey}`);
+                    
+                    // Copy data to current rowKey
+                    if (savedData.siteObservations) loadedSiteObservations[currentRowKey] = savedData.siteObservations;
+                    if (savedData.taskStatus) loadedTaskStatus[currentRowKey] = savedData.taskStatus;
+                    if (savedData.typeOfIssue) loadedTypeOfIssue[currentRowKey] = savedData.typeOfIssue;
+                    if (savedData.viewPhotos) loadedViewPhotos[currentRowKey] = savedData.viewPhotos;
+                    if (savedData.remarks) loadedRemarks[currentRowKey] = savedData.remarks;
+                    if (savedData.photoMetadata) loadedPhotoMetadata[currentRowKey] = savedData.photoMetadata;
+                    if (savedData.dateOfInspection) loadedDateOfInspection[currentRowKey] = savedData.dateOfInspection;
+                  }
+                }
+              });
+              console.log(`[loadFromRTUTrackerSitesDB] Applied ${fallbackMatches} fallback matches by siteCode`);
+            }
+          }
+          
+          // Store sitesBySiteCode for future reference
+          (window as any).__rtuTrackerSitesBySiteCode = sitesBySiteCode;
+
+          // Log sample of loaded data for debugging
+          const sampleRowKeys = Object.keys(data).slice(0, 5);
+          console.log(`[loadFromRTUTrackerSitesDB] Loaded ${Object.keys(data).length} total sites. Sample rowKeys:`, sampleRowKeys);
+          sampleRowKeys.forEach(rowKey => {
+            const siteData = data[rowKey];
+            console.log(`[loadFromRTUTrackerSitesDB] Sample rowKey "${rowKey}":`, {
+              siteObservations: siteData.siteObservations,
+              taskStatus: siteData.taskStatus,
+              photosCount: siteData.viewPhotos?.length || 0,
+              hasRemarks: !!siteData.remarks,
+              dateOfInspection: siteData.dateOfInspection
+            });
+          });
+          
+          // Also log all rowKeys to help debug matching issues
+          console.log(`[loadFromRTUTrackerSitesDB] All loaded rowKeys:`, Object.keys(data));
 
           setSiteObservations(loadedSiteObservations);
           setTaskStatus(loadedTaskStatus);
@@ -429,6 +493,11 @@ export default function MyRTUTracker() {
           dateOfInspectionRef.current = loadedDateOfInspection;
 
           console.log(`[loadFromRTUTrackerSitesDB] Loaded ${Object.keys(data).length} sites from database`);
+          console.log(`[loadFromRTUTrackerSitesDB] Stored ${Object.keys(sitesBySiteCode).length} sites by siteCode for fallback matching`);
+          
+          // Reset fallback ref and trigger fallback matching
+          fallbackAppliedRef.current = '';
+          setDataLoadTrigger(prev => prev + 1);
         }
       } else {
         console.warn('Failed to load from RTU Tracker Sites database');
@@ -471,6 +540,144 @@ export default function MyRTUTracker() {
       loadFromRTUTrackerSitesDB();
     }
   }, [selectedFile, userRole, loadFromRTUTrackerSitesDB]);
+
+  // Auto-refresh data periodically and on window focus to sync with mobile app updates
+  useEffect(() => {
+    if (!selectedFile || userRole !== 'Equipment') {
+      return;
+    }
+
+    const refreshData = () => {
+      console.log('[MyRTUTracker] Auto-refreshing data from database...');
+      // Force refresh by resetting loading flag and fallback ref
+      isLoadingRef.current = false;
+      fallbackAppliedRef.current = ''; // Reset to allow fallback matching to run again
+      loadFromRTUTrackerSitesDB();
+    };
+
+    // Refresh on window focus (when user switches back to the tab)
+    const handleFocus = () => {
+      refreshData();
+    };
+    window.addEventListener('focus', handleFocus);
+
+    // Refresh every 10 seconds to pick up changes from mobile app
+    const interval = setInterval(refreshData, 10000);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(interval);
+    };
+  }, [selectedFile, userRole, loadFromRTUTrackerSitesDB]);
+
+  // Apply fallback matching by siteCode after rows and data are loaded
+  const fallbackAppliedRef = useRef<string>('');
+  useEffect(() => {
+    console.log('[MyRTUTracker Fallback] useEffect triggered', {
+      selectedFile,
+      userRole,
+      rowsCount: rows.length,
+      headersCount: headers.length,
+      dataLoadTrigger
+    });
+    
+    if (!selectedFile || userRole !== 'Equipment' || rows.length === 0 || headers.length === 0) {
+      console.log('[MyRTUTracker Fallback] Early return - missing prerequisites');
+      return;
+    }
+
+    const sitesBySiteCode = (window as any).__rtuTrackerSitesBySiteCode || {};
+    if (Object.keys(sitesBySiteCode).length === 0) {
+      console.log('[MyRTUTracker Fallback] No sitesBySiteCode data available');
+      return;
+    }
+
+    console.log(`[MyRTUTracker Fallback] Checking ${Object.keys(sitesBySiteCode).length} sites by siteCode`);
+    console.log(`[MyRTUTracker Fallback] Available siteCodes:`, Object.keys(sitesBySiteCode).slice(0, 10));
+
+    // Create a unique key for this file/rows combination to avoid re-applying
+    const currentKey = `${selectedFile}-${rows.length}-${headers.length}`;
+    if (fallbackAppliedRef.current === currentKey) {
+      console.log('[MyRTUTracker Fallback] Already applied for this combination, skipping');
+      return; // Already applied for this combination
+    }
+
+    const siteCodeHeader = headers.find((h: string) => {
+      const normalized = normalize(h);
+      return normalized === 'sitecode' || normalized === 'site_code' || normalized === 'site code';
+    });
+
+    if (!siteCodeHeader) {
+      return;
+    }
+
+    let fallbackMatches = 0;
+    const updatedSiteObservations = { ...siteObservationsRef.current };
+    const updatedTaskStatus = { ...taskStatusRef.current };
+    const updatedTypeOfIssue = { ...typeOfIssueRef.current };
+    const updatedViewPhotos = { ...viewPhotosRef.current };
+    const updatedRemarks = { ...remarksRef.current };
+    const updatedPhotoMetadata = { ...photoMetadataRef.current };
+    const updatedDateOfInspection = { ...dateOfInspectionRef.current };
+
+    rows.forEach((row: any) => {
+      const siteCode = String(row[siteCodeHeader] || '').trim().toUpperCase();
+      if (siteCode && sitesBySiteCode[siteCode]) {
+        const savedData = sitesBySiteCode[siteCode];
+        const currentRowKey = generateRowKey(selectedFile, row, headers);
+
+        // Check if we need to apply fallback
+        // Apply if: 1) No data for current rowKey, OR 2) RowKey is different (mismatch)
+        const hasDifferentRowKey = savedData.rowKey && savedData.rowKey !== currentRowKey;
+        const hasNoData = !updatedSiteObservations[currentRowKey];
+        const needsFallback = (hasNoData || hasDifferentRowKey) && savedData.siteObservations;
+        
+        if (needsFallback) {
+          fallbackMatches++;
+          console.log(`[MyRTUTracker Fallback] ✅ Applying fallback for Site Code ${siteCode}:`, {
+            currentRowKey,
+            savedRowKey: savedData.rowKey,
+            siteObservations: savedData.siteObservations,
+            taskStatus: savedData.taskStatus,
+            hasPhotos: (savedData.viewPhotos?.length || 0) > 0,
+            rowKeyMismatch: hasDifferentRowKey,
+            hadNoData: hasNoData,
+            willOverwrite: hasDifferentRowKey && !hasNoData
+          });
+
+          // Copy ALL data to current rowKey (overwrite if rowKey mismatch)
+          if (savedData.siteObservations) updatedSiteObservations[currentRowKey] = savedData.siteObservations;
+          if (savedData.taskStatus) updatedTaskStatus[currentRowKey] = savedData.taskStatus;
+          if (savedData.typeOfIssue) updatedTypeOfIssue[currentRowKey] = savedData.typeOfIssue;
+          if (savedData.viewPhotos) updatedViewPhotos[currentRowKey] = savedData.viewPhotos;
+          if (savedData.remarks) updatedRemarks[currentRowKey] = savedData.remarks;
+          if (savedData.photoMetadata) updatedPhotoMetadata[currentRowKey] = savedData.photoMetadata;
+          if (savedData.dateOfInspection) updatedDateOfInspection[currentRowKey] = savedData.dateOfInspection;
+        } else {
+          // Log when fallback is not needed
+          console.log(`[MyRTUTracker Fallback] ⏭️ Skipping Site Code ${siteCode}:`, {
+            currentRowKey,
+            savedRowKey: savedData.rowKey,
+            hasData: !!updatedSiteObservations[currentRowKey],
+            hasSavedData: !!savedData.siteObservations,
+            rowKeyMatch: !hasDifferentRowKey
+          });
+        }
+      }
+    });
+
+    if (fallbackMatches > 0) {
+      console.log(`[MyRTUTracker Fallback] Applied ${fallbackMatches} fallback matches by siteCode`);
+      setSiteObservations(updatedSiteObservations);
+      setTaskStatus(updatedTaskStatus);
+      setTypeOfIssue(updatedTypeOfIssue);
+      setViewPhotos(updatedViewPhotos);
+      setRemarks(updatedRemarks);
+      setPhotoMetadata(updatedPhotoMetadata);
+      setDateOfInspection(updatedDateOfInspection);
+      fallbackAppliedRef.current = currentKey;
+    }
+  }, [rows, headers, selectedFile, userRole, dataLoadTrigger]);
 
   // Fetch fresh user data if divisions are missing
   useEffect(() => {
@@ -1548,6 +1755,21 @@ export default function MyRTUTracker() {
           onChange={e => setSearch(e.target.value)}
           disabled={!selectedFile}
         />
+        {userRole === 'Equipment' && selectedFile && (
+          <button
+            onClick={async () => {
+              console.log('[MyRTUTracker] Manual refresh triggered');
+              // Force refresh by resetting loading flag and fallback ref
+              isLoadingRef.current = false;
+              fallbackAppliedRef.current = ''; // Reset to allow fallback matching to run again
+              await loadFromRTUTrackerSitesDB();
+            }}
+            className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
+            title="Refresh data from database to sync with mobile app"
+          >
+            🔄 Refresh
+          </button>
+        )}
         <label className="block font-medium text-gray-700">Download:</label>
         <select
           className="border border-gray-300 rounded px-2 py-2 min-w-[140px] bg-white"
@@ -1609,6 +1831,23 @@ export default function MyRTUTracker() {
                 </tr>
               ) : paginatedRows.map((row, idx) => {
                 const rowKey = generateRowKey(selectedFile, row, headers);
+                const siteCodeHeader = headers.find((h: string) => {
+                  const normalized = normalize(h);
+                  return normalized === 'sitecode' || normalized === 'site_code' || normalized === 'site code';
+                });
+                const siteCode = siteCodeHeader ? String(row[siteCodeHeader] || '').trim().toUpperCase() : '';
+                
+                // Debug: Log rowKey and data lookup for first few rows
+                if (idx < 3) {
+                  console.log(`[MyRTUTracker Render] Row ${idx} - Site Code: ${siteCode}, RowKey: ${rowKey}`, {
+                    hasSiteObservations: !!siteObservations[rowKey],
+                    siteObservationsValue: siteObservations[rowKey],
+                    hasTaskStatus: !!taskStatus[rowKey],
+                    taskStatusValue: taskStatus[rowKey],
+                    hasViewPhotos: !!(viewPhotos[rowKey] && viewPhotos[rowKey].length > 0),
+                    photosCount: viewPhotos[rowKey]?.length || 0
+                  });
+                }
                 const isEven = idx % 2 === 0;
                 return (
                   <tr 

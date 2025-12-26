@@ -332,7 +332,6 @@ export const bulkSaveRTUTrackerSites = async (req, res) => {
 export const getRTUTrackerSitesByFile = async (req, res) => {
   try {
     const { fileId } = req.params;
-    const userId = req.user.userId;
 
     if (!fileId) {
       return res.status(400).json({
@@ -341,23 +340,52 @@ export const getRTUTrackerSitesByFile = async (req, res) => {
       });
     }
 
-    // Find all records for this file and user
-    const sites = await RTUTrackerSites.find({ fileId, userId })
+    // Find all records for this file (regardless of userId to allow cross-user sync)
+    // Sort by updatedAt descending to get most recent first
+    const sites = await RTUTrackerSites.find({ fileId })
       .sort({ updatedAt: -1 });
 
-    // Convert to map by rowKey
+    // Convert to map by rowKey, keeping only the most recent entry for each rowKey
+    // This ensures that if multiple users saved data for the same rowKey, we get the latest one
     const sitesMap = {};
+    const sitesBySiteCode = {}; // Also create a map by siteCode for fallback matching
     sites.forEach(site => {
-      sitesMap[site.rowKey] = {
-        siteObservations: site.siteObservations || '',
-        taskStatus: site.taskStatus || '',
-        typeOfIssue: site.typeOfIssue || '',
-        viewPhotos: site.viewPhotos || [],
-        photoMetadata: site.photoMetadata || [],
-        remarks: site.remarks || '',
-        dateOfInspection: site.dateOfInspection || '',
-      };
+      // Only add if we haven't seen this rowKey yet (since we sorted by updatedAt desc, first one is most recent)
+      if (!sitesMap[site.rowKey]) {
+        sitesMap[site.rowKey] = {
+          siteCode: site.siteCode || '',
+          siteObservations: site.siteObservations || '',
+          taskStatus: site.taskStatus || '',
+          typeOfIssue: site.typeOfIssue || '',
+          viewPhotos: site.viewPhotos || [],
+          photoMetadata: site.photoMetadata || [],
+          remarks: site.remarks || '',
+          dateOfInspection: site.dateOfInspection || '',
+        };
+      }
+      // Also store by siteCode for fallback matching (keep most recent)
+      // Normalize siteCode to uppercase for consistent matching
+      const normalizedSiteCode = site.siteCode ? String(site.siteCode).trim().toUpperCase() : '';
+      if (normalizedSiteCode && (!sitesBySiteCode[normalizedSiteCode] || new Date(site.updatedAt) > new Date(sitesBySiteCode[normalizedSiteCode].updatedAt))) {
+        sitesBySiteCode[normalizedSiteCode] = {
+          rowKey: site.rowKey,
+          siteCode: normalizedSiteCode,
+          siteObservations: site.siteObservations || '',
+          taskStatus: site.taskStatus || '',
+          typeOfIssue: site.typeOfIssue || '',
+          viewPhotos: site.viewPhotos || [],
+          photoMetadata: site.photoMetadata || [],
+          remarks: site.remarks || '',
+          dateOfInspection: site.dateOfInspection || '',
+          updatedAt: site.updatedAt,
+        };
+      }
     });
+    
+    // Add sitesBySiteCode to the response for fallback matching
+    sitesMap._bySiteCode = sitesBySiteCode;
+
+    console.log(`[getRTUTrackerSitesByFile] Returning ${Object.keys(sitesMap).length} unique sites for fileId: ${fileId}`);
 
     res.status(200).json({
       success: true,
