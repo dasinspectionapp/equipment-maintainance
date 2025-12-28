@@ -84,6 +84,7 @@ export default function RTUTrackerStatus() {
 
   // MultiSelectDropdown Component
   const MultiSelectDropdown = ({ label, options, selectedValues, onChange, loading, placeholder = 'Select options' }: MultiSelectDropdownProps) => {
+    const { theme } = useTheme();
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const ALL_OPTION = 'All';
@@ -122,15 +123,22 @@ export default function RTUTrackerStatus() {
 
     return (
       <div className="relative" ref={dropdownRef}>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label className="block text-sm font-medium mb-2" style={{ color: theme.text }}>
           {label}
         </label>
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg bg-white text-left focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 hover:border-gray-400 transition-colors flex items-center justify-between"
+          className="w-full px-4 py-2.5 border rounded-lg text-left focus:outline-none focus:ring-2 transition-colors flex items-center justify-between"
+          style={{
+            backgroundColor: theme.inputBackground,
+            borderColor: theme.inputBorder,
+            color: theme.text,
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.borderColor = theme.primary}
+          onMouseLeave={(e) => e.currentTarget.style.borderColor = theme.inputBorder}
         >
-          <span className={isAllSelected ? 'text-gray-400' : 'text-gray-900'}>
+          <span style={{ color: isAllSelected ? theme.textMuted : theme.text }}>
             {loading ? 'Loading...' : isAllSelected ? `${placeholder} (All)` : `${selectedValues.length} selected`}
           </span>
           <div className="flex items-center gap-2">
@@ -138,7 +146,10 @@ export default function RTUTrackerStatus() {
               <button
                 type="button"
                 onClick={handleClearAll}
-                className="text-gray-400 hover:text-red-500 transition-colors"
+                className="transition-colors"
+                style={{ color: theme.icon }}
+                onMouseEnter={(e) => e.currentTarget.style.color = theme.error}
+                onMouseLeave={(e) => e.currentTarget.style.color = theme.icon}
                 title="Clear All"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -147,7 +158,8 @@ export default function RTUTrackerStatus() {
               </button>
             )}
             <svg
-              className={`w-5 h-5 text-gray-400 transition-transform ${isOpen ? 'transform rotate-180' : ''}`}
+              className={`w-5 h-5 transition-transform ${isOpen ? 'transform rotate-180' : ''}`}
+              style={{ color: theme.icon }}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -158,25 +170,39 @@ export default function RTUTrackerStatus() {
         </button>
 
         {isOpen && (
-          <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto">
+          <div 
+            className="absolute z-50 w-full mt-1 border rounded-lg shadow-lg max-h-60 overflow-auto"
+            style={{
+              backgroundColor: theme.surface,
+              borderColor: theme.border,
+            }}
+          >
             {loading ? (
-              <div className="px-4 py-3 text-sm text-gray-500 text-center">Loading...</div>
+              <div className="px-4 py-3 text-sm text-center" style={{ color: theme.textMuted }}>Loading...</div>
             ) : options.length === 0 ? (
-              <div className="px-4 py-3 text-sm text-gray-500 text-center">No options available</div>
+              <div className="px-4 py-3 text-sm text-center" style={{ color: theme.textMuted }}>No options available</div>
             ) : (
               <>
                 <label
-                  className={`flex items-center px-4 py-2.5 cursor-pointer hover:bg-blue-50 transition-colors border-b border-gray-200 ${
-                    isAllSelected ? 'bg-blue-50 font-medium' : ''
-                  }`}
+                  className="flex items-center px-4 py-2.5 cursor-pointer transition-colors border-b"
+                  style={{
+                    backgroundColor: isAllSelected ? theme.primary + '20' : 'transparent',
+                    borderBottomColor: theme.border,
+                  }}
+                  onMouseEnter={(e) => !isAllSelected && (e.currentTarget.style.backgroundColor = theme.primary + '10')}
+                  onMouseLeave={(e) => !isAllSelected && (e.currentTarget.style.backgroundColor = 'transparent')}
                 >
                   <input
                     type="checkbox"
                     checked={isAllSelected}
                     onChange={() => handleToggle(ALL_OPTION)}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                    className="w-4 h-4 rounded focus:ring-2"
+                    style={{
+                      accentColor: theme.primary,
+                      borderColor: theme.border,
+                    }}
                   />
-                  <span className={`ml-3 text-sm ${isAllSelected ? 'text-blue-700' : 'text-gray-900'}`}>
+                  <span className="ml-3 text-sm" style={{ color: isAllSelected ? theme.primary : theme.text, fontWeight: isAllSelected ? '600' : 'normal' }}>
                     {ALL_OPTION}
                   </span>
                 </label>
@@ -185,17 +211,24 @@ export default function RTUTrackerStatus() {
                   return (
                     <label
                       key={option}
-                      className={`flex items-center px-4 py-2.5 cursor-pointer hover:bg-blue-50 transition-colors ${
-                        isSelected ? 'bg-blue-50' : ''
-                      }`}
+                      className="flex items-center px-4 py-2.5 cursor-pointer transition-colors"
+                      style={{
+                        backgroundColor: isSelected ? theme.primary + '20' : 'transparent',
+                      }}
+                      onMouseEnter={(e) => !isSelected && (e.currentTarget.style.backgroundColor = theme.primary + '10')}
+                      onMouseLeave={(e) => !isSelected && (e.currentTarget.style.backgroundColor = 'transparent')}
                     >
                       <input
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => handleToggle(option)}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                        className="w-4 h-4 rounded focus:ring-2"
+                        style={{
+                          accentColor: theme.primary,
+                          borderColor: theme.border,
+                        }}
                       />
-                      <span className="ml-3 text-sm text-gray-900">{option}</span>
+                      <span className="ml-3 text-sm" style={{ color: theme.text }}>{option}</span>
                     </label>
                   );
                 })}

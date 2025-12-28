@@ -6,22 +6,70 @@
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
+  /* Light theme colors */
+  --bg: #f1f5fb;
+  --surface: #ffffff;
+  --card: #ffffff;
+  --text: #1a1a1a;
+  --text-secondary: #4a5568;
+  --text-muted: #718096;
+  --primary: #005aa9;
+  --primary-dark: #003b73;
+  --primary-light: #0078d4;
+  --border: #e2e8f0;
+  --border-light: #f1f5f9;
+  --input-bg: #ffffff;
+  --input-border: #e5e7eb;
+  --placeholder: #9ca3af;
+  --icon: #4a5568;
+  --icon-secondary: #718096;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
-  }
+.dark {
+  /* Dark theme colors */
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --card: #334155;
+  --text: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --primary: #3b82f6;
+  --primary-dark: #2563eb;
+  --primary-light: #60a5fa;
+  --border: #334155;
+  --border-light: #475569;
+  --input-bg: #1e293b;
+  --input-border: #475569;
+  --placeholder: #64748b;
+  --icon: #cbd5e1;
+  --icon-secondary: #94a3b8;
 }
 
 body {
-  color: rgb(var(--foreground-rgb));
+  background-color: var(--bg);
+  color: var(--text);
   font-family: 'Inter', sans-serif;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Input placeholder styling */
+input::placeholder,
+textarea::placeholder,
+select::placeholder {
+  color: var(--placeholder);
+  opacity: 1;
+}
+
+/* Select dropdown styling */
+select {
+  background-color: var(--input-bg);
+  color: var(--text);
+  border-color: var(--input-border);
+}
+
+select option {
+  background-color: var(--input-bg);
+  color: var(--text);
 }
 
 /* Blue color */
@@ -145,15 +193,27 @@ html {
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--border-light);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #0B4F6C, #1789FC);
+  background: var(--primary);
   border-radius: 5px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, #FFD700, #FFBF00);
+  background: var(--primary-light);
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: var(--border);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: var(--primary-dark);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
 }
 

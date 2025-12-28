@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { API_BASE } from '../utils/api';
+import { useTheme } from '../context/ThemeContext';
 
 const PAGE_SIZE_OPTIONS = [25, 50, 75, 100];
 
@@ -45,6 +46,7 @@ const FILTER_DEFS: FilterDef[] = [
 ];
 
 export default function MyDivisionData() {
+  const { theme } = useTheme();
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [selectedFile, setSelectedFile] = useState<string>('');
   const [headers, setHeaders] = useState<string[]>([]);
@@ -1495,17 +1497,22 @@ export default function MyDivisionData() {
           {isEditMode ? 'DONE' : 'EDIT'}
         </button>
         {/* Download format select */}
-        <label className="block font-medium text-gray-700">Download:</label>
+        <label className="block font-medium" style={{ color: theme.text }}>Download:</label>
         <select
-          className="border border-gray-300 rounded px-2 py-2 min-w-[140px] bg-white"
+          className="border rounded px-2 py-2 min-w-[140px]"
+          style={{
+            backgroundColor: theme.inputBackground,
+            borderColor: theme.inputBorder,
+            color: theme.text,
+          }}
           defaultValue=""
           onChange={e => { handleDownloadSelect(e.target.value); e.currentTarget.value = ''; }}
           disabled={!selectedFile || !rows.length}
         >
-          <option value="" disabled>Select format</option>
-          <option value="pdf">PDF</option>
-          <option value="xlsx">XLSX</option>
-          <option value="csv">CSV</option>
+          <option value="" disabled style={{ backgroundColor: theme.inputBackground, color: theme.text }}>Select format</option>
+          <option value="pdf" style={{ backgroundColor: theme.inputBackground, color: theme.text }}>PDF</option>
+          <option value="xlsx" style={{ backgroundColor: theme.inputBackground, color: theme.text }}>XLSX</option>
+          <option value="csv" style={{ backgroundColor: theme.inputBackground, color: theme.text }}>CSV</option>
         </select>
       </div>
       {/* Filters Row */}
@@ -1515,15 +1522,20 @@ export default function MyDivisionData() {
           if (!key) return null;
           return (
             <div key={def.label} className="flex items-center gap-2">
-              <label className="text-gray-700 text-sm font-medium">{def.label}:</label>
+              <label className="text-sm font-medium" style={{ color: theme.text }}>{def.label}:</label>
               <select
-                className="border border-gray-300 rounded px-2 py-1 min-w-[140px] text-sm"
+                className="border rounded px-2 py-1 min-w-[140px] text-sm"
+                style={{
+                  backgroundColor: theme.inputBackground,
+                  borderColor: theme.inputBorder,
+                  color: theme.text,
+                }}
                 value={filters[def.label] || ""}
                 onChange={e => setFilters(prev => ({ ...prev, [def.label]: e.target.value }))}
               >
-                <option value="">All</option>
+                <option value="" style={{ backgroundColor: theme.inputBackground, color: theme.text }}>All</option>
                 {filterOptions[def.label].map(opt => (
-                  <option key={opt} value={opt}>{opt}</option>
+                  <option key={opt} value={opt} style={{ backgroundColor: theme.inputBackground, color: theme.text }}>{opt}</option>
                 ))}
               </select>
             </div>
@@ -1625,8 +1637,23 @@ export default function MyDivisionData() {
             <span className="font-medium text-gray-700">Page {currentPage} of {totalPages}</span>
             <button className="bg-gray-200 px-4 py-1 rounded disabled:opacity-50 border border-gray-300" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}>Next</button>
             <label className="ml-4 block text-sm text-gray-700 font-medium">Rows per page:</label>
-            <select value={rowsPerPage} onChange={e => setRowsPerPage(Number(e.target.value))} className="border border-gray-300 rounded px-2 py-1 ml-1 focus:ring-blue-400 focus:border-blue-400" style={{ fontFamily: 'inherit' }}>
-              {PAGE_SIZE_OPTIONS.map(size => (<option key={size} value={size}>{size}</option>))}
+            <select 
+              value={rowsPerPage} 
+              onChange={e => setRowsPerPage(Number(e.target.value))} 
+              className="border rounded px-2 py-1 ml-1 focus:ring-2" 
+              style={{ 
+                fontFamily: 'inherit',
+                backgroundColor: theme.inputBackground,
+                borderColor: theme.inputBorder,
+                color: theme.text,
+                outlineColor: theme.primary,
+              }}
+            >
+              {PAGE_SIZE_OPTIONS.map(size => (
+                <option key={size} value={size} style={{ backgroundColor: theme.inputBackground, color: theme.text }}>
+                  {size}
+                </option>
+              ))}
             </select>
           </div>
         </div>

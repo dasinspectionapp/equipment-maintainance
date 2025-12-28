@@ -2,8 +2,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { API_BASE } from '../utils/api'
+import { useTheme } from '../context/ThemeContext'
 
 export default function LoginForm() {
+  const { theme } = useTheme()
   const navigate = useNavigate()
   const [showPassword, setShowPassword] = useState(false)
   const [formData, setFormData] = useState({
@@ -137,19 +139,19 @@ export default function LoginForm() {
   return (
     <div className="w-full max-w-md">
       {/* Login Card */}
-      <div className="bg-white rounded-2xl shadow-2xl p-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <div className="rounded-2xl shadow-2xl p-8 animate-in fade-in slide-in-from-bottom-4 duration-700" style={{ backgroundColor: theme.surface }}>
         <div className="mb-6">
-          <h2 className="text-3xl font-bold text-electrical-blue text-center">
+          <h2 className="text-3xl font-bold text-center" style={{ color: theme.primary }}>
             Sign In
           </h2>
-          <p className="text-center text-gray-600 mt-2">
+          <p className="text-center mt-2" style={{ color: theme.textSecondary }}>
             Distribution Automation System
           </p>
         </div>
 
         {/* Error Message */}
         {loginError && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          <div className="mb-4 p-3 rounded-lg text-sm border" style={{ backgroundColor: theme.error + '20', borderColor: theme.error, color: theme.error }}>
             {loginError}
           </div>
         )}
@@ -157,7 +159,7 @@ export default function LoginForm() {
         <form onSubmit={handleLogin} className="space-y-5">
           {/* User ID Field */}
           <div>
-            <label htmlFor="userId" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="userId" className="block text-sm font-medium mb-2" style={{ color: theme.text }}>
               User ID
             </label>
             <input
@@ -166,19 +168,25 @@ export default function LoginForm() {
               name="userId"
               value={formData.userId}
               onChange={handleChange}
-              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-electrical-blue focus:border-transparent transition-all ${
-                errors.userId ? 'border-red-500' : 'border-gray-300'
+              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:border-transparent transition-all ${
+                errors.userId ? 'border-red-500' : ''
               }`}
+              style={{
+                backgroundColor: theme.inputBackground,
+                borderColor: errors.userId ? theme.error : theme.inputBorder,
+                color: theme.text,
+                outlineColor: theme.primary,
+              }}
               placeholder="Enter your user ID"
             />
             {errors.userId && (
-              <p className="mt-1 text-sm text-red-600">{errors.userId}</p>
+              <p className="mt-1 text-sm" style={{ color: theme.error }}>{errors.userId}</p>
             )}
           </div>
 
           {/* Password Field */}
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="password" className="block text-sm font-medium mb-2" style={{ color: theme.text }}>
               Password
             </label>
             <div className="relative">
@@ -188,15 +196,24 @@ export default function LoginForm() {
                 name="password"
                 value={formData.password}
                 onChange={handleChange}
-                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-electrical-blue focus:border-transparent transition-all pr-12 ${
-                  errors.password ? 'border-red-500' : 'border-gray-300'
+                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:border-transparent transition-all pr-12 ${
+                  errors.password ? 'border-red-500' : ''
                 }`}
+                style={{
+                  backgroundColor: theme.inputBackground,
+                  borderColor: errors.password ? theme.error : theme.inputBorder,
+                  color: theme.text,
+                  outlineColor: theme.primary,
+                }}
                 placeholder="Enter your password"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-electrical-blue transition-colors"
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 transition-colors"
+                style={{ color: theme.icon }}
+                onMouseEnter={(e) => e.currentTarget.style.color = theme.primary}
+                onMouseLeave={(e) => e.currentTarget.style.color = theme.icon}
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
                 {showPassword ? (
@@ -212,32 +229,38 @@ export default function LoginForm() {
               </button>
             </div>
             {errors.password && (
-              <p className="mt-1 text-sm text-red-600">{errors.password}</p>
+              <p className="mt-1 text-sm" style={{ color: theme.error }}>{errors.password}</p>
             )}
           </div>
 
           {/* Application Dropdown */}
           <div>
-            <label htmlFor="application" className="block text-sm font-medium text-gray-700 mb-2">
-              Application <span className="text-gray-500 text-xs font-normal">(Required for non-Admin users)</span>
+            <label htmlFor="application" className="block text-sm font-medium mb-2" style={{ color: theme.text }}>
+              Application <span className="text-xs font-normal" style={{ color: theme.textMuted }}>(Required for non-Admin users)</span>
             </label>
             <select
               id="application"
               name="application"
               value={formData.application}
               onChange={handleChange}
-              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-electrical-blue focus:border-transparent transition-all appearance-none bg-white ${
-                errors.application ? 'border-red-500' : 'border-gray-300'
+              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:border-transparent transition-all appearance-none ${
+                errors.application ? 'border-red-500' : ''
               }`}
+              style={{
+                backgroundColor: theme.inputBackground,
+                borderColor: errors.application ? theme.error : theme.inputBorder,
+                color: theme.text,
+                outlineColor: theme.primary,
+              }}
             >
               {applications.map(app => (
-                <option key={app.value} value={app.value}>
+                <option key={app.value} value={app.value} style={{ backgroundColor: theme.inputBackground, color: theme.text }}>
                   {app.label}
                 </option>
               ))}
             </select>
             {errors.application && (
-              <p className="mt-1 text-sm text-red-600">{errors.application}</p>
+              <p className="mt-1 text-sm" style={{ color: theme.error }}>{errors.application}</p>
             )}
           </div>
 
@@ -245,7 +268,10 @@ export default function LoginForm() {
           <div className="flex justify-end">
             <a
               href="/forgot-password"
-              className="text-sm text-electrical-blue hover:text-electrical-blue-dark transition-colors"
+              className="text-sm transition-colors"
+              style={{ color: theme.primary }}
+              onMouseEnter={(e) => e.currentTarget.style.color = theme.primaryDark}
+              onMouseLeave={(e) => e.currentTarget.style.color = theme.primary}
             >
               Forgot Password?
             </a>
@@ -255,7 +281,13 @@ export default function LoginForm() {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full bg-electrical-blue hover:bg-electrical-blue-dark text-white font-bold py-3 px-4 rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+            className="w-full font-bold py-3 px-4 rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+            style={{ 
+              backgroundColor: theme.primary,
+              color: '#ffffff',
+            }}
+            onMouseEnter={(e) => !isLoading && (e.currentTarget.style.backgroundColor = theme.primaryDark)}
+            onMouseLeave={(e) => !isLoading && (e.currentTarget.style.backgroundColor = theme.primary)}
           >
             {isLoading ? (
               <span className="flex items-center justify-center">
@@ -274,14 +306,27 @@ export default function LoginForm() {
           <button
             type="button"
             onClick={() => navigate('/signup')}
-            className="w-full border-2 border-electrical-blue text-electrical-blue hover:bg-electrical-blue hover:text-white font-bold py-3 px-4 rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98]"
+            className="w-full border-2 font-bold py-3 px-4 rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98]"
+            style={{ 
+              borderColor: theme.primary,
+              color: theme.primary,
+              backgroundColor: 'transparent',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = theme.primary;
+              e.currentTarget.style.color = '#ffffff';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.color = theme.primary;
+            }}
           >
             Sign Up
           </button>
         </form>
 
         {/* Footer Text */}
-        <p className="mt-6 text-center text-sm text-gray-500">
+        <p className="mt-6 text-center text-sm" style={{ color: theme.textMuted }}>
           © 2024 BESCOM. All rights reserved.
         </p>
       </div>
