@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { API_BASE } from '../utils/api';
+import { useTheme } from '../context/ThemeContext';
 
 // Normalize function for case-insensitive matching
 const normalize = (str: string): string => {
