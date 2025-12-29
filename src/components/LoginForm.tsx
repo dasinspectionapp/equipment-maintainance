@@ -194,10 +194,6 @@ export default function LoginForm() {
     }
   };
 
-  const handleOTPError = (error: string) => {
-    setLoginError(error);
-  };
-
   // Show OTP input if TOTP is required
   if (requiresTotp) {
     return (
@@ -221,7 +217,6 @@ export default function LoginForm() {
           <div className="mb-6">
             <OTPInput
               onComplete={handleOTPComplete}
-              onError={handleOTPError}
               length={6}
               disabled={isLoading}
             />
