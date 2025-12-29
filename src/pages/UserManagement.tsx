@@ -17,6 +17,8 @@ interface User {
   division?: string;
   circle?: string;
   subdivision?: string;
+  adminAllowsTotp?: boolean;
+  totpEnabled?: boolean;
 }
 
 export default function UserManagement() {
@@ -29,6 +31,8 @@ export default function UserManagement() {
   const [selectedMappedTo, setSelectedMappedTo] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [editUser, setEditUser] = useState<Partial<User>>({});
+  const [totpStatuses, setTotpStatuses] = useState<Record<string, { adminAllowsTotp: boolean; totpEnabled: boolean }>>({});
+  const [isLoadingTotp, setIsLoadingTotp] = useState(false);
   
   const applications = [
     'Equipment Maintenance',
@@ -38,6 +42,51 @@ export default function UserManagement() {
   useEffect(() => {
     fetchUsers();
   }, []);
+
+  useEffect(() => {
+    if (users.length > 0) {
+      fetchTotpStatuses();
+    }
+  }, [users]);
+
+  const fetchTotpStatuses = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.warn('No token found for TOTP status fetch');
+        return;
+      }
+
+      const response = await fetch(`${API_BASE}/api/admin/totp/status`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('TOTP Status Response:', result);
+        if (result.success && Array.isArray(result.users)) {
+          const statusMap: Record<string, { adminAllowsTotp: boolean; totpEnabled: boolean }> = {};
+          result.users.forEach((user: any) => {
+            statusMap[user.userId] = {
+              adminAllowsTotp: user.adminAllowsTotp || false,
+              totpEnabled: user.totpEnabled || false
+            };
+          });
+          console.log('TOTP Status Map:', statusMap);
+          setTotpStatuses(statusMap);
+        } else {
+          console.warn('TOTP status response format unexpected:', result);
+        }
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Failed to fetch TOTP statuses:', response.status, errorData);
+      }
+    } catch (error) {
+      console.error('Error fetching TOTP statuses:', error);
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -310,6 +359,7 @@ export default function UserManagement() {
       if (response && response.ok) {
         alert(`${action} action completed successfully`);
         fetchUsers(); // Refresh the list
+        fetchTotpStatuses(); // Refresh TOTP statuses
       } else {
         alert(`${action} action completed (mock)`);
         fetchUsers();
@@ -318,6 +368,71 @@ export default function UserManagement() {
       console.error(`Error performing ${action}:`, error);
       alert(`${action} action completed (mock)`);
       fetchUsers();
+    }
+  };
+
+  const handleTotpAction = async (action: 'enable' | 'disable' | 'reset', userId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        alert('Not authenticated. Please login again.');
+        return;
+      }
+
+      const user = users.find(u => u._id === userId);
+      if (!user) {
+        alert('User not found');
+        return;
+      }
+
+      const userIdentifier = user.userId;
+      if (!userIdentifier) {
+        alert('User ID not found');
+        return;
+      }
+
+      let confirmMessage = '';
+      switch (action) {
+        case 'enable':
+          confirmMessage = `Enable TOTP for user ${userIdentifier}?`;
+          break;
+        case 'disable':
+          confirmMessage = `Disable TOTP for user ${userIdentifier}? This will clear their TOTP secret and recovery codes.`;
+          break;
+        case 'reset':
+          confirmMessage = `Reset TOTP for user ${userIdentifier}? They will need to re-scan the QR code on next login.`;
+          break;
+      }
+
+      if (!confirm(confirmMessage)) return;
+
+      setIsLoadingTotp(true);
+      console.log(`TOTP ${action} - User ID:`, userIdentifier);
+      
+      const response = await fetch(`${API_BASE}/api/admin/totp/${action}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ userId: userIdentifier })
+      });
+
+      const data = await response.json();
+      console.log(`TOTP ${action} response:`, data);
+
+      if (response.ok && data.success) {
+        alert(data.message || `TOTP ${action} completed successfully`);
+        // Refresh both TOTP statuses and users
+        await Promise.all([fetchTotpStatuses(), fetchUsers()]);
+      } else {
+        alert(data.error || `Failed to ${action} TOTP`);
+      }
+    } catch (error: any) {
+      console.error(`Error performing TOTP ${action}:`, error);
+      alert(`Failed to ${action} TOTP: ${error.message || 'Unknown error'}`);
+    } finally {
+      setIsLoadingTotp(false);
     }
   };
 
@@ -453,6 +568,9 @@ export default function UserManagement() {
                 <th className="px-6 py-3 text-left text-sm font-bold text-white uppercase tracking-wider border border-gray-300" style={{ position: 'sticky', top: 0, background: 'linear-gradient(to right, #2563eb, #1d4ed8)' }}>
                   Mapped Applications
                 </th>
+                <th className="px-6 py-3 text-center text-sm font-bold text-white uppercase tracking-wider border border-gray-300" style={{ position: 'sticky', top: 0, background: 'linear-gradient(to right, #2563eb, #1d4ed8)' }}>
+                  TOTP Status
+                </th>
                 <th className="px-6 py-3 text-left text-sm font-bold text-white uppercase tracking-wider border border-gray-300" style={{ position: 'sticky', top: 0, background: 'linear-gradient(to right, #2563eb, #1d4ed8)' }}>
                   Actions
                 </th>
@@ -508,6 +626,33 @@ export default function UserManagement() {
                       ) : (
                         <span className="text-gray-400 italic">Not mapped</span>
                       )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-center border border-gray-300">
+                      {(() => {
+                        const totpStatus = totpStatuses[user.userId];
+                        const adminAllows = totpStatus?.adminAllowsTotp || false;
+                        const enabled = totpStatus?.totpEnabled || false;
+                        return (
+                          <div className="flex flex-col gap-1 items-center">
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${
+                              adminAllows 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-gray-100 text-gray-600'
+                            }`}>
+                              {adminAllows ? 'Allowed' : 'Not Allowed'}
+                            </span>
+                            {adminAllows && (
+                              <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                enabled 
+                                  ? 'bg-blue-100 text-blue-800' 
+                                  : 'bg-yellow-100 text-yellow-800'
+                              }`}>
+                                {enabled ? 'Enabled' : 'Pending Setup'}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium border border-gray-300">
                       <div className="flex flex-wrap items-center gap-4">
@@ -572,6 +717,49 @@ export default function UserManagement() {
                         >
                           Reset Password
                         </button>
+                        <div className="border-l border-gray-300 pl-2 ml-2 flex gap-2">
+                          {(() => {
+                            const totpStatus = totpStatuses[user.userId];
+                            const adminAllows = totpStatus?.adminAllowsTotp || false;
+                            const enabled = totpStatus?.totpEnabled || false;
+                            
+                            if (!adminAllows) {
+                              return (
+                                <button
+                                  onClick={() => handleTotpAction('enable', user._id)}
+                                  disabled={isLoadingTotp}
+                                  className="px-3 py-1 text-xs font-medium text-green-700 bg-green-100 hover:bg-green-200 rounded transition-colors disabled:opacity-50"
+                                  title="Enable TOTP for this user"
+                                >
+                                  Enable TOTP
+                                </button>
+                              );
+                            } else {
+                              return (
+                                <>
+                                  <button
+                                    onClick={() => handleTotpAction('disable', user._id)}
+                                    disabled={isLoadingTotp}
+                                    className="px-3 py-1 text-xs font-medium text-red-700 bg-red-100 hover:bg-red-200 rounded transition-colors disabled:opacity-50"
+                                    title="Disable TOTP for this user"
+                                  >
+                                    Disable TOTP
+                                  </button>
+                                  {enabled && (
+                                    <button
+                                      onClick={() => handleTotpAction('reset', user._id)}
+                                      disabled={isLoadingTotp}
+                                      className="px-3 py-1 text-xs font-medium text-orange-700 bg-orange-100 hover:bg-orange-200 rounded transition-colors disabled:opacity-50"
+                                      title="Reset TOTP - user must re-scan QR code"
+                                    >
+                                      Reset TOTP
+                                    </button>
+                                  )}
+                                </>
+                              );
+                            }
+                          })()}
+                        </div>
                         <button
                           onClick={() => handleAction('delete', user._id)}
                           className="px-3 py-1 text-xs font-medium text-red-700 bg-red-100 hover:bg-red-200 rounded transition-colors"
@@ -584,7 +772,7 @@ export default function UserManagement() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={8} className="px-6 py-4 text-center text-gray-500 border border-gray-300">
+                  <td colSpan={9} className="px-6 py-4 text-center text-gray-500 border border-gray-300">
                     {searchQuery ? 'No users match your search criteria' : 'No users found'}
                   </td>
                 </tr>

@@ -1,6 +1,14 @@
 import mongoose from 'mongoose';
 import User from '../models/User.js';
 import jwt from 'jsonwebtoken';
+import {
+  generateTotpSecret,
+  verifyTotpToken,
+  generateQRCode,
+  generateRecoveryCodes,
+  verifyRecoveryCode,
+  generateDeviceId
+} from '../utils/totpUtils.js';
 
 // Generate JWT Token
 const generateToken = (id) => {
@@ -231,6 +239,58 @@ export const loginUser = async (req, res) => {
         });
       }
     }
+
+    // Check if TOTP is enabled for this user
+    const userWithTotp = await User.findOne({ userId }).select('+totpSecret');
+    
+    if (userWithTotp.totpEnabled && userWithTotp.totpSecret) {
+      // TOTP is enabled - require OTP verification
+      // Return temporary token for OTP verification step
+      const tempToken = jwt.sign(
+        { 
+          id: user._id, 
+          userId: user.userId,
+          application: mappedApplicationName,
+          requiresTotp: true 
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: '5m' } // Short-lived token for OTP verification
+      );
+
+      return res.status(200).json({
+        success: true,
+        requiresTotp: true,
+        message: 'Please enter your 6-digit OTP from Google Authenticator',
+        tempToken: tempToken
+      });
+    }
+
+    // No TOTP required - proceed with normal login
+    // Track device
+    const deviceId = generateDeviceId(req);
+    const platform = req.body.platform || 'web'; // 'web', 'android', 'ios'
+    
+    // Update or add device
+    if (!user.devices) {
+      user.devices = [];
+    }
+    
+    const existingDeviceIndex = user.devices.findIndex(d => d.deviceId === deviceId);
+    const deviceInfo = {
+      deviceId,
+      platform,
+      lastLogin: new Date(),
+      userAgent: req.headers['user-agent'],
+      ipAddress: req.ip || req.connection.remoteAddress
+    };
+
+    if (existingDeviceIndex >= 0) {
+      user.devices[existingDeviceIndex] = deviceInfo;
+    } else {
+      user.devices.push(deviceInfo);
+    }
+    
+    await user.save();
 
     res.status(200).json({
       success: true,
@@ -752,6 +812,470 @@ export const deactivateUser = async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message || 'Server error'
+    });
+  }
+};
+
+// ============================================
+// TOTP AUTHENTICATION ENDPOINTS
+// ============================================
+
+// @desc    Verify OTP and complete login
+// @route   POST /api/auth/otp/verify
+// @access  Public (with temp token)
+export const verifyOTP = async (req, res) => {
+  try {
+    const { tempToken, otp } = req.body;
+
+    if (!tempToken || !otp) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please provide temporary token and OTP'
+      });
+    }
+
+    // Verify temp token
+    let decoded;
+    try {
+      decoded = jwt.verify(tempToken, process.env.JWT_SECRET);
+    } catch (error) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid or expired token. Please login again.'
+      });
+    }
+
+    if (!decoded.requiresTotp) {
+      return res.status(400).json({
+        success: false,
+        error: 'This token does not require TOTP verification'
+      });
+    }
+
+    // Get user with TOTP secret
+    const user = await User.findById(decoded.id).select('+totpSecret');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    if (!user.totpEnabled || !user.totpSecret) {
+      return res.status(400).json({
+        success: false,
+        error: 'TOTP is not enabled for this user'
+      });
+    }
+
+    // Verify OTP
+    const isValid = verifyTotpToken(otp, user.totpSecret, 1);
+
+    if (!isValid) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid OTP. Please try again.'
+      });
+    }
+
+    // OTP verified - complete login
+    // Track device
+    const deviceId = generateDeviceId(req);
+    const platform = req.body.platform || 'web';
+    
+    if (!user.devices) {
+      user.devices = [];
+    }
+    
+    const existingDeviceIndex = user.devices.findIndex(d => d.deviceId === deviceId);
+    const deviceInfo = {
+      deviceId,
+      platform,
+      lastLogin: new Date(),
+      userAgent: req.headers['user-agent'],
+      ipAddress: req.ip || req.connection.remoteAddress
+    };
+
+    if (existingDeviceIndex >= 0) {
+      user.devices[existingDeviceIndex] = deviceInfo;
+    } else {
+      user.devices.push(deviceInfo);
+    }
+    
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Login successful',
+      token: generateToken(user._id),
+      user: {
+        id: user._id,
+        fullName: user.fullName,
+        userId: user.userId,
+        email: user.email,
+        role: user.role,
+        designation: user.designation,
+        mappedTo: user.mappedTo,
+        division: user.division || [],
+        circle: user.circle || [],
+        subDivision: user.subDivision || []
+      }
+    });
+
+  } catch (error) {
+    console.error('OTP verification error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Server error during OTP verification'
+    });
+  }
+};
+
+// @desc    Initialize TOTP setup (generate secret and QR)
+// @route   POST /api/auth/totp/setup
+// @access  Private
+export const setupTotp = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('+totpSecret');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    // Check if admin allows TOTP
+    if (!user.adminAllowsTotp) {
+      return res.status(403).json({
+        success: false,
+        error: 'TOTP is not enabled for your account. Please contact administrator.'
+      });
+    }
+
+    // If TOTP is already enabled, require admin reset first
+    if (user.totpEnabled && user.totpSecret) {
+      return res.status(400).json({
+        success: false,
+        error: 'TOTP is already enabled. Please contact administrator to reset if needed.'
+      });
+    }
+
+    // Generate new TOTP secret
+    const { secret, otpauthUrl } = generateTotpSecret(user.userId, 'BESCOM DAS');
+
+    // Generate QR code
+    const qrCodeDataUrl = await generateQRCode(otpauthUrl);
+
+    // Store secret temporarily (don't enable yet - wait for confirmation)
+    user.totpSecret = secret;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'TOTP setup initialized. Scan QR code and confirm with OTP.',
+      qrCode: qrCodeDataUrl,
+      secret: secret, // For manual entry if QR scan fails
+      otpauthUrl: otpauthUrl
+    });
+
+  } catch (error) {
+    console.error('TOTP setup error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Server error during TOTP setup'
+    });
+  }
+};
+
+// @desc    Confirm TOTP setup (verify OTP and enable)
+// @route   POST /api/auth/totp/confirm
+// @access  Private
+export const confirmTotp = async (req, res) => {
+  try {
+    const { otp } = req.body;
+
+    if (!otp) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please provide OTP'
+      });
+    }
+
+    const user = await User.findById(req.user.id).select('+totpSecret');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    if (!user.totpSecret) {
+      return res.status(400).json({
+        success: false,
+        error: 'TOTP setup not initialized. Please run setup first.'
+      });
+    }
+
+    // Verify OTP
+    const isValid = verifyTotpToken(otp, user.totpSecret, 1);
+
+    if (!isValid) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid OTP. Please try again.'
+      });
+    }
+
+    // Generate recovery codes
+    const { plainCodes, hashedCodes } = await generateRecoveryCodes(8);
+
+    // Enable TOTP and store recovery codes
+    user.totpEnabled = true;
+    user.recoveryCodes = hashedCodes;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'TOTP enabled successfully. Save your recovery codes securely.',
+      recoveryCodes: plainCodes, // Show only once
+      warning: 'Save these recovery codes in a secure location. They will not be shown again.'
+    });
+
+  } catch (error) {
+    console.error('TOTP confirmation error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Server error during TOTP confirmation'
+    });
+  }
+};
+
+// @desc    Login using recovery code
+// @route   POST /api/auth/recovery-login
+// @access  Public
+export const recoveryLogin = async (req, res) => {
+  try {
+    const { userId, password, recoveryCode, application } = req.body;
+
+    if (!userId || !password || !recoveryCode) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please provide User ID, Password, and Recovery Code'
+      });
+    }
+
+    // Find user
+    const user = await User.findOne({ userId }).select('+password');
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid credentials'
+      });
+    }
+
+    // Check if user is active
+    if (!user.isActive) {
+      return res.status(401).json({
+        success: false,
+        error: 'Your account has been deactivated. Please contact administrator.'
+      });
+    }
+
+    // Check password
+    const isPasswordMatch = await user.matchPassword(password);
+
+    if (!isPasswordMatch) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid credentials'
+      });
+    }
+
+    // Verify recovery code
+    const validRecoveryCode = await verifyRecoveryCode(recoveryCode, user.recoveryCodes);
+
+    if (!validRecoveryCode) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid recovery code'
+      });
+    }
+
+    // Mark recovery code as used
+    validRecoveryCode.used = true;
+    validRecoveryCode.usedAt = new Date();
+    await user.save();
+
+    // Application validation (same as login)
+    const applicationMap = {
+      'equipment-maintenance': 'Equipment Maintenance',
+      'equipment-survey': 'Equipment Survey'
+    };
+    
+    const mappedApplicationName = applicationMap[application] || application;
+    
+    if (user.role !== 'Admin' && application) {
+      if (!user.mappedTo || !Array.isArray(user.mappedTo) || user.mappedTo.length === 0) {
+        return res.status(403).json({
+          success: false,
+          error: 'You are not mapped to any application.'
+        });
+      }
+      
+      if (!user.mappedTo.includes(mappedApplicationName)) {
+        return res.status(403).json({
+          success: false,
+          error: `You are not authorized to access ${mappedApplicationName}.`
+        });
+      }
+    }
+
+    // Track device
+    const deviceId = generateDeviceId(req);
+    const platform = req.body.platform || 'web';
+    
+    if (!user.devices) {
+      user.devices = [];
+    }
+    
+    const existingDeviceIndex = user.devices.findIndex(d => d.deviceId === deviceId);
+    const deviceInfo = {
+      deviceId,
+      platform,
+      lastLogin: new Date(),
+      userAgent: req.headers['user-agent'],
+      ipAddress: req.ip || req.connection.remoteAddress
+    };
+
+    if (existingDeviceIndex >= 0) {
+      user.devices[existingDeviceIndex] = deviceInfo;
+    } else {
+      user.devices.push(deviceInfo);
+    }
+    
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Login successful using recovery code',
+      token: generateToken(user._id),
+      user: {
+        id: user._id,
+        fullName: user.fullName,
+        userId: user.userId,
+        email: user.email,
+        role: user.role,
+        designation: user.designation,
+        mappedTo: user.mappedTo,
+        division: user.division || [],
+        circle: user.circle || [],
+        subDivision: user.subDivision || []
+      }
+    });
+
+  } catch (error) {
+    console.error('Recovery login error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Server error during recovery login'
+    });
+  }
+};
+
+// @desc    Get current user's TOTP status
+// @route   GET /api/auth/totp/status
+// @access  Private
+export const getMyTotpStatus = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('userId fullName email role adminAllowsTotp totpEnabled');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        userId: user.userId,
+        fullName: user.fullName,
+        email: user.email,
+        role: user.role,
+        adminAllowsTotp: user.adminAllowsTotp || false,
+        totpEnabled: user.totpEnabled || false
+      }
+    });
+
+  } catch (error) {
+    console.error('Get TOTP status error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Server error'
+    });
+  }
+};
+
+// @desc    Reset own TOTP (for logged-in users, including admins)
+// @route   POST /api/auth/totp/reset-self
+// @access  Private
+export const resetOwnTotp = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('+totpSecret');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    // Clear TOTP data but keep adminAllowsTotp = true
+    user.totpEnabled = false;
+    user.totpSecret = null;
+    user.recoveryCodes = [];
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'TOTP reset successfully. You can set it up again in Settings.',
+      data: {
+        userId: user.userId,
+        adminAllowsTotp: user.adminAllowsTotp,
+        totpEnabled: user.totpEnabled
+      }
+    });
+
+  } catch (error) {
+    console.error('Reset own TOTP error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Server error'
+    });
+  }
+};
+
+// @desc    Logout (client-side token removal, server-side optional cleanup)
+// @route   POST /api/auth/logout
+// @access  Private
+export const logout = async (req, res) => {
+  try {
+    // In JWT-based auth, logout is primarily client-side
+    // Optionally, you can maintain a token blacklist or remove device tracking
+    res.status(200).json({
+      success: true,
+      message: 'Logged out successfully'
+    });
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Server error during logout'
     });
   }
 };

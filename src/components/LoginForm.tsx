@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { API_BASE } from '../utils/api'
 import { useTheme } from '../context/ThemeContext'
+import OTPInput from './OTPInput'
 
 export default function LoginForm() {
   const { theme } = useTheme()
@@ -20,6 +21,8 @@ export default function LoginForm() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [loginError, setLoginError] = useState('');
+  const [requiresTotp, setRequiresTotp] = useState(false);
+  const [tempToken, setTempToken] = useState('');
 
   const applications = [
     { value: '', label: 'Select Application' },
@@ -93,6 +96,14 @@ export default function LoginForm() {
         throw new Error(data.error || 'Login failed');
       }
 
+      // Check if TOTP is required
+      if (data.requiresTotp && data.tempToken) {
+        setRequiresTotp(true);
+        setTempToken(data.tempToken);
+        setIsLoading(false);
+        return;
+      }
+
       // Validate application for non-Admin users
       if (data.user && data.user.role !== 'Admin' && !formData.application) {
         setErrors(prev => ({
@@ -135,6 +146,104 @@ export default function LoginForm() {
       setIsLoading(false);
     }
   };
+
+  const handleOTPComplete = async (otp: string) => {
+    setIsLoading(true);
+    setLoginError('');
+
+    try {
+      const response = await fetch(`${API_BASE}/api/auth/otp/verify`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          tempToken,
+          otp,
+          platform: 'web'
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'OTP verification failed');
+      }
+
+      // Store token and user data
+      if (data.token) {
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        if (formData.application) {
+          localStorage.setItem('selectedApplication', formData.application);
+        }
+      }
+
+      // Redirect based on role
+      const userRole = data.user?.role || '';
+      if (userRole === 'CCR' || userRole.toLowerCase() === 'ccr') {
+        window.location.href = '/dashboard/equipment-dashboard';
+      } else {
+        window.location.href = '/dashboard';
+      }
+    } catch (error: any) {
+      console.error('OTP verification error:', error);
+      setLoginError(error.message || 'Invalid OTP. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleOTPError = (error: string) => {
+    setLoginError(error);
+  };
+
+  // Show OTP input if TOTP is required
+  if (requiresTotp) {
+    return (
+      <div className="w-full max-w-md">
+        <div className="rounded-2xl shadow-2xl p-8 animate-in fade-in slide-in-from-bottom-4 duration-700" style={{ backgroundColor: theme.surface }}>
+          <div className="mb-6">
+            <h2 className="text-3xl font-bold text-center" style={{ color: theme.primary }}>
+              Enter OTP
+            </h2>
+            <p className="text-center mt-2" style={{ color: theme.textSecondary }}>
+              Enter the 6-digit code from Google Authenticator
+            </p>
+          </div>
+
+          {loginError && (
+            <div className="mb-4 p-3 rounded-lg text-sm border" style={{ backgroundColor: theme.error + '20', borderColor: theme.error, color: theme.error }}>
+              {loginError}
+            </div>
+          )}
+
+          <div className="mb-6">
+            <OTPInput
+              onComplete={handleOTPComplete}
+              onError={handleOTPError}
+              length={6}
+              disabled={isLoading}
+            />
+          </div>
+
+          <div className="text-center">
+            <button
+              onClick={() => {
+                setRequiresTotp(false);
+                setTempToken('');
+                setLoginError('');
+              }}
+              className="text-sm transition-colors"
+              style={{ color: theme.primary }}
+            >
+              ← Back to Login
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-md">

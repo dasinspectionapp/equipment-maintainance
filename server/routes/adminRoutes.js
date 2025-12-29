@@ -22,6 +22,13 @@ import {
 } from '../controllers/elibraryController.js';
 import { protect, authorize } from '../middleware/authMiddleware.js';
 import fileUpload from 'express-fileupload';
+import {
+  enableTotpForUser,
+  disableTotpForUser,
+  resetTotpForUser,
+  getTotpStatus,
+  getTotpStatusForUser
+} from '../controllers/adminTotpController.js';
 
 const router = express.Router();
 
@@ -67,6 +74,13 @@ router.post('/elibrary', authorize('Admin'), fileUpload({
 }), createResource);
 router.put('/elibrary/:id', authorize('Admin'), updateResource);
 router.delete('/elibrary/:id', authorize('Admin'), deleteResource);
+
+// Admin TOTP Management Routes (Admin only)
+router.post('/totp/enable', authorize('Admin'), enableTotpForUser);
+router.post('/totp/disable', authorize('Admin'), disableTotpForUser);
+router.post('/totp/reset', authorize('Admin'), resetTotpForUser);
+router.get('/totp/status', authorize('Admin'), getTotpStatus);
+router.get('/totp/status/:userId', authorize('Admin'), getTotpStatusForUser);
 
 export default router;
 

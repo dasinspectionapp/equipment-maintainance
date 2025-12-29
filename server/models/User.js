@@ -106,6 +106,51 @@ const userSchema = new mongoose.Schema({
     enum: ['pending', 'approved', 'rejected'],
     default: 'pending'
   },
+  // TOTP Authentication Fields
+  totpSecret: {
+    type: String,
+    select: false, // Never return in queries unless explicitly requested
+    default: null
+  },
+  totpEnabled: {
+    type: Boolean,
+    default: false
+  },
+  adminAllowsTotp: {
+    type: Boolean,
+    default: false // Admin must enable TOTP for user
+  },
+  recoveryCodes: [{
+    codeHash: {
+      type: String,
+      required: true
+    },
+    used: {
+      type: Boolean,
+      default: false
+    },
+    usedAt: {
+      type: Date,
+      default: null
+    }
+  }],
+  devices: [{
+    deviceId: {
+      type: String,
+      required: true
+    },
+    platform: {
+      type: String,
+      enum: ['web', 'android', 'ios'],
+      required: true
+    },
+    lastLogin: {
+      type: Date,
+      default: Date.now
+    },
+    userAgent: String,
+    ipAddress: String
+  }],
   createdAt: {
     type: Date,
     default: Date.now
