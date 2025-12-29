@@ -9,7 +9,7 @@ interface TOTPSetupProps {
 
 export default function TOTPSetup({ onComplete, onCancel }: TOTPSetupProps) {
   const { theme } = useTheme();
-  const [step, setStep] = useState<'qr' | 'confirm'>('qr');
+  const [step, setStep] = useState<'qr' | 'confirm' | 'recovery'>('qr');
   const [qrCode, setQrCode] = useState<string>('');
   const [secret, setSecret] = useState<string>('');
   const [otp, setOtp] = useState('');
@@ -92,10 +92,6 @@ export default function TOTPSetup({ onComplete, onCancel }: TOTPSetupProps) {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleOTPComplete = (otpValue: string) => {
-    setOtp(otpValue);
   };
 
   const handleSaveRecoveryCodes = () => {
@@ -202,7 +198,8 @@ export default function TOTPSetup({ onComplete, onCancel }: TOTPSetupProps) {
                   }}
                   onKeyDown={(e) => {
                     if (e.key === 'Backspace' && !otp[i] && i > 0) {
-                      (e.target.previousElementSibling as HTMLInputElement)?.focus();
+                      const target = e.target as HTMLInputElement;
+                      (target.previousElementSibling as HTMLInputElement)?.focus();
                     }
                   }}
                   className="w-12 h-14 text-center text-2xl font-bold border-2 rounded-lg focus:ring-2 focus:border-transparent transition-all"

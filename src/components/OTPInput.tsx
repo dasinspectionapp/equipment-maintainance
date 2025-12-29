@@ -3,12 +3,11 @@ import { useTheme } from '../context/ThemeContext';
 
 interface OTPInputProps {
   onComplete: (otp: string) => void;
-  onError?: (error: string) => void;
   length?: number;
   disabled?: boolean;
 }
 
-export default function OTPInput({ onComplete, onError, length = 6, disabled = false }: OTPInputProps) {
+export default function OTPInput({ onComplete, length = 6, disabled = false }: OTPInputProps) {
   const { theme } = useTheme();
   const [otp, setOtp] = useState<string[]>(Array(length).fill(''));
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
@@ -87,17 +86,14 @@ export default function OTPInput({ onComplete, onError, length = 6, disabled = f
     }
   };
 
-  const reset = () => {
-    setOtp(Array(length).fill(''));
-    inputRefs.current[0]?.focus();
-  };
-
   return (
     <div className="flex justify-center gap-2">
       {otp.map((digit, index) => (
         <input
           key={index}
-          ref={(el) => (inputRefs.current[index] = el)}
+          ref={(el) => {
+            inputRefs.current[index] = el;
+          }}
           type="text"
           inputMode="numeric"
           maxLength={1}
