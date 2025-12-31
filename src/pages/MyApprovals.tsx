@@ -132,10 +132,184 @@ export default function MyApprovals() {
         })) || []
       });
 
-      const approvals: ApprovalRecord[] = Array.isArray(data.data) ? data.data : [];
+      let approvals: ApprovalRecord[] = Array.isArray(data.data) ? data.data : [];
 
-      console.log('MyApprovals - Loaded approvals:', {
+      console.log('MyApprovals - Raw approvals from API (before dedup):', {
         count: approvals.length,
+        approvals: approvals.map(a => ({
+          _id: a._id,
+          approvalType: a.approvalType,
+          status: a.status,
+          siteCode: a.siteCode,
+          equipmentOfflineSiteId: (a as any).equipmentOfflineSiteId?._id || (a as any).equipmentOfflineSiteId,
+          actionId: (a as any).actionId?._id || (a as any).actionId
+        }))
+      });
+
+      // Frontend deduplication as safety measure (in case backend dedup didn't work)
+      // Only deduplicate TRUE duplicates: same actionId or same CCR approval from same AMC approval
+      const deduplicatedApprovals: ApprovalRecord[] = [];
+      const duplicates: any[] = [];
+      const seenActionIds = new Set<string>();
+      const seenCCRKeys = new Map<string, ApprovalRecord>();
+      
+      approvals.forEach((approval) => {
+        const actionId = (approval as any).actionId?._id || (approval as any).actionId;
+        const actionIdStr = actionId ? String(actionId) : null;
+        
+        // Check 1: Same actionId = duplicate
+        if (actionIdStr && seenActionIds.has(actionIdStr)) {
+          duplicates.push({
+            type: 'same_actionId',
+            duplicate: {
+              _id: approval._id,
+              siteCode: approval.siteCode,
+              actionId: actionIdStr,
+              status: approval.status
+            }
+          });
+          return; // Skip this duplicate
+        }
+        
+        if (actionIdStr) {
+          seenActionIds.add(actionIdStr);
+        }
+        
+        // Check 2: For CCR Resolution Approvals, check for duplicates by equipmentOfflineSiteId (regardless of status)
+        if (approval.approvalType === 'CCR Resolution Approval') {
+          // Helper to extract equipmentOfflineSiteId (handles both populated and non-populated)
+          const getEquipmentOfflineSiteId = (a: any) => {
+            if (!a.equipmentOfflineSiteId) return null;
+            if (typeof a.equipmentOfflineSiteId === 'object' && a.equipmentOfflineSiteId._id) {
+              return String(a.equipmentOfflineSiteId._id);
+            }
+            return String(a.equipmentOfflineSiteId);
+          };
+          
+          const equipmentOfflineSiteId = getEquipmentOfflineSiteId(approval);
+          const status = approval.status || 'NO_STATUS';
+          
+          // CRITICAL: One site should only have ONE CCR approval (regardless of status)
+          // Priority: Approved > Kept for Monitoring > Recheck Requested > Pending
+          if (equipmentOfflineSiteId) {
+            const key = `CCR_${equipmentOfflineSiteId}`;
+            
+            if (seenCCRKeys.has(key)) {
+              const existing = seenCCRKeys.get(key)!;
+              const existingStatus = existing.status || 'NO_STATUS';
+              
+              // Status priority: Approved > Kept for Monitoring > Recheck Requested > Pending
+              const statusPriority: { [key: string]: number } = {
+                'Approved': 4,
+                'Kept for Monitoring': 3,
+                'Recheck Requested': 2,
+                'Pending': 1,
+                'NO_STATUS': 0
+              };
+              
+              const existingPriority = statusPriority[existingStatus] || 0;
+              const currentPriority = statusPriority[status] || 0;
+              
+              duplicates.push({
+                type: 'same_site_different_status',
+                duplicate: {
+                  _id: approval._id,
+                  siteCode: approval.siteCode,
+                  equipmentOfflineSiteId: equipmentOfflineSiteId,
+                  status: status,
+                  priority: currentPriority
+                },
+                original: {
+                  _id: existing._id,
+                  siteCode: existing.siteCode,
+                  equipmentOfflineSiteId: getEquipmentOfflineSiteId(existing),
+                  status: existingStatus,
+                  priority: existingPriority
+                }
+              });
+              
+              // Keep the one with higher priority status, or if same priority, keep the newer one
+              const existingCreatedAt = (existing as any).createdAt || new Date(0);
+              const newCreatedAt = (approval as any).createdAt || new Date(0);
+              if (currentPriority > existingPriority || 
+                  (currentPriority === existingPriority && new Date(newCreatedAt) > new Date(existingCreatedAt))) {
+                seenCCRKeys.set(key, approval);
+                // Replace in deduplicatedApprovals
+                const index = deduplicatedApprovals.findIndex(a => a._id === existing._id);
+                if (index !== -1) {
+                  deduplicatedApprovals[index] = approval;
+                }
+              }
+              return; // Skip this duplicate
+            } else {
+              seenCCRKeys.set(key, approval);
+            }
+          } else {
+            // If no equipmentOfflineSiteId, use siteCode + status as fallback
+            const fallbackKey = `CCR_SITECODE_${approval.siteCode}_${status}`;
+            if (seenCCRKeys.has(fallbackKey)) {
+              const existing = seenCCRKeys.get(fallbackKey)!;
+              duplicates.push({
+                type: 'same_sitecode_same_status',
+                duplicate: {
+                  _id: approval._id,
+                  siteCode: approval.siteCode,
+                  status: status
+                },
+                original: {
+                  _id: existing._id,
+                  siteCode: existing.siteCode,
+                  status: existing.status
+                }
+              });
+              const existingCreatedAt = (existing as any).createdAt || new Date(0);
+              const newCreatedAt = (approval as any).createdAt || new Date(0);
+              if (new Date(newCreatedAt) < new Date(existingCreatedAt)) {
+                seenCCRKeys.set(fallbackKey, approval);
+                const index = deduplicatedApprovals.findIndex(a => a._id === existing._id);
+                if (index !== -1) {
+                  deduplicatedApprovals[index] = approval;
+                }
+              }
+              return; // Skip this duplicate
+            } else {
+              seenCCRKeys.set(fallbackKey, approval);
+            }
+          }
+        }
+        
+        // Not a duplicate, add to results
+        deduplicatedApprovals.push(approval);
+      });
+
+      approvals = deduplicatedApprovals;
+
+      if (duplicates.length > 0) {
+        console.warn('MyApprovals - ⚠️ DUPLICATES DETECTED ON FRONTEND:', {
+          duplicatesCount: duplicates.length,
+          duplicates: duplicates,
+          totalBeforeDedup: data.data?.length || 0,
+          totalAfterDedup: approvals.length
+        });
+      }
+
+      // Log site 5W1599 specifically
+      const site599Approvals = approvals.filter(a => a.siteCode === '5W1599');
+      if (site599Approvals.length > 0) {
+        console.log('MyApprovals - 🔍 APPROVALS FOR SITE 5W1599:', {
+          count: site599Approvals.length,
+          approvals: site599Approvals.map(a => ({
+            _id: a._id,
+            approvalType: a.approvalType,
+            status: a.status,
+            equipmentOfflineSiteId: (a as any).equipmentOfflineSiteId?._id || (a as any).equipmentOfflineSiteId
+          }))
+        });
+      }
+
+      console.log('MyApprovals - Final approvals (after dedup):', {
+        count: approvals.length,
+        duplicatesRemoved: (data.data?.length || 0) - approvals.length,
         approvals: approvals.map(a => ({
           _id: a._id,
           approvalType: a.approvalType,

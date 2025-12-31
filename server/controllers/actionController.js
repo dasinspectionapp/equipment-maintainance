@@ -2559,6 +2559,69 @@ export async function updateActionStatus(req, res, next) {
           // Find the approval document for this action
           let approval = await Approval.findOne({ actionId: action._id });
           
+          // CRITICAL: For CCR Resolution Approvals, also check by equipmentOfflineSiteId to prevent duplicates
+          // If approval not found by actionId, check if there's already an approval for this site
+          if (!approval && isCCRApprovalType) {
+            const row = action.rowData || {};
+            const approvalSiteCode = (row['Site Code'] || row['SITE CODE'] || row['Code'] || row['CODE'] || '').trim().toUpperCase();
+            
+            if (approvalSiteCode) {
+              try {
+                const EquipmentOfflineSites = (await import('../models/EquipmentOfflineSites.js')).default;
+                // Try to find EquipmentOfflineSites record
+                const possibleUserIds = [
+                  action.assignedToUserId,
+                  action.assignedByUserId,
+                  currentUser.userId
+                ].filter(Boolean);
+                
+                for (const userId of possibleUserIds) {
+                  const equipmentSite = await EquipmentOfflineSites.findOne({
+                    siteCode: approvalSiteCode,
+                    userId: userId,
+                  })
+                  .sort({ createdAt: -1 })
+                  .lean();
+                  
+                  if (equipmentSite) {
+                    // CRITICAL: Check if there's already an approval for this equipmentOfflineSiteId
+                    // Check for ALL statuses to prevent creating duplicates after CCR approves
+                    const existingApproval = await Approval.findOne({
+                      approvalType: 'CCR Resolution Approval',
+                      equipmentOfflineSiteId: equipmentSite._id
+                    });
+                    
+                    if (existingApproval) {
+                      console.log('[updateActionStatus] ⚠️ Existing CCR approval found for this site - not creating duplicate:', {
+                        existingApprovalId: existingApproval._id,
+                        siteCode: approvalSiteCode,
+                        equipmentOfflineSiteId: equipmentSite._id,
+                        existingStatus: existingApproval.status,
+                        existingActionId: existingApproval.actionId,
+                        currentActionId: action._id,
+                        willUpdateExisting: true
+                      });
+                      approval = existingApproval; // Use existing approval instead of creating new one
+                      // Update the existing approval's actionId if it's different (shouldn't happen, but just in case)
+                      if (existingApproval.actionId?.toString() !== action._id.toString()) {
+                        console.log('[updateActionStatus] ⚠️ WARNING: Existing approval has different actionId, updating it:', {
+                          existingActionId: existingApproval.actionId,
+                          newActionId: action._id
+                        });
+                        existingApproval.actionId = action._id;
+                        await existingApproval.save();
+                      }
+                      break;
+                    }
+                    break;
+                  }
+                }
+              } catch (equipmentError) {
+                console.error('[updateActionStatus] Error checking for existing approval:', equipmentError);
+              }
+            }
+          }
+          
           // If approval doesn't exist, create it
           if (!approval) {
             console.log('[updateActionStatus] Approval document not found, creating new one for action:', action._id);
@@ -2615,25 +2678,65 @@ export async function updateActionStatus(req, res, next) {
               }
             }
 
-            // Create new approval document
-            approval = await Approval.create({
-              actionId: action._id,
-              siteCode: approvalSiteCode,
-              equipmentOfflineSiteId: equipmentOfflineSiteId,
-              approvalType: action.typeOfIssue,
-              status: initialStatus,
-              submittedByUserId: action.assignedByUserId || currentUser.userId,
-              submittedByRole: action.assignedByRole || currentUser.role,
-              assignedToUserId: action.assignedToUserId,
-              assignedToRole: action.assignedToRole,
-              submissionRemarks: action.remarks || '',
-              photos: photos,
-              supportDocuments: supportDocuments,
-              fileId: action.sourceFileId,
-              rowKey: row.__siteObservationRowKey || '',
-              originalRowData: row || {},
-              metadata: {}
-            });
+            // CRITICAL: Final check before creating - ensure no duplicate exists
+            if (isCCRApprovalType && equipmentOfflineSiteId) {
+              const finalDuplicateCheck = await Approval.findOne({
+                approvalType: 'CCR Resolution Approval',
+                equipmentOfflineSiteId: equipmentOfflineSiteId
+              });
+              
+              if (finalDuplicateCheck) {
+                console.log('[updateActionStatus] ❌❌❌ DUPLICATE PREVENTION: Found existing approval, NOT creating new one:', {
+                  existingApprovalId: finalDuplicateCheck._id,
+                  existingStatus: finalDuplicateCheck.status,
+                  existingActionId: finalDuplicateCheck.actionId,
+                  currentActionId: action._id,
+                  equipmentOfflineSiteId: equipmentOfflineSiteId,
+                  siteCode: approvalSiteCode
+                });
+                approval = finalDuplicateCheck; // Use existing instead
+              } else {
+                // Create new approval document
+                approval = await Approval.create({
+                  actionId: action._id,
+                  siteCode: approvalSiteCode,
+                  equipmentOfflineSiteId: equipmentOfflineSiteId,
+                  approvalType: action.typeOfIssue,
+                  status: initialStatus,
+                  submittedByUserId: action.assignedByUserId || currentUser.userId,
+                  submittedByRole: action.assignedByRole || currentUser.role,
+                  assignedToUserId: action.assignedToUserId,
+                  assignedToRole: action.assignedToRole,
+                  submissionRemarks: action.remarks || '',
+                  photos: photos,
+                  supportDocuments: supportDocuments,
+                  fileId: action.sourceFileId,
+                  rowKey: row.__siteObservationRowKey || '',
+                  originalRowData: row || {},
+                  metadata: {}
+                });
+              }
+            } else {
+              // Create new approval document (for non-CCR approvals or when equipmentOfflineSiteId is not available)
+              approval = await Approval.create({
+                actionId: action._id,
+                siteCode: approvalSiteCode,
+                equipmentOfflineSiteId: equipmentOfflineSiteId,
+                approvalType: action.typeOfIssue,
+                status: initialStatus,
+                submittedByUserId: action.assignedByUserId || currentUser.userId,
+                submittedByRole: action.assignedByRole || currentUser.role,
+                assignedToUserId: action.assignedToUserId,
+                assignedToRole: action.assignedToRole,
+                submissionRemarks: action.remarks || '',
+                photos: photos,
+                supportDocuments: supportDocuments,
+                fileId: action.sourceFileId,
+                rowKey: row.__siteObservationRowKey || '',
+                originalRowData: row || {},
+                metadata: {}
+              });
+            }
 
             // Set approver info if already approved
             if (isCompleted || (isInProgress && String(remarks || '').toLowerCase().includes('kept for monitoring'))) {
