@@ -85,16 +85,14 @@ const connectDB = async () => {
       console.log(`✓ Database: ${conn.connection.name}`);
       console.log(`✓ Ready State: ${conn.connection.readyState}`);
       
-      // If we need to use 'das' database instead of 'admin', switch to it
-      // Note: This only works if 'das' is a database, not a collection
-      // If 'das' is a collection, it will be in the current database (admin)
+      // Switch to 'das' database for storing collections
       const currentDb = conn.connection.name;
       if (currentDb === 'admin') {
         console.log(`ℹ Connected to 'admin' database for authentication`);
-        console.log(`ℹ Collections will be in the 'admin' database`);
-        // If you need to switch to 'das' database, uncomment below:
-        // const dasDb = conn.connection.useDb('das');
-        // console.log(`✓ Switched to 'das' database`);
+        // Switch to 'das' database for collections
+        const dasDb = conn.connection.useDb('das');
+        console.log(`✓ Switched to 'das' database for collections`);
+        console.log(`✓ Collections (including Reports) will be stored in 'das' database`);
       }
       
       isConnected = true;

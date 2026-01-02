@@ -12,7 +12,8 @@ import {
   getReports,
   getLocalRemoteReports,
   getReportDetails,
-  getReportFilters
+  getReportFilters,
+  clearReportsData
 } from '../controllers/equipmentOfflineSitesController.js';
 
 const router = express.Router();
@@ -54,6 +55,18 @@ router.get('/reports/details', (req, res, next) => {
 router.get('/reports/filters', (req, res, next) => {
   console.log('Report Filters route hit - Method:', req.method, 'Path:', req.path);
   getReportFilters(req, res, next);
+});
+
+// Clear all reports data for Equipment role (Resolved and Pending)
+// IMPORTANT: This must come before parameterized routes to avoid route conflicts
+router.delete('/reports/clear', (req, res, next) => {
+  console.log('==========================================');
+  console.log('Clear Reports route hit - Method:', req.method);
+  console.log('Clear Reports route hit - Path:', req.path);
+  console.log('Clear Reports route hit - Original URL:', req.originalUrl);
+  console.log('Clear Reports route hit - Params:', req.params);
+  console.log('==========================================');
+  clearReportsData(req, res, next);
 });
 
 // Update only No of Days Offline for matching Site Code and Device Status

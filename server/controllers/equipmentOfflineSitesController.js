@@ -1,9 +1,12 @@
+import mongoose from 'mongoose';
 import EquipmentOfflineSites from '../models/EquipmentOfflineSites.js';
 import Upload from '../models/Upload.js';
 import Action from '../models/Action.js';
 import User from '../models/User.js';
 import Approval from '../models/Approval.js';
 import Notification from '../models/Notification.js';
+import Reports from '../models/Reports.js';
+import EquipmentReports from '../models/EquipmentReports.js';
 
 // @desc    Save or update equipment offline site data
 // @route   POST /api/equipment-offline-sites
@@ -2281,6 +2284,15 @@ export const bulkUpdateDaysOfflineOnly = async (req, res) => {
 // @access  Private
 export const deleteEquipmentOfflineSite = async (req, res) => {
   try {
+    // Guard: Prevent this route from matching /reports/clear
+    if (req.params.fileId === 'reports' && req.params.rowKey === 'clear') {
+      console.error('[Delete Equipment Offline Site] Route conflict detected - this should not match /reports/clear');
+      return res.status(404).json({
+        success: false,
+        error: 'Route not found. Use /reports/clear to clear reports data.'
+      });
+    }
+
     const { fileId, rowKey } = req.params;
     const userId = req.user.userId;
 
@@ -2671,6 +2683,234 @@ export const getReports = async (req, res) => {
       };
     });
 
+    // Save reports to Reports collection for Equipment role users
+    // Only save if reports don't already exist (prevent re-saving after clearing)
+    const userRole = req.user.role;
+    if (userRole === 'Equipment' && reports.length > 0) {
+      try {
+        // Verify MongoDB connection is ready
+        if (mongoose.connection.readyState !== 1) {
+          console.error('[Reports Save] MongoDB connection not ready. State:', mongoose.connection.readyState);
+          throw new Error('MongoDB connection not ready');
+        }
+        
+        console.log(`[Reports Save] Current database: ${mongoose.connection.name}`);
+        console.log(`[Reports Save] User role: ${userRole}, Reports count: ${reports.length}`);
+        // Prepare reports data to save
+        const reportsToSave = reports.map((report) => {
+          // Handle createdAt date
+          let createdAtDate = null;
+          if (report.createdAt) {
+            if (report.createdAt instanceof Date) {
+              createdAtDate = report.createdAt;
+            } else if (report.createdAt.$date) {
+              createdAtDate = new Date(report.createdAt.$date);
+            } else if (typeof report.createdAt === 'string') {
+              createdAtDate = new Date(report.createdAt);
+            } else if (typeof report.createdAt === 'number') {
+              createdAtDate = new Date(report.createdAt);
+            }
+          }
+
+          const normalizedSiteCode = (report.siteCode || '').trim().toUpperCase();
+          const ccrStatusValue =
+            reportType === 'Resolved'
+              ? (ccrStatusMap[normalizedSiteCode] || 'Pending')
+              : '';
+
+          // Format resolvedBy
+          let resolvedByValue = 'N/A';
+          if (reportType === 'Pending') {
+            if (report.user) {
+              const fullName = report.user.fullName || '';
+              const role = report.user.role || '';
+              const roleDisplay = role ? `${role} Team` : '';
+              resolvedByValue = fullName && roleDisplay ? `${fullName}@${roleDisplay}` : (fullName || report.userId || 'N/A');
+            } else if (report.userId) {
+              resolvedByValue = report.userId;
+            }
+          } else {
+            resolvedByValue = report.user?.fullName || report.userId || 'N/A';
+          }
+
+          return {
+            reportType: reportType,
+            userId: userId,
+            userRole: userRole,
+            siteCode: report.siteCode || '',
+            remarks: report.remarks || '',
+            updatedTimeAndDate: createdAtDate && !isNaN(createdAtDate.getTime())
+              ? createdAtDate.toLocaleString('en-IN', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  second: '2-digit',
+                  hour12: true
+                })
+              : '',
+            ccrStatus: ccrStatusValue,
+            resolvedBy: resolvedByValue,
+            taskStatus: report.taskStatus || '',
+            typeOfIssue: report.typeOfIssue || '',
+            siteObservations: report.siteObservations || '',
+            circle: report.circle || '',
+            division: report.division || '',
+            subDivision: report.subDivision || '',
+            originalRowData: report.originalRowData || {},
+            equipmentOfflineSiteId: report._id,
+            filters: {
+              circles: circles ? (Array.isArray(circles) ? circles : [circles]) : [],
+              divisions: divisions ? (Array.isArray(divisions) ? divisions : [divisions]) : [],
+              subDivisions: subDivisions ? (Array.isArray(subDivisions) ? subDivisions : [subDivisions]) : [],
+              fromDate: fromDate ? new Date(fromDate) : null,
+              toDate: toDate ? new Date(toDate) : null,
+              timeRange: 'All' // You can extract this from query if needed
+            },
+            metadata: {
+              originalUserId: report.originalUserId || '',
+              fileId: report.fileId || '',
+              rowKey: report.rowKey || ''
+            }
+          };
+        });
+
+        // Save reports to 'das' database
+        // Use 'das' database connection for Reports collection
+        try {
+          // Get 'das' database connection
+          const dasConnection = mongoose.connection.useDb('das', {
+            useCache: true,
+            noListener: false
+          });
+          
+          console.log(`[Reports Save] ==========================================`);
+          console.log(`[Reports Save] Current connection database: ${mongoose.connection.name}`);
+          console.log(`[Reports Save] Switching to 'das' database...`);
+          console.log(`[Reports Save] Das connection database: ${dasConnection.name}`);
+          console.log(`[Reports Save] Das connection ready state: ${dasConnection.readyState}`);
+          
+          // Verify we can access the 'das' database by listing collections
+          try {
+            const collections = await dasConnection.db.listCollections().toArray();
+            console.log(`[Reports Save] Collections in 'das' database:`, collections.map(c => c.name));
+          } catch (listErr) {
+            console.error(`[Reports Save] Error listing collections in 'das' database:`, listErr.message);
+          }
+          
+          // Get or create EquipmentReports model on 'das' database
+          // This will use the "Equipment Reports" collection in 'das' database
+          let EquipmentReportsOnDas;
+          
+          // Delete existing model if it exists to ensure correct collection name
+          if (dasConnection.models && dasConnection.models.EquipmentReports) {
+            delete dasConnection.models.EquipmentReports;
+            console.log('[Reports Save] Deleted existing EquipmentReports model to recreate with correct collection name');
+          }
+          
+          // Create model on 'das' database connection
+          // IMPORTANT: Pass collection name as third parameter to ensure "Equipment Reports" is used
+          EquipmentReportsOnDas = dasConnection.model('EquipmentReports', EquipmentReports.schema, 'Equipment Reports');
+          console.log('[Reports Save] Created EquipmentReports model on das database with collection: Equipment Reports');
+          
+          console.log(`[Reports Save] Model name: ${EquipmentReportsOnDas.modelName}`);
+          console.log(`[Reports Save] Collection name: ${EquipmentReportsOnDas.collection.name}`);
+          console.log(`[Reports Save] Database name: ${EquipmentReportsOnDas.db.databaseName}`);
+          
+          // Verify collection name is correct
+          if (EquipmentReportsOnDas.collection.name !== 'Equipment Reports') {
+            console.error(`[Reports Save] ⚠ WARNING: Collection name is "${EquipmentReportsOnDas.collection.name}" but expected "Equipment Reports"`);
+          } else {
+            console.log(`[Reports Save] ✓ Collection name verified: "Equipment Reports"`);
+          }
+          
+          // Check if reports already exist for this user and report type
+          // This prevents re-saving after clearing
+          const existingReportsCount = await EquipmentReportsOnDas.countDocuments({
+            userId: userId,
+            reportType: reportType
+          });
+          
+          if (existingReportsCount > 0) {
+            console.log(`[Reports Save] ⚠ Reports already exist (${existingReportsCount} found) for user ${userId} and report type ${reportType}`);
+            console.log(`[Reports Save] Skipping auto-save to prevent duplicates and preserve cleared data`);
+            console.log(`[Reports Save] If you want to refresh the data, please clear reports first`);
+            console.log(`[Reports Save] ==========================================`);
+          } else {
+            console.log(`[Reports Save] No existing reports found. Proceeding to save new reports...`);
+            console.log(`[Reports Save] Attempting to save ${reportsToSave.length} reports...`);
+            if (reportsToSave.length > 0) {
+              console.log(`[Reports Save] Sample report (first):`, {
+                reportType: reportsToSave[0].reportType,
+                userId: reportsToSave[0].userId,
+                siteCode: reportsToSave[0].siteCode
+              });
+            }
+            
+            // Remove category field from reportsToSave since EquipmentReports collection doesn't need it
+            const equipmentReportsToSave = reportsToSave.map(({ category, ...rest }) => rest);
+            
+            // Insert reports into Equipment Reports collection
+            const insertResult = await EquipmentReportsOnDas.insertMany(equipmentReportsToSave, { 
+              ordered: false,
+              rawResult: false
+            });
+            
+            console.log(`[Reports Save] ✓ SUCCESS! Saved ${Array.isArray(insertResult) ? insertResult.length : equipmentReportsToSave.length} reports`);
+            console.log(`[Reports Save] Database: ${dasConnection.name}`);
+            console.log(`[Reports Save] Collection: ${EquipmentReportsOnDas.collection.name} (Equipment Reports)`);
+            console.log(`[Reports Save] ==========================================`);
+            
+            // Verify the data was saved by counting documents
+            try {
+              const count = await EquipmentReportsOnDas.countDocuments({ userId: userId });
+              console.log(`[Reports Save] Verification: Found ${count} Equipment Reports for user ${userId} in 'das' database`);
+            } catch (countErr) {
+              console.error(`[Reports Save] Error counting documents:`, countErr.message);
+            }
+          }
+          
+        } catch (saveErr) {
+          // Log detailed error information
+          console.error('[Reports Save] ✗ ERROR saving reports:');
+          console.error('[Reports Save] Error message:', saveErr.message);
+          console.error('[Reports Save] Error code:', saveErr.code);
+          console.error('[Reports Save] Error name:', saveErr.name);
+          console.error('[Reports Save] Error stack:', saveErr.stack);
+          
+          if (saveErr.writeErrors && Array.isArray(saveErr.writeErrors)) {
+            console.error('[Reports Save] Write errors count:', saveErr.writeErrors.length);
+            saveErr.writeErrors.slice(0, 3).forEach((err, idx) => {
+              console.error(`[Reports Save] Write error ${idx + 1}:`, {
+                code: err.code,
+                message: err.errmsg || err.message
+              });
+            });
+          }
+          
+          if (saveErr.result) {
+            console.error('[Reports Save] Insert result:', {
+              insertedCount: saveErr.result.insertedCount,
+              matchedCount: saveErr.result.matchedCount,
+              modifiedCount: saveErr.result.modifiedCount
+            });
+          }
+          
+          // Re-throw if it's a critical error (not duplicate key)
+          if (saveErr.code !== 11000 && saveErr.code !== 11001) {
+            console.error('[Reports Save] Critical error - needs attention!');
+            // Don't throw - we don't want to fail the request, just log the error
+          } else {
+            console.log('[Reports Save] Duplicate key error - some reports may already exist (this is okay)');
+          }
+        }
+      } catch (saveError) {
+        // Log error but don't fail the request
+        console.error('Error saving reports to Reports collection:', saveError);
+      }
+    }
+
     res.status(200).json({
       success: true,
       data: formattedReports,
@@ -2686,6 +2926,148 @@ export const getReports = async (req, res) => {
         success: false,
         error: error.message || 'Failed to fetch reports',
         details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      });
+    }
+  }
+};
+
+// @desc    Clear all reports data for Equipment role users (Resolved and Pending)
+// @route   DELETE /api/equipment-offline-sites/reports/clear
+// @access  Private (Equipment role only)
+export const clearReportsData = async (req, res) => {
+  try {
+    console.log(`[Clear Reports] ==========================================`);
+    console.log(`[Clear Reports] Route hit: ${req.method} ${req.path}`);
+    console.log(`[Clear Reports] Full URL: ${req.originalUrl}`);
+    
+    const userId = req.user.userId;
+    const userRole = req.user.role;
+
+    console.log(`[Clear Reports] User: ${userId}, Role: ${userRole}`);
+
+    // Only allow Equipment role users to clear reports
+    if (userRole !== 'Equipment') {
+      console.log(`[Clear Reports] Access denied - user role is not Equipment`);
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied. Only Equipment role users can clear reports data.'
+      });
+    }
+
+    // Verify MongoDB connection is ready
+    if (mongoose.connection.readyState !== 1) {
+      console.error(`[Clear Reports] MongoDB connection not ready. State: ${mongoose.connection.readyState}`);
+      return res.status(500).json({
+        success: false,
+        error: 'Database connection not ready. Please try again.'
+      });
+    }
+
+    console.log(`[Clear Reports] Attempting to clear Reports data from 'das' database...`);
+    console.log(`[Clear Reports] Current database: ${mongoose.connection.name}`);
+
+    // Get 'das' database connection
+    const dasConnection = mongoose.connection.useDb('das', {
+      useCache: true,
+      noListener: false
+    });
+
+    console.log(`[Clear Reports] Using 'das' database: ${dasConnection.name}`);
+    console.log(`[Clear Reports] Das connection ready state: ${dasConnection.readyState}`);
+
+    // Verify EquipmentReports model exists
+    if (!EquipmentReports || !EquipmentReports.schema) {
+      console.error(`[Clear Reports] EquipmentReports model or schema not found`);
+      return res.status(500).json({
+        success: false,
+        error: 'EquipmentReports model not found. Please check server configuration.'
+      });
+    }
+
+    // Get or create EquipmentReports model on 'das' database
+    // This uses the "Equipment Reports" collection in 'das' database
+    let EquipmentReportsOnDas;
+    try {
+      // Delete existing model if it exists to ensure correct collection name
+      if (dasConnection.models && dasConnection.models.EquipmentReports) {
+        delete dasConnection.models.EquipmentReports;
+        console.log(`[Clear Reports] Deleted existing EquipmentReports model to recreate with correct collection name`);
+      }
+      
+      // IMPORTANT: Pass collection name as third parameter to ensure "Equipment Reports" is used
+      EquipmentReportsOnDas = dasConnection.model('EquipmentReports', EquipmentReports.schema, 'Equipment Reports');
+      console.log(`[Clear Reports] Created EquipmentReports model on das database with collection: Equipment Reports`);
+      
+      console.log(`[Clear Reports] Model name: ${EquipmentReportsOnDas.modelName}`);
+      console.log(`[Clear Reports] Collection name: ${EquipmentReportsOnDas.collection.name}`);
+      console.log(`[Clear Reports] Database name: ${EquipmentReportsOnDas.db.databaseName}`);
+      
+      // Verify collection name is correct
+      if (EquipmentReportsOnDas.collection.name !== 'Equipment Reports') {
+        console.error(`[Clear Reports] ⚠ WARNING: Collection name is "${EquipmentReportsOnDas.collection.name}" but expected "Equipment Reports"`);
+      } else {
+        console.log(`[Clear Reports] ✓ Collection name verified: "Equipment Reports"`);
+      }
+    } catch (modelError) {
+      console.error(`[Clear Reports] Error creating/accessing EquipmentReports model:`, modelError);
+      return res.status(500).json({
+        success: false,
+        error: `Failed to access EquipmentReports model: ${modelError.message}`
+      });
+    }
+
+    // Delete all Equipment Reports (Resolved and Pending) to start fresh
+    // This clears all Equipment Reports for all Equipment users from "Equipment Reports" collection
+    const deleteQuery = {
+      userRole: 'Equipment',
+      reportType: { $in: ['Resolved', 'Pending'] }
+    };
+
+    console.log(`[Clear Reports] Delete query:`, JSON.stringify(deleteQuery, null, 2));
+
+    // Count documents before deletion
+    const countBefore = await EquipmentReportsOnDas.countDocuments(deleteQuery);
+    console.log(`[Clear Reports] Found ${countBefore} reports to delete`);
+
+    if (countBefore === 0) {
+      return res.status(200).json({
+        success: true,
+        message: 'No reports found to clear. Equipment Reports collection is already empty.',
+        deletedCount: 0
+      });
+    }
+
+    // Delete the reports from Equipment Reports collection
+    const deleteResult = await EquipmentReportsOnDas.deleteMany(deleteQuery);
+
+    console.log(`[Clear Reports] ✓ Successfully deleted ${deleteResult.deletedCount} reports`);
+    console.log(`[Clear Reports] Database: ${dasConnection.name}, Collection: Equipment Reports`);
+
+    // Verify deletion
+    const countAfter = await EquipmentReportsOnDas.countDocuments(deleteQuery);
+    console.log(`[Clear Reports] Verification: ${countAfter} reports remaining (should be 0)`);
+
+    res.status(200).json({
+      success: true,
+      message: `Successfully cleared ${deleteResult.deletedCount} report(s) from Equipment Reports collection (Resolved and Pending)`,
+      deletedCount: deleteResult.deletedCount,
+      database: dasConnection.name,
+      collection: 'Equipment Reports'
+    });
+    
+    console.log(`[Clear Reports] ==========================================`);
+  } catch (error) {
+    console.error('[Clear Reports] ✗ Error clearing reports data:', error);
+    console.error('[Clear Reports] Error message:', error.message);
+    console.error('[Clear Reports] Error name:', error.name);
+    console.error('[Clear Reports] Error stack:', error.stack);
+    console.error(`[Clear Reports] ==========================================`);
+    
+    // Ensure we always return JSON
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to clear reports data'
       });
     }
   }
