@@ -273,73 +273,23 @@ export const updateApprovalStatus = async (req, res) => {
               const supportDocuments = row.__supportDocuments || [];
 
               // Check if Approval document for CCR already exists
-              // CRITICAL: Check by siteCode AND equipmentOfflineSiteId AND metadata.firstApprovalActionId to prevent duplicates
-              // Also check if there's any existing CCR approval for this equipmentOfflineSiteId to prevent multiple approvals
               const existingCCRApproval = await Approval.findOne({
-                approvalType: 'CCR Resolution Approval',
-                $or: [
-                  {
-                    siteCode: approvalSiteCode,
-                    equipmentOfflineSiteId: equipmentOfflineSiteId,
-                    status: { $in: ['Pending', 'In Progress'] }
-                  },
-                  {
-                    'metadata.firstApprovalActionId': action._id.toString(),
-                    status: { $in: ['Pending', 'In Progress'] }
-                  }
-                ]
+                actionId: ccrApprovalAction._id
               });
 
               if (existingCCRApproval) {
-                console.log('[ApprovalController] CCR Approval document already exists:', {
-                  existingApprovalId: existingCCRApproval._id,
+                console.log('[ApprovalController] CCR Approval document already exists:', existingCCRApproval._id);
+              } else {
+                const ccrApprovalDoc = await Approval.create({
+                  actionId: ccrApprovalAction._id,
                   siteCode: approvalSiteCode,
                   equipmentOfflineSiteId: equipmentOfflineSiteId,
-                  firstApprovalActionId: existingCCRApproval.metadata?.firstApprovalActionId,
-                  currentActionId: action._id.toString()
-                });
-              } else {
-                // FINAL SAFETY CHECK: One more check right before creating to prevent race conditions
-                const finalDuplicateCheck = await Approval.findOne({
                   approvalType: 'CCR Resolution Approval',
-                  $or: [
-                    { equipmentOfflineSiteId: equipmentOfflineSiteId },
-                    { 
-                      siteCode: approvalSiteCode,
-                      submittedByUserId: userId
-                    }
-                  ]
-                });
-                
-                if (finalDuplicateCheck) {
-                  console.log('[ApprovalController] ❌❌❌ FINAL DUPLICATE CHECK FAILED - Approval already exists, NOT creating:', {
-                    existingApprovalId: finalDuplicateCheck._id,
-                    existingStatus: finalDuplicateCheck.status,
-                    siteCode: approvalSiteCode,
-                    equipmentOfflineSiteId: equipmentOfflineSiteId,
-                    actionId: ccrApprovalAction._id
-                  });
-                  // Don't create - approval already exists
-                } else {
-                  console.log('[ApprovalController] 🟢 CREATING NEW CCR APPROVAL (Equipment approved AMC):', {
-                    siteCode: approvalSiteCode,
-                    equipmentOfflineSiteId: equipmentOfflineSiteId,
-                    actionId: ccrApprovalAction._id,
-                    userRole: userRole,
-                    userId: userId,
-                    timestamp: new Date().toISOString()
-                  });
-                  
-                  const ccrApprovalDoc = await Approval.create({
-                    actionId: ccrApprovalAction._id,
-                    siteCode: approvalSiteCode,
-                    equipmentOfflineSiteId: equipmentOfflineSiteId,
-                    approvalType: 'CCR Resolution Approval',
-                    status: 'Pending',
-                    submittedByUserId: userId,
-                    submittedByRole: userRole,
-                    assignedToUserId: ccrUser.userId,
-                    assignedToRole: 'CCR',
+                  status: 'Pending',
+                  submittedByUserId: userId,
+                  submittedByRole: userRole,
+                  assignedToUserId: ccrUser.userId,
+                  assignedToRole: 'CCR',
                   submissionRemarks: remarks || 'Resolution approved by Equipment; pending CCR approval',
                   photos: photos,
                   supportDocuments: supportDocuments,
@@ -350,34 +300,33 @@ export const updateApprovalStatus = async (req, res) => {
                     firstApprovalActionId: action._id.toString(),
                     firstApprovalType: 'AMC Resolution Approval'
                   }
-                  });
+                });
 
-                  console.log('[ApprovalController] CCR Approval document created (Second Approval):', {
-                    approvalId: ccrApprovalDoc._id,
-                    actionId: ccrApprovalAction._id,
-                    siteCode: approvalSiteCode
-                  });
+                console.log('[ApprovalController] CCR Approval document created (Second Approval):', {
+                  approvalId: ccrApprovalDoc._id,
+                  actionId: ccrApprovalAction._id,
+                  siteCode: approvalSiteCode
+                });
 
-                  // Send notification to CCR user
-                  try {
-                    await Notification.create({
-                      userId: ccrUser.userId,
-                      title: 'Resolution Approval Required',
-                      message: approvalSiteCode
-                        ? `Site ${approvalSiteCode} resolution requires your approval.`
-                        : 'A resolution requires your approval.',
-                      type: 'info',
-                      category: 'maintenance',
-                      application: 'Equipment Maintenance',
-                      link: '/dashboard/my-approvals',
-                      metadata: {
-                        actionId: ccrApprovalAction._id.toString(),
-                        originalActionId: action._id.toString()
-                      }
-                    });
-                  } catch (notifErr) {
-                    console.error('[ApprovalController] Error creating notification:', notifErr);
-                  }
+                // Send notification to CCR user
+                try {
+                  await Notification.create({
+                    userId: ccrUser.userId,
+                    title: 'Resolution Approval Required',
+                    message: approvalSiteCode
+                      ? `Site ${approvalSiteCode} resolution requires your approval.`
+                      : 'A resolution requires your approval.',
+                    type: 'info',
+                    category: 'maintenance',
+                    application: 'Equipment Maintenance',
+                    link: '/dashboard/my-approvals',
+                    metadata: {
+                      actionId: ccrApprovalAction._id.toString(),
+                      originalActionId: action._id.toString()
+                    }
+                  });
+                } catch (notifErr) {
+                  console.error('[ApprovalController] Error creating notification:', notifErr);
                 }
               }
             }
@@ -689,222 +638,10 @@ export const getMyApprovals = async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
-    // CRITICAL: Deduplicate ONLY true duplicates for CCR users
-    // True duplicates are:
-    // 1. Same actionId (same action should only have one approval)
-    // 2. For CCR Resolution Approvals: same equipmentOfflineSiteId + same status
-    //    (one site should only have ONE pending CCR approval at a time)
-    const deduplicatedApprovals = [];
-    const duplicates = [];
-    const seenActionIds = new Set();
-    const seenCCRKeys = new Map(); // key -> approval
-    
-    // Helper function to extract equipmentOfflineSiteId (handles both populated and non-populated)
-    const getEquipmentOfflineSiteId = (approval) => {
-      if (!approval.equipmentOfflineSiteId) return null;
-      // If populated, it's an object with _id
-      if (typeof approval.equipmentOfflineSiteId === 'object' && approval.equipmentOfflineSiteId._id) {
-        return approval.equipmentOfflineSiteId._id.toString();
-      }
-      // If not populated, it's just the ObjectId
-      return approval.equipmentOfflineSiteId.toString();
-    };
-    
-    approvals.forEach((approval) => {
-      const actionId = approval.actionId?._id || approval.actionId;
-      const actionIdStr = actionId ? actionId.toString() : null;
-      
-      // Check 1: Same actionId = duplicate (one action should only have one approval)
-      if (actionIdStr && seenActionIds.has(actionIdStr)) {
-        duplicates.push({
-          type: 'same_actionId',
-          duplicate: {
-            _id: approval._id,
-            siteCode: approval.siteCode,
-            actionId: actionIdStr,
-            status: approval.status
-          }
-        });
-        return; // Skip this duplicate
-      }
-      
-      if (actionIdStr) {
-        seenActionIds.add(actionIdStr);
-      }
-      
-      // Check 2: For CCR Resolution Approvals, check for duplicates by equipmentOfflineSiteId (regardless of status)
-      if (approval.approvalType === 'CCR Resolution Approval') {
-        const equipmentOfflineSiteId = getEquipmentOfflineSiteId(approval);
-        const status = approval.status || 'NO_STATUS';
-        
-        if (equipmentOfflineSiteId) {
-          // CRITICAL: One site should only have ONE CCR approval (regardless of status)
-          // Check by equipmentOfflineSiteId only - if Approved exists, don't show Pending
-          // Priority: Approved > Kept for Monitoring > Recheck Requested > Pending
-          const key = `CCR_${equipmentOfflineSiteId}`;
-          
-          if (seenCCRKeys.has(key)) {
-            const existing = seenCCRKeys.get(key);
-            const existingStatus = existing.status || 'NO_STATUS';
-            
-            // Status priority: Approved > Kept for Monitoring > Recheck Requested > Pending
-            const statusPriority = {
-              'Approved': 4,
-              'Kept for Monitoring': 3,
-              'Recheck Requested': 2,
-              'Pending': 1,
-              'NO_STATUS': 0
-            };
-            
-            const existingPriority = statusPriority[existingStatus] || 0;
-            const currentPriority = statusPriority[status] || 0;
-            
-            duplicates.push({
-              type: 'same_site_different_status',
-              duplicate: {
-                _id: approval._id.toString(),
-                siteCode: approval.siteCode,
-                equipmentOfflineSiteId: equipmentOfflineSiteId,
-                status: status,
-                priority: currentPriority,
-                createdAt: approval.createdAt,
-                actionId: actionIdStr
-              },
-              original: {
-                _id: existing._id.toString(),
-                siteCode: existing.siteCode,
-                equipmentOfflineSiteId: getEquipmentOfflineSiteId(existing),
-                status: existingStatus,
-                priority: existingPriority,
-                createdAt: existing.createdAt,
-                actionId: existing.actionId?._id || existing.actionId
-              }
-            });
-            
-            // Keep the one with higher priority status, or if same priority, keep the newer one
-            if (currentPriority > existingPriority || 
-                (currentPriority === existingPriority && new Date(approval.createdAt) > new Date(existing.createdAt))) {
-              seenCCRKeys.set(key, approval);
-              // Replace in deduplicatedApprovals
-              const index = deduplicatedApprovals.findIndex(a => a._id.toString() === existing._id.toString());
-              if (index !== -1) {
-                deduplicatedApprovals[index] = approval;
-              }
-            }
-            return; // Skip this duplicate
-          } else {
-            seenCCRKeys.set(key, approval);
-          }
-        } else {
-          // If no equipmentOfflineSiteId, use siteCode + status as fallback
-          const fallbackKey = `CCR_SITECODE_${approval.siteCode}_${status}`;
-          if (seenCCRKeys.has(fallbackKey)) {
-            const existing = seenCCRKeys.get(fallbackKey);
-            duplicates.push({
-              type: 'same_sitecode_same_status',
-              duplicate: {
-                _id: approval._id.toString(),
-                siteCode: approval.siteCode,
-                status: status
-              },
-              original: {
-                _id: existing._id.toString(),
-                siteCode: existing.siteCode,
-                status: existing.status
-              }
-            });
-            const approvalDate = new Date(approval.createdAt || 0);
-            const existingDate = new Date(existing.createdAt || 0);
-            if (approvalDate < existingDate) {
-              seenCCRKeys.set(fallbackKey, approval);
-              const index = deduplicatedApprovals.findIndex(a => a._id.toString() === existing._id.toString());
-              if (index !== -1) {
-                deduplicatedApprovals[index] = approval;
-              }
-            }
-            return; // Skip this duplicate
-          } else {
-            seenCCRKeys.set(fallbackKey, approval);
-          }
-        }
-      }
-      
-      // Not a duplicate, add to results
-      deduplicatedApprovals.push(approval);
-    });
-
-    // Log duplicates for debugging - especially for site code 5W1599
-    if (duplicates.length > 0) {
-      const siteCode599Duplicates = duplicates.filter(d => 
-        (d.duplicate && d.duplicate.siteCode === '5W1599') || 
-        (d.original && d.original.siteCode === '5W1599')
-      );
-      
-      console.log('[ApprovalController] ⚠️ DUPLICATE APPROVALS DETECTED:', {
-        totalApprovals: approvals.length,
-        uniqueApprovals: deduplicatedApprovals.length,
-        duplicatesCount: duplicates.length,
-        duplicates: duplicates,
-        userRole: userRole,
-        query: query,
-        siteCode599Duplicates: siteCode599Duplicates.length > 0 ? siteCode599Duplicates : 'No duplicates for 5W1599'
-      });
-    }
-    
-    // Log all approvals for site 5W1599 and other duplicate sites for detailed debugging
-    const duplicateSiteCodes = ['5W1599', '3W1605', '3W1575'];
-    duplicateSiteCodes.forEach(siteCode => {
-      const siteApprovals = approvals.filter(a => a.siteCode === siteCode);
-      if (siteApprovals.length > 0) {
-        console.log(`[ApprovalController] 🔍 ALL APPROVALS FOR SITE ${siteCode}:`, {
-          count: siteApprovals.length,
-          approvals: siteApprovals.map(a => {
-            const equipmentOfflineSiteId = a.equipmentOfflineSiteId?._id || a.equipmentOfflineSiteId;
-            return {
-              _id: a._id.toString(),
-              approvalType: a.approvalType,
-              status: a.status,
-              equipmentOfflineSiteId: equipmentOfflineSiteId ? equipmentOfflineSiteId.toString() : 'NULL',
-              equipmentOfflineSiteIdType: typeof equipmentOfflineSiteId,
-              actionId: a.actionId?._id || a.actionId,
-              metadata: a.metadata,
-              createdAt: a.createdAt,
-              submittedByUserId: a.submittedByUserId,
-              assignedToUserId: a.assignedToUserId
-            };
-          }),
-          deduplicatedCount: deduplicatedApprovals.filter(a => a.siteCode === siteCode).length
-        });
-      }
-    });
-
-    console.log('[ApprovalController] getMyApprovals - Query result:', {
-      userRole: userRole,
-      userId: userId,
-      query: query,
-      totalApprovals: approvals.length,
-      deduplicatedCount: deduplicatedApprovals.length,
-      duplicatesRemoved: approvals.length - deduplicatedApprovals.length,
-      sampleApprovals: deduplicatedApprovals.slice(0, 5).map(a => ({
-        _id: a._id,
-        siteCode: a.siteCode,
-        approvalType: a.approvalType,
-        status: a.status,
-        equipmentOfflineSiteId: a.equipmentOfflineSiteId?._id || a.equipmentOfflineSiteId,
-        actionId: a.actionId?._id || a.actionId,
-        createdAt: a.createdAt
-      }))
-    });
-
     res.status(200).json({
       success: true,
-      count: deduplicatedApprovals.length,
-      data: deduplicatedApprovals,
-      _debug: {
-        totalBeforeDedup: approvals.length,
-        duplicatesFound: duplicates.length,
-        duplicates: duplicates
-      }
+      count: approvals.length,
+      data: approvals
     });
   } catch (error) {
     console.error('Error fetching approvals:', error);

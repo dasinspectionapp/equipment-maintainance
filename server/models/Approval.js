@@ -127,11 +127,6 @@ approvalSchema.index({ submittedByUserId: 1, createdAt: -1 });
 approvalSchema.index({ assignedToUserId: 1, createdAt: -1 });
 approvalSchema.index({ actionId: 1 });
 approvalSchema.index({ equipmentOfflineSiteId: 1 });
-// Compound index for duplicate prevention: one CCR Resolution Approval per equipmentOfflineSiteId
-approvalSchema.index({ equipmentOfflineSiteId: 1, approvalType: 1 }, { 
-  unique: false, // Not unique because we allow different statuses, but helps with queries
-  sparse: true // Only index documents that have equipmentOfflineSiteId
-});
 
 const Approval = mongoose.models.Approval || mongoose.model('Approval', approvalSchema);
 
