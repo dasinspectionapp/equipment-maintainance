@@ -273,19 +273,19 @@ export const updateApprovalStatus = async (req, res) => {
               const supportDocuments = row.__supportDocuments || [];
 
               // Check if Approval document for CCR already exists
-              // CRITICAL: Check by siteCode AND equipmentOfflineSiteId AND metadata.firstApprovalActionId to prevent duplicates
-              // Also check if there's any existing CCR approval for this equipmentOfflineSiteId to prevent multiple approvals
+              // CRITICAL: Check by siteCode AND equipmentOfflineSiteId to prevent duplicates
+              // Check for ANY status (Pending, In Progress, Approved, etc.) to prevent duplicate approvals
               const existingCCRApproval = await Approval.findOne({
                 approvalType: 'CCR Resolution Approval',
                 $or: [
                   {
                     siteCode: approvalSiteCode,
-                    equipmentOfflineSiteId: equipmentOfflineSiteId,
-                    status: { $in: ['Pending', 'In Progress'] }
+                    equipmentOfflineSiteId: equipmentOfflineSiteId
+                    // Removed status filter - check for ANY status to prevent all duplicates
                   },
                   {
-                    'metadata.firstApprovalActionId': action._id.toString(),
-                    status: { $in: ['Pending', 'In Progress'] }
+                    'metadata.firstApprovalActionId': action._id.toString()
+                    // Removed status filter - check for ANY status to prevent all duplicates
                   }
                 ]
               });
