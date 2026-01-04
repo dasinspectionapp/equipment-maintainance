@@ -2526,8 +2526,9 @@ export const getReports = async (req, res) => {
       });
     }
 
-    // Build CCR status map for Resolved report type
+    // Build CCR status and remarks map for Resolved report type
     let ccrStatusMap = {};
+    let approvalRemarksMap = {}; // Store remarks from approval submissions
     if (reportType === 'Resolved' && reports.length > 0) {
       try {
         // Get all unique siteCodes from reports
@@ -2537,27 +2538,36 @@ export const getReports = async (req, res) => {
 
         if (siteCodes.length > 0) {
           // PRIMARY SOURCE: Check Approval collection for CCR Resolution Approval status
-          // This is the source of truth for CCR approval status
+          // This is the source of truth for CCR approval status and submission remarks
           const ccrApprovals = await Approval.find({
             approvalType: 'CCR Resolution Approval',
             siteCode: { $in: siteCodes },
-            status: { $in: ['Pending', 'Approved', 'Rejected'] }
+            status: { $in: ['Pending', 'Approved', 'Rejected', 'Kept for Monitoring'] }
           })
           .sort({ createdAt: -1 }) // Get most recent approval for each site
           .lean();
 
-          // Group by siteCode and get the most recent approval status
+          // Group by siteCode and get the most recent approval status and remarks
           const approvalMap = new Map();
           ccrApprovals.forEach(approval => {
             const sc = (approval.siteCode || '').trim().toUpperCase();
             if (!sc || approvalMap.has(sc)) return; // Skip if already processed (most recent first)
             
             const approvalStatus = String(approval.status || '').trim();
+            const submissionRemarks = String(approval.submissionRemarks || approval.approvalRemarks || '').trim();
+            
+            // Store submission remarks (from Equipment when they submitted for approval)
+            if (submissionRemarks) {
+              approvalRemarksMap[sc] = submissionRemarks;
+            }
+            
             if (approvalStatus === 'Approved') {
               approvalMap.set(sc, 'Approved');
+            } else if (approvalStatus === 'Kept for Monitoring') {
+              approvalMap.set(sc, 'Kept for Monitoring');
             } else if (approvalStatus === 'Rejected') {
               // Rejected approvals might be kept for monitoring
-              const remarks = String(approval.approvalRemarks || approval.submissionRemarks || '').toLowerCase();
+              const remarks = submissionRemarks.toLowerCase();
               if (remarks.includes('kept for monitoring') || remarks.includes('monitoring')) {
                 approvalMap.set(sc, 'Kept for Monitoring');
               } else {
@@ -2641,6 +2651,11 @@ export const getReports = async (req, res) => {
           ? (ccrStatusMap[normalizedSiteCode] || 'Pending')
           : '';
 
+      // For Resolved reports, get remarks from approval submission if available, otherwise from report
+      const finalRemarks = reportType === 'Resolved' && approvalRemarksMap[normalizedSiteCode]
+        ? approvalRemarksMap[normalizedSiteCode]
+        : (report.remarks || '');
+
       // Format resolvedBy/pendingAt based on report type
       // For Pending: show "fullName@role Team" format
       // For Resolved: show just fullName
@@ -2664,7 +2679,7 @@ export const getReports = async (req, res) => {
         siteCode: report.siteCode || '',
         taskStatus: report.taskStatus || '',
         typeOfIssue: report.typeOfIssue || '',
-        remarks: report.remarks || '',
+        remarks: finalRemarks,
         updatedTimeAndDate: formattedDate,
         resolvedBy: resolvedBy,
         ccrStatus
