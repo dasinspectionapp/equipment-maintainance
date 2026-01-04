@@ -801,9 +801,6 @@ export default function EquipmentDashboard() {
               if (dateHeaderMap.has(dateHeader)) {
                 // We have a date for this header (either header is a date, or we read it from row 2)
                 finalDate = dateHeaderMap.get(dateHeader)!;
-                const dateKeyFromHeader = formatDateToISO(finalDate);
-                
-                // Skip logging for performance
               } else {
                 // Header is "DATE" but we couldn't get date from row 2 - try parsing from cell value as fallback
                 const raw = row[dateHeader];
@@ -1552,14 +1549,6 @@ export default function EquipmentDashboard() {
 
       const equipRaw = row.__equipLRSwitchStatus || '';
       const equipLR = normalize(equipRaw);
-      
-      // Get site code from row (try multiple possible column names)
-      const siteCode = (row as any)['SITE CODE'] || 
-                       (row as any)['Site Code'] || 
-                       (row as any)['site code'] || 
-                       (row as any)['SITE_CODE'] ||
-                       (row as any)['SiteCode'] ||
-                       'UNKNOWN';
       
       // Treat any value containing "local" as LOCAL
       if (equipLR.includes('local')) {
