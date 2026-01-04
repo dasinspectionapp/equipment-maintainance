@@ -1799,10 +1799,15 @@ export default function MyData() {
                     
                     // Filter rows: only include rows where the DEVICE STATUS for latest date is OFFLINE
                     // This matches the dashboard behavior (shows only currently offline sites)
-                    filteredOnlineOfflineRows = onlineOfflineRows.filter((row: any) => {
-                      const status = String(row[latestDeviceStatusHeader] || '').trim().toUpperCase();
-                      return status === 'OFFLINE';
-                    });
+                    if (latestDeviceStatusHeader) {
+                      filteredOnlineOfflineRows = onlineOfflineRows.filter((row: any) => {
+                        const status = String(row[latestDeviceStatusHeader!] || '').trim().toUpperCase();
+                        return status === 'OFFLINE';
+                      });
+                    } else {
+                      // If no device status header found, use all rows (fallback)
+                      filteredOnlineOfflineRows = onlineOfflineRows;
+                    }
                     
                     console.log('MY DATA - Filtered ONLINE-OFFLINE rows by latest date:', 
                       onlineOfflineRows.length, '->', filteredOnlineOfflineRows.length, 
