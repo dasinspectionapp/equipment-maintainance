@@ -1723,28 +1723,130 @@ export default function MyData() {
                     return normalized === 'site code' || normalized === 'sitecode' || normalized === 'site_code';
                   });
                   
-                  // Find DEVICE STATUS and NO OF DAYS OFFLINE columns
-                  const deviceStatusHeader = onlineOfflineHeaders.find((h: string) => {
+                  // CRITICAL: Find and filter by latest date to match dashboard behavior
+                  // Dashboard shows only sites offline on the latest date (e.g., 20-11-2025)
+                  // MY OFFLINE SITES should show the same sites, not all historical offline sites
+                  let filteredOnlineOfflineRows = onlineOfflineRows;
+                  
+                  // Declare these in outer scope so they're available later
+                  let latestDeviceStatusHeader: string | undefined = undefined;
+                  let latestNoOfDaysOfflineHeader: string | undefined = undefined;
+                  
+                  // Find all date columns in ONLINE-OFFLINE file
+                  const dateColumns: { name: string; date: Date; index: number }[] = [];
+                  onlineOfflineHeaders.forEach((h: string, index: number) => {
                     const normalized = normalizeHeader(h);
-                    return normalized === 'device status' ||
-                           normalized === 'device_status' ||
-                           normalized === 'devicestatus' ||
-                           (normalized.includes('device') && normalized.includes('status'));
+                    if (normalized.includes('date')) {
+                      // Try to parse date from column name
+                      const datePatterns = [
+                        /(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/,
+                        /(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/,
+                      ];
+                      
+                      for (const pattern of datePatterns) {
+                        const match = String(h).match(pattern);
+                        if (match) {
+                          let parsedDate: Date;
+                          if (pattern.source.includes('\\d{4}') && pattern.source.startsWith('(\\d{4})')) {
+                            parsedDate = new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]));
+                          } else {
+                            parsedDate = new Date(parseInt(match[3]), parseInt(match[2]) - 1, parseInt(match[1]));
+                          }
+                          
+                          if (!isNaN(parsedDate.getTime())) {
+                            dateColumns.push({ name: h, date: parsedDate, index });
+                            break;
+                          }
+                        }
+                      }
+                    }
                   });
                   
-                  const noOfDaysOfflineHeader = onlineOfflineHeaders.find((h: string) => {
-                    const normalized = normalizeHeader(h);
-                    return normalized === 'no of days offline' ||
-                           normalized === 'no_of_days_offline' ||
-                           normalized === 'noofdaysoffline' ||
-                           (normalized.includes('days') && normalized.includes('offline')) ||
-                           (normalized.includes('day') && normalized.includes('offline'));
-                  });
+                  if (dateColumns.length > 0) {
+                    // Sort by date to find the latest
+                    dateColumns.sort((a, b) => b.date.getTime() - a.date.getTime());
+                    const latestDateColumn = dateColumns[0];
+                    
+                    console.log('MY DATA - Found', dateColumns.length, 'date columns, latest:', latestDateColumn.name, 
+                      latestDateColumn.date.toLocaleDateString());
+                    
+                    // Find the DEVICE STATUS and NO OF DAYS OFFLINE columns for the latest date group
+                    // Status columns are typically right after the date column
+                    for (let i = latestDateColumn.index + 1; i < onlineOfflineHeaders.length; i++) {
+                      const col = onlineOfflineHeaders[i];
+                      const normalized = normalizeHeader(col);
+                      
+                      // Stop if we hit another date column
+                      if (dateColumns.some(dc => dc.name === col && dc.index !== latestDateColumn.index)) break;
+                      
+                      // Check if this is a device status column
+                      if (!latestDeviceStatusHeader && (normalized.includes('device') && normalized.includes('status'))) {
+                        latestDeviceStatusHeader = col;
+                        console.log('MY DATA - Found DEVICE STATUS for latest date:', latestDeviceStatusHeader);
+                      }
+                      
+                      // Check if this is a no of days offline column
+                      if (!latestNoOfDaysOfflineHeader && 
+                          ((normalized.includes('days') && normalized.includes('offline')) || 
+                           (normalized.includes('day') && normalized.includes('offline')))) {
+                        latestNoOfDaysOfflineHeader = col;
+                        console.log('MY DATA - Found NO OF DAYS OFFLINE for latest date:', latestNoOfDaysOfflineHeader);
+                      }
+                      
+                      // Stop after finding both
+                      if (latestDeviceStatusHeader && latestNoOfDaysOfflineHeader) break;
+                    }
+                    
+                    // Filter rows: only include rows where the DEVICE STATUS for latest date is OFFLINE
+                    // This matches the dashboard behavior (shows only currently offline sites)
+                    filteredOnlineOfflineRows = onlineOfflineRows.filter((row: any) => {
+                      const status = String(row[latestDeviceStatusHeader] || '').trim().toUpperCase();
+                      return status === 'OFFLINE';
+                    });
+                    
+                    console.log('MY DATA - Filtered ONLINE-OFFLINE rows by latest date:', 
+                      onlineOfflineRows.length, '->', filteredOnlineOfflineRows.length, 
+                      '(only sites offline on', latestDateColumn.date.toLocaleDateString(), ')');
+                  } else {
+                    console.log('MY DATA - No date columns found, using all ONLINE-OFFLINE rows');
+                  }
                   
-                  console.log('MY DATA - DEVICE STATUS header found:', deviceStatusHeader);
-                  console.log('MY DATA - NO OF DAYS OFFLINE header found:', noOfDaysOfflineHeader);
+                  // Build columns to merge: only DEVICE STATUS and NO OF DAYS OFFLINE from latest date
+                  // Use the columns from latest date group if found, otherwise find first occurrence
+                  let deviceStatusHeader: string | undefined = undefined;
+                  let noOfDaysOfflineHeader: string | undefined = undefined;
                   
-                  // Build columns to merge: only DEVICE STATUS and NO OF DAYS OFFLINE
+                  if (dateColumns.length > 0) {
+                    // Use the status columns from latest date group
+                    deviceStatusHeader = latestDeviceStatusHeader;
+                    noOfDaysOfflineHeader = latestNoOfDaysOfflineHeader;
+                  }
+                  
+                  // Fallback: find first occurrence if no date columns or columns not found
+                  if (!deviceStatusHeader) {
+                    deviceStatusHeader = onlineOfflineHeaders.find((h: string) => {
+                      const normalized = normalizeHeader(h);
+                      return normalized === 'device status' ||
+                             normalized === 'device_status' ||
+                             normalized === 'devicestatus' ||
+                             (normalized.includes('device') && normalized.includes('status'));
+                    });
+                  }
+                  
+                  if (!noOfDaysOfflineHeader) {
+                    noOfDaysOfflineHeader = onlineOfflineHeaders.find((h: string) => {
+                      const normalized = normalizeHeader(h);
+                      return normalized === 'no of days offline' ||
+                             normalized === 'no_of_days_offline' ||
+                             normalized === 'noofdaysoffline' ||
+                             (normalized.includes('days') && normalized.includes('offline')) ||
+                             (normalized.includes('day') && normalized.includes('offline'));
+                    });
+                  }
+                  
+                  console.log('MY DATA - DEVICE STATUS header (latest date):', deviceStatusHeader);
+                  console.log('MY DATA - NO OF DAYS OFFLINE header (latest date):', noOfDaysOfflineHeader);
+                  
                   const onlineOfflineColumns: string[] = [];
                   if (deviceStatusHeader) onlineOfflineColumns.push(deviceStatusHeader);
                   if (noOfDaysOfflineHeader) onlineOfflineColumns.push(noOfDaysOfflineHeader);
@@ -1761,9 +1863,10 @@ export default function MyData() {
                   
                   if (mainSiteCodeHeader && onlineOfflineSiteCodeHeader && onlineOfflineColumns.length > 0) {
                     // Create a map of ONLINE-OFFLINE data by SITE CODE
+                    // Use filtered rows (latest date only) to match dashboard behavior
                     const onlineOfflineMap = new Map<string, any>();
                     
-                    onlineOfflineRows.forEach((row: any) => {
+                    filteredOnlineOfflineRows.forEach((row: any) => {
                       const siteCode = String(row[onlineOfflineSiteCodeHeader] || '').trim();
                       if (siteCode) {
                         // If multiple rows exist for same SITE CODE, keep the latest one
@@ -1773,24 +1876,42 @@ export default function MyData() {
                       }
                     });
                     
-                    console.log('MY DATA - Mapped ONLINE-OFFLINE data for', onlineOfflineMap.size, 'unique SITE CODEs');
+                    console.log('MY DATA - Mapped ONLINE-OFFLINE data for', onlineOfflineMap.size, 'unique SITE CODEs (latest date only)');
                     
-                    // Merge data into main rows
+                    // Track which site codes exist in Device Status Upload
+                    const existingSiteCodes = new Set<string>();
+                    fileRows.forEach((row: any) => {
+                      const siteCode = String(row[mainSiteCodeHeader] || '').trim();
+                      if (siteCode) existingSiteCodes.add(siteCode);
+                    });
+                    
+                    // Step 1: Update existing rows with ONLINE-OFFLINE data
                     let mergedCount = 0;
+                    let updatedCount = 0;
                     fileRows = fileRows.map((row: any) => {
                       const siteCode = String(row[mainSiteCodeHeader] || '').trim();
                       const onlineOfflineRow = onlineOfflineMap.get(siteCode);
                       
                       if (onlineOfflineRow) {
                         mergedCount++;
-                        // Add the ONLINE-OFFLINE columns from ONLINE-OFFLINE data
+                        // Check if DEVICE STATUS changed or if this is an update
+                        const oldDeviceStatus = deviceStatusHeader ? String(row[deviceStatusHeader] || '').trim().toUpperCase() : '';
+                        const newDeviceStatus = deviceStatusHeader ? String(onlineOfflineRow[deviceStatusHeader] || '').trim().toUpperCase() : '';
+                        
+                        // If both are OFFLINE, it's just a NO OF DAYS OFFLINE update
+                        if (oldDeviceStatus === 'OFFLINE' && newDeviceStatus === 'OFFLINE') {
+                          updatedCount++;
+                          console.log(`MY DATA - Updating existing site ${siteCode}: NO OF DAYS OFFLINE only (still OFFLINE)`);
+                        }
+                        
+                        // Merge the ONLINE-OFFLINE columns (DEVICE STATUS and NO OF DAYS OFFLINE)
                         const mergedRow = { ...row };
                         onlineOfflineColumns.forEach((col: string) => {
                           mergedRow[col] = onlineOfflineRow[col] ?? '';
                         });
                         return mergedRow;
                       }
-                      // If no match, add empty values for the ONLINE-OFFLINE columns
+                      // If no match in ONLINE-OFFLINE, set DEVICE STATUS to empty (site might be ONLINE now)
                       const mergedRow = { ...row };
                       onlineOfflineColumns.forEach((col: string) => {
                         mergedRow[col] = '';
@@ -1798,7 +1919,39 @@ export default function MyData() {
                       return mergedRow;
                     });
                     
-                    console.log('MY DATA - Merged ONLINE-OFFLINE data into', mergedCount, 'rows');
+                    console.log('MY DATA - Merged ONLINE-OFFLINE data into', mergedCount, 'existing rows');
+                    console.log('MY DATA - Updated NO OF DAYS OFFLINE for', updatedCount, 'existing OFFLINE sites');
+                    
+                    // Step 2: Add new rows for sites in ONLINE-OFFLINE that don't exist in Device Status Upload
+                    const newRowsToAdd: any[] = [];
+                    onlineOfflineMap.forEach((onlineOfflineRow, siteCode) => {
+                      if (!existingSiteCodes.has(siteCode)) {
+                        // This is a new site not in Device Status Upload - add it
+                        console.log(`MY DATA - Adding new site from ONLINE-OFFLINE: ${siteCode}`);
+                        
+                        // Create a new row with data from ONLINE-OFFLINE
+                        const newRow: any = {};
+                        
+                        // Copy all columns from ONLINE-OFFLINE row
+                        onlineOfflineHeaders.forEach((header: string) => {
+                          newRow[header] = onlineOfflineRow[header] ?? '';
+                        });
+                        
+                        // Ensure the ONLINE-OFFLINE status columns are included
+                        onlineOfflineColumns.forEach((col: string) => {
+                          newRow[col] = onlineOfflineRow[col] ?? '';
+                        });
+                        
+                        newRowsToAdd.push(newRow);
+                      }
+                    });
+                    
+                    if (newRowsToAdd.length > 0) {
+                      console.log(`MY DATA - Adding ${newRowsToAdd.length} new sites from ONLINE-OFFLINE that don't exist in Device Status Upload`);
+                      fileRows = [...fileRows, ...newRowsToAdd];
+                    }
+                    
+                    console.log('MY DATA - Total rows after merge:', fileRows.length, '(original:', fileRows.length - newRowsToAdd.length, '+ new:', newRowsToAdd.length, ')');
                     
                     // Find EQUIPMENT MAKE column to insert DEVICE STATUS and NO OF DAYS OFFLINE after it
                     // (Will be reordered later to ensure DATE and DEVICE STATUS come after EQUIPMENT MAKE)

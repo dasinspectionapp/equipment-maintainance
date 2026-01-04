@@ -12,7 +12,8 @@
     "create-notifications": "node utils/createTestNotification.js",
     "create-equipment-offline-sites": "node utils/createEquipmentOfflineSitesCollection.js",
     "reset-equipment-offline-sites": "node utils/resetEquipmentOfflineSites.js",
-    "find-ip": "node find-ip.js"
+    "find-ip": "node find-ip.js",
+    "reset-production": "node reset-production-data.js"
   },
   "keywords": [
     "bescom",
