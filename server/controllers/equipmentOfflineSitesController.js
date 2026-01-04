@@ -1,12 +1,9 @@
-import mongoose from 'mongoose';
 import EquipmentOfflineSites from '../models/EquipmentOfflineSites.js';
 import Upload from '../models/Upload.js';
 import Action from '../models/Action.js';
 import User from '../models/User.js';
 import Approval from '../models/Approval.js';
 import Notification from '../models/Notification.js';
-import Reports from '../models/Reports.js';
-import EquipmentReports from '../models/EquipmentReports.js';
 
 // @desc    Save or update equipment offline site data
 // @route   POST /api/equipment-offline-sites
@@ -801,22 +798,32 @@ export const saveEquipmentOfflineSite = async (req, res) => {
                       status: { $in: ['Pending', 'In Progress'] }
                     }).lean();
                     
-                    const existingCCRApproval = await Approval.findOne({
+                    // CRITICAL: Check for ANY existing CCR approval for this equipmentOfflineSiteId
+                    // Check for ALL statuses (Pending, Approved, etc.) to prevent creating new approvals after CCR approves
+                    const existingCCRApprovalById = await Approval.findOne({
                       approvalType: 'CCR Resolution Approval',
-                      siteCode: siteCodeUpper,
-                      status: { $in: ['Pending', 'In Progress'] }
+                      equipmentOfflineSiteId: offlineSite._id
                     }).lean();
                     
-                    if (!existingCCRAction && !existingCCRApproval) {
-                      console.log('[saveEquipmentOfflineSite] No existing CCR approval found - creating new approval');
-                    } else {
-                      console.log('[saveEquipmentOfflineSite] CCR approval already exists - skipping creation:', {
-                        existingActionId: existingCCRAction?._id?.toString(),
-                        existingApprovalId: existingCCRApproval?._id?.toString()
-                      });
-                    }
+                    // Also check by siteCode in case equipmentOfflineSiteId changed
+                    const existingCCRApprovalBySiteCode = await Approval.findOne({
+                      approvalType: 'CCR Resolution Approval',
+                      siteCode: siteCodeUpper
+                    }).lean();
                     
-                    if (!existingCCRAction && !existingCCRApproval) {
+                    const existingCCRApproval = existingCCRApprovalById || existingCCRApprovalBySiteCode;
+                    
+                    if (existingCCRApproval) {
+                      console.log('[saveEquipmentOfflineSite] ⚠️ CCR approval already exists - skipping creation:', {
+                        existingActionId: existingCCRAction?._id?.toString(),
+                        existingApprovalId: existingCCRApproval._id?.toString(),
+                        existingStatus: existingCCRApproval.status,
+                        foundBy: existingCCRApprovalById ? 'equipmentOfflineSiteId' : 'siteCode',
+                        siteCode: siteCodeUpper
+                      });
+                    } else if (!existingCCRAction && !existingCCRApproval) {
+                      console.log('[saveEquipmentOfflineSite] No existing CCR approval found - creating new approval');
+                      
                       // Get division from action or offlineSite
                       const division = action.assignedToDivision || 
                         offlineSite.division ||
@@ -851,8 +858,39 @@ export const saveEquipmentOfflineSite = async (req, res) => {
                         assignedDate: new Date()
                       });
                       
-                      // Create Approval document
-                      const approval = await Approval.create({
+                      // FINAL SAFETY CHECK: One more check right before creating to prevent race conditions
+                      const finalDuplicateCheck = await Approval.findOne({
+                        approvalType: 'CCR Resolution Approval',
+                        $or: [
+                          { equipmentOfflineSiteId: offlineSite._id },
+                          { 
+                            siteCode: siteCode.trim().toUpperCase(),
+                            submittedByUserId: action.assignedByUserId || userId
+                          }
+                        ]
+                      });
+                      
+                      if (finalDuplicateCheck) {
+                        console.log('[saveEquipmentOfflineSite] ❌❌❌ FINAL DUPLICATE CHECK FAILED - Approval already exists, NOT creating:', {
+                          existingApprovalId: finalDuplicateCheck._id,
+                          existingStatus: finalDuplicateCheck.status,
+                          siteCode: siteCode.trim().toUpperCase(),
+                          equipmentOfflineSiteId: offlineSite._id,
+                          actionId: ccrApproval._id
+                        });
+                        // Don't create - approval already exists - skip to end
+                      } else {
+                        // Create Approval document
+                        console.log('[saveEquipmentOfflineSite] 🟢 CREATING NEW CCR APPROVAL:', {
+                          siteCode: siteCode.trim().toUpperCase(),
+                          equipmentOfflineSiteId: offlineSite._id,
+                          actionId: ccrApproval._id,
+                          userRole: currentUserRole,
+                          userId: userId,
+                          timestamp: new Date().toISOString()
+                        });
+                        
+                        const approval = await Approval.create({
                         actionId: ccrApproval._id,
                         siteCode: siteCode.trim().toUpperCase(),
                         equipmentOfflineSiteId: offlineSite._id,
@@ -913,10 +951,7 @@ export const saveEquipmentOfflineSite = async (req, res) => {
                       } catch (notifError) {
                         console.error('[saveEquipmentOfflineSite] Error sending notifications to CCR users:', notifError.message);
                       }
-                    } else {
-                      console.log('[saveEquipmentOfflineSite] CCR approval already exists:', {
-                        existingActionId: existingCCRAction._id
-                      });
+                      }
                     }
                   } else {
                     console.error('[saveEquipmentOfflineSite] ❌ No CCR user found - Cannot create approval');
@@ -965,13 +1000,43 @@ export const saveEquipmentOfflineSite = async (req, res) => {
                       status: { $in: ['Pending', 'In Progress'] }
                     }).lean();
                     
-                    const existingCCRApproval = await Approval.findOne({
+                    // CRITICAL: Check for ANY existing CCR approval for this site
+                    // Priority: 1) Check by equipmentOfflineSiteId (most specific)
+                    //           2) Check by siteCode + userId (to avoid false matches with other users' sites)
+                    // Check for ALL statuses (Pending, In Progress, Approved, etc.) to prevent creating new approvals
+                    let existingCCRApproval = await Approval.findOne({
                       approvalType: 'CCR Resolution Approval',
-                      siteCode: siteCodeUpper,
-                      status: { $in: ['Pending', 'In Progress'] }
+                      equipmentOfflineSiteId: offlineSite._id
                     }).lean();
                     
-                    if (!existingCCRAction && !existingCCRApproval) {
+                    // If not found by equipmentOfflineSiteId, check by siteCode + submittedByUserId or assignedByUserId
+                    // This ensures we find approvals even if equipmentOfflineSiteId changed (new document created)
+                    if (!existingCCRApproval) {
+                      const actionUserId = action.assignedByUserId || action.assignedToUserId || userId;
+                      existingCCRApproval = await Approval.findOne({
+                        approvalType: 'CCR Resolution Approval',
+                        siteCode: siteCodeUpper,
+                        $or: [
+                          { submittedByUserId: actionUserId },
+                          { assignedByUserId: actionUserId },
+                          { 'metadata.firstApprovalActionId': action._id.toString() }
+                        ]
+                      }).lean();
+                    }
+                    
+                    // CRITICAL: If there's ANY existing CCR approval (regardless of status), don't create a new one
+                    // This prevents creating new Pending approvals after CCR has already approved
+                    if (existingCCRApproval) {
+                      console.log('[saveEquipmentOfflineSite] ⚠️ CCR approval already exists - skipping creation of new approval:', {
+                        existingApprovalId: existingCCRApproval._id,
+                        siteCode: siteCodeUpper,
+                        status: existingCCRApproval.status,
+                        equipmentOfflineSiteId: existingCCRApproval.equipmentOfflineSiteId,
+                        currentOfflineSiteId: offlineSite._id,
+                        foundBy: existingCCRApprovalById ? 'equipmentOfflineSiteId' : 'siteCode',
+                        reason: 'Approval already exists for this site'
+                      });
+                    } else if (!existingCCRAction && !existingCCRApproval) {
                       // Get division from action or offlineSite
                       const division = action.assignedToDivision || 
                         offlineSite.division ||
@@ -1006,18 +1071,49 @@ export const saveEquipmentOfflineSite = async (req, res) => {
                         assignedDate: new Date()
                       });
                       
-                      // Create Approval document
-                      // CRITICAL: Use offlineSite._id to link approval to the EquipmentOfflineSites record
-                      const approval = await Approval.create({
-                        actionId: ccrApproval._id,
-                        siteCode: siteCodeUpper,
-                        equipmentOfflineSiteId: offlineSite._id,
+                      // FINAL SAFETY CHECK: One more check right before creating to prevent race conditions
+                      const finalDuplicateCheck = await Approval.findOne({
                         approvalType: 'CCR Resolution Approval',
-                        status: 'Pending',
-                        submittedByUserId: action.assignedByUserId || userId,
-                        submittedByRole: 'Equipment',
-                        assignedToUserId: ccrUser.userId,
-                        assignedToRole: 'CCR',
+                        $or: [
+                          { equipmentOfflineSiteId: offlineSite._id },
+                          { 
+                            siteCode: siteCodeUpper,
+                            submittedByUserId: action.assignedByUserId || userId
+                          }
+                        ]
+                      });
+                      
+                      if (finalDuplicateCheck) {
+                        console.log('[saveEquipmentOfflineSite] ❌❌❌ FINAL DUPLICATE CHECK FAILED (Equipment role) - Approval already exists, NOT creating:', {
+                          existingApprovalId: finalDuplicateCheck._id,
+                          existingStatus: finalDuplicateCheck.status,
+                          siteCode: siteCodeUpper,
+                          equipmentOfflineSiteId: offlineSite._id,
+                          actionId: ccrApproval._id
+                        });
+                        // Don't create - approval already exists - skip to end
+                      } else {
+                        // Create Approval document
+                        // CRITICAL: Use offlineSite._id to link approval to the EquipmentOfflineSites record
+                        console.log('[saveEquipmentOfflineSite] 🟢 CREATING NEW CCR APPROVAL (Equipment role):', {
+                          siteCode: siteCodeUpper,
+                          equipmentOfflineSiteId: offlineSite._id,
+                          actionId: ccrApproval._id,
+                          userRole: 'Equipment',
+                          userId: userId,
+                          timestamp: new Date().toISOString()
+                        });
+                        
+                        const approval = await Approval.create({
+                          actionId: ccrApproval._id,
+                          siteCode: siteCodeUpper,
+                          equipmentOfflineSiteId: offlineSite._id,
+                          approvalType: 'CCR Resolution Approval',
+                          status: 'Pending',
+                          submittedByUserId: action.assignedByUserId || userId,
+                          submittedByRole: 'Equipment',
+                          assignedToUserId: ccrUser.userId,
+                          assignedToRole: 'CCR',
                         submissionRemarks: remarks || `Resolution completed by Equipment team; pending CCR approval`,
                         photos: action.photo ? (Array.isArray(action.photo) ? action.photo : [action.photo]) : [],
                         supportDocuments: [],
@@ -1040,22 +1136,22 @@ export const saveEquipmentOfflineSite = async (req, res) => {
                         assignedToRole: approval.assignedToRole
                       });
                       
-                      console.log('[saveEquipmentOfflineSite] ✅✅✅ CCR approval created for Equipment role (with action):', {
-                        approvalId: approval._id.toString(),
-                        actionId: ccrApproval._id.toString(),
-                        siteCode: siteCodeUpper,
-                        assignedToUserId: approval.assignedToUserId
-                      });
-                      
-                      // Send notification to all CCR users
-                      try {
-                        const allCCRUsersForNotif = await User.find({
-                          role: 'CCR',
-                          status: 'approved',
-                          isActive: true
-                        }).select('userId fullName').lean();
+                        console.log('[saveEquipmentOfflineSite] ✅✅✅ CCR approval created for Equipment role (with action):', {
+                          approvalId: approval._id.toString(),
+                          actionId: ccrApproval._id.toString(),
+                          siteCode: siteCodeUpper,
+                          assignedToUserId: approval.assignedToUserId
+                        });
                         
-                        const notifications = allCCRUsersForNotif.map(ccrUser => ({
+                        // Send notification to all CCR users
+                        try {
+                          const allCCRUsersForNotif = await User.find({
+                            role: 'CCR',
+                            status: 'approved',
+                            isActive: true
+                          }).select('userId fullName').lean();
+                          
+                          const notifications = allCCRUsersForNotif.map(ccrUser => ({
                           userId: ccrUser.userId,
                           title: 'New Resolution Approval Required',
                           message: `Site ${siteCodeUpper} resolution requires CCR approval.`,
@@ -1075,8 +1171,9 @@ export const saveEquipmentOfflineSite = async (req, res) => {
                           ccrUsersCount: allCCRUsersForNotif.length,
                           siteCode: siteCodeUpper
                         });
-                      } catch (notifError) {
-                        console.error('[saveEquipmentOfflineSite] Error sending notifications to CCR users:', notifError.message);
+                        } catch (notifError) {
+                          console.error('[saveEquipmentOfflineSite] Error sending notifications to CCR users:', notifError.message);
+                        }
                       }
                     } else {
                       console.log('[saveEquipmentOfflineSite] CCR approval already exists for Equipment resolution:', {
@@ -1153,12 +1250,29 @@ export const saveEquipmentOfflineSite = async (req, res) => {
                 if (ccrUser) {
                   const siteCodeUpper = siteCode.trim().toUpperCase();
                   
-                  // Check if CCR approval already exists
-                  const existingCCRApproval = await Approval.findOne({
+                  // CRITICAL: Check for ANY existing CCR approval for this site
+                  // Check for ALL statuses (Pending, Approved, etc.) to prevent creating new approvals after CCR approves
+                  const existingCCRApprovalById = await Approval.findOne({
                     approvalType: 'CCR Resolution Approval',
-                    siteCode: siteCodeUpper,
-                    status: { $in: ['Pending', 'In Progress'] }
+                    equipmentOfflineSiteId: offlineSite?._id
                   }).lean();
+                  
+                  // Also check by siteCode in case equipmentOfflineSiteId changed
+                  const existingCCRApprovalBySiteCode = await Approval.findOne({
+                    approvalType: 'CCR Resolution Approval',
+                    siteCode: siteCodeUpper
+                  }).lean();
+                  
+                  const existingCCRApproval = existingCCRApprovalById || existingCCRApprovalBySiteCode;
+                  
+                  if (existingCCRApproval) {
+                    console.log('[saveEquipmentOfflineSite] ⚠️ CCR approval already exists - skipping creation:', {
+                      existingApprovalId: existingCCRApproval._id?.toString(),
+                      existingStatus: existingCCRApproval.status,
+                      foundBy: existingCCRApprovalById ? 'equipmentOfflineSiteId' : 'siteCode',
+                      siteCode: siteCodeUpper
+                    });
+                  }
                   
                   if (!existingCCRApproval) {
                     // Get division from offlineSite or originalRowData
@@ -1309,12 +1423,29 @@ export const saveEquipmentOfflineSite = async (req, res) => {
                 if (ccrUser) {
                   const siteCodeUpper = siteCode.trim().toUpperCase();
                   
-                  // Check if CCR approval already exists
-                  const existingCCRApproval = await Approval.findOne({
+                  // CRITICAL: Check for ANY existing CCR approval for this site
+                  // Check for ALL statuses (Pending, Approved, etc.) to prevent creating new approvals after CCR approves
+                  const existingCCRApprovalById = await Approval.findOne({
                     approvalType: 'CCR Resolution Approval',
-                    siteCode: siteCodeUpper,
-                    status: { $in: ['Pending', 'In Progress'] }
+                    equipmentOfflineSiteId: offlineSite?._id
                   }).lean();
+                  
+                  // Also check by siteCode in case equipmentOfflineSiteId changed
+                  const existingCCRApprovalBySiteCode = await Approval.findOne({
+                    approvalType: 'CCR Resolution Approval',
+                    siteCode: siteCodeUpper
+                  }).lean();
+                  
+                  const existingCCRApproval = existingCCRApprovalById || existingCCRApprovalBySiteCode;
+                  
+                  if (existingCCRApproval) {
+                    console.log('[saveEquipmentOfflineSite] ⚠️ CCR approval already exists - skipping creation:', {
+                      existingApprovalId: existingCCRApproval._id?.toString(),
+                      existingStatus: existingCCRApproval.status,
+                      foundBy: existingCCRApprovalById ? 'equipmentOfflineSiteId' : 'siteCode',
+                      siteCode: siteCodeUpper
+                    });
+                  }
                   
                   if (!existingCCRApproval) {
                     // Get division from offlineSite or originalRowData
@@ -2150,15 +2281,6 @@ export const bulkUpdateDaysOfflineOnly = async (req, res) => {
 // @access  Private
 export const deleteEquipmentOfflineSite = async (req, res) => {
   try {
-    // Guard: Prevent this route from matching /reports/clear
-    if (req.params.fileId === 'reports' && req.params.rowKey === 'clear') {
-      console.error('[Delete Equipment Offline Site] Route conflict detected - this should not match /reports/clear');
-      return res.status(404).json({
-        success: false,
-        error: 'Route not found. Use /reports/clear to clear reports data.'
-      });
-    }
-
     const { fileId, rowKey } = req.params;
     const userId = req.user.userId;
 
@@ -2549,234 +2671,6 @@ export const getReports = async (req, res) => {
       };
     });
 
-    // Save reports to Reports collection for Equipment role users
-    // Only save if reports don't already exist (prevent re-saving after clearing)
-    const userRole = req.user.role;
-    if (userRole === 'Equipment' && reports.length > 0) {
-      try {
-        // Verify MongoDB connection is ready
-        if (mongoose.connection.readyState !== 1) {
-          console.error('[Reports Save] MongoDB connection not ready. State:', mongoose.connection.readyState);
-          throw new Error('MongoDB connection not ready');
-        }
-        
-        console.log(`[Reports Save] Current database: ${mongoose.connection.name}`);
-        console.log(`[Reports Save] User role: ${userRole}, Reports count: ${reports.length}`);
-        // Prepare reports data to save
-        const reportsToSave = reports.map((report) => {
-          // Handle createdAt date
-          let createdAtDate = null;
-          if (report.createdAt) {
-            if (report.createdAt instanceof Date) {
-              createdAtDate = report.createdAt;
-            } else if (report.createdAt.$date) {
-              createdAtDate = new Date(report.createdAt.$date);
-            } else if (typeof report.createdAt === 'string') {
-              createdAtDate = new Date(report.createdAt);
-            } else if (typeof report.createdAt === 'number') {
-              createdAtDate = new Date(report.createdAt);
-            }
-          }
-
-          const normalizedSiteCode = (report.siteCode || '').trim().toUpperCase();
-          const ccrStatusValue =
-            reportType === 'Resolved'
-              ? (ccrStatusMap[normalizedSiteCode] || 'Pending')
-              : '';
-
-          // Format resolvedBy
-          let resolvedByValue = 'N/A';
-          if (reportType === 'Pending') {
-            if (report.user) {
-              const fullName = report.user.fullName || '';
-              const role = report.user.role || '';
-              const roleDisplay = role ? `${role} Team` : '';
-              resolvedByValue = fullName && roleDisplay ? `${fullName}@${roleDisplay}` : (fullName || report.userId || 'N/A');
-            } else if (report.userId) {
-              resolvedByValue = report.userId;
-            }
-          } else {
-            resolvedByValue = report.user?.fullName || report.userId || 'N/A';
-          }
-
-          return {
-            reportType: reportType,
-            userId: userId,
-            userRole: userRole,
-            siteCode: report.siteCode || '',
-            remarks: report.remarks || '',
-            updatedTimeAndDate: createdAtDate && !isNaN(createdAtDate.getTime())
-              ? createdAtDate.toLocaleString('en-IN', {
-                  day: '2-digit',
-                  month: '2-digit',
-                  year: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  second: '2-digit',
-                  hour12: true
-                })
-              : '',
-            ccrStatus: ccrStatusValue,
-            resolvedBy: resolvedByValue,
-            taskStatus: report.taskStatus || '',
-            typeOfIssue: report.typeOfIssue || '',
-            siteObservations: report.siteObservations || '',
-            circle: report.circle || '',
-            division: report.division || '',
-            subDivision: report.subDivision || '',
-            originalRowData: report.originalRowData || {},
-            equipmentOfflineSiteId: report._id,
-            filters: {
-              circles: circles ? (Array.isArray(circles) ? circles : [circles]) : [],
-              divisions: divisions ? (Array.isArray(divisions) ? divisions : [divisions]) : [],
-              subDivisions: subDivisions ? (Array.isArray(subDivisions) ? subDivisions : [subDivisions]) : [],
-              fromDate: fromDate ? new Date(fromDate) : null,
-              toDate: toDate ? new Date(toDate) : null,
-              timeRange: 'All' // You can extract this from query if needed
-            },
-            metadata: {
-              originalUserId: report.originalUserId || '',
-              fileId: report.fileId || '',
-              rowKey: report.rowKey || ''
-            }
-          };
-        });
-
-        // Save reports to 'das' database
-        // Use 'das' database connection for Reports collection
-        try {
-          // Get 'das' database connection
-          const dasConnection = mongoose.connection.useDb('das', {
-            useCache: true,
-            noListener: false
-          });
-          
-          console.log(`[Reports Save] ==========================================`);
-          console.log(`[Reports Save] Current connection database: ${mongoose.connection.name}`);
-          console.log(`[Reports Save] Switching to 'das' database...`);
-          console.log(`[Reports Save] Das connection database: ${dasConnection.name}`);
-          console.log(`[Reports Save] Das connection ready state: ${dasConnection.readyState}`);
-          
-          // Verify we can access the 'das' database by listing collections
-          try {
-            const collections = await dasConnection.db.listCollections().toArray();
-            console.log(`[Reports Save] Collections in 'das' database:`, collections.map(c => c.name));
-          } catch (listErr) {
-            console.error(`[Reports Save] Error listing collections in 'das' database:`, listErr.message);
-          }
-          
-          // Get or create EquipmentReports model on 'das' database
-          // This will use the "Equipment Reports" collection in 'das' database
-          let EquipmentReportsOnDas;
-          
-          // Delete existing model if it exists to ensure correct collection name
-          if (dasConnection.models && dasConnection.models.EquipmentReports) {
-            delete dasConnection.models.EquipmentReports;
-            console.log('[Reports Save] Deleted existing EquipmentReports model to recreate with correct collection name');
-          }
-          
-          // Create model on 'das' database connection
-          // IMPORTANT: Pass collection name as third parameter to ensure "Equipment Reports" is used
-          EquipmentReportsOnDas = dasConnection.model('EquipmentReports', EquipmentReports.schema, 'Equipment Reports');
-          console.log('[Reports Save] Created EquipmentReports model on das database with collection: Equipment Reports');
-          
-          console.log(`[Reports Save] Model name: ${EquipmentReportsOnDas.modelName}`);
-          console.log(`[Reports Save] Collection name: ${EquipmentReportsOnDas.collection.name}`);
-          console.log(`[Reports Save] Database name: ${EquipmentReportsOnDas.db.databaseName}`);
-          
-          // Verify collection name is correct
-          if (EquipmentReportsOnDas.collection.name !== 'Equipment Reports') {
-            console.error(`[Reports Save] ⚠ WARNING: Collection name is "${EquipmentReportsOnDas.collection.name}" but expected "Equipment Reports"`);
-          } else {
-            console.log(`[Reports Save] ✓ Collection name verified: "Equipment Reports"`);
-          }
-          
-          // Check if reports already exist for this user and report type
-          // This prevents re-saving after clearing
-          const existingReportsCount = await EquipmentReportsOnDas.countDocuments({
-            userId: userId,
-            reportType: reportType
-          });
-          
-          if (existingReportsCount > 0) {
-            console.log(`[Reports Save] ⚠ Reports already exist (${existingReportsCount} found) for user ${userId} and report type ${reportType}`);
-            console.log(`[Reports Save] Skipping auto-save to prevent duplicates and preserve cleared data`);
-            console.log(`[Reports Save] If you want to refresh the data, please clear reports first`);
-            console.log(`[Reports Save] ==========================================`);
-          } else {
-            console.log(`[Reports Save] No existing reports found. Proceeding to save new reports...`);
-            console.log(`[Reports Save] Attempting to save ${reportsToSave.length} reports...`);
-            if (reportsToSave.length > 0) {
-              console.log(`[Reports Save] Sample report (first):`, {
-                reportType: reportsToSave[0].reportType,
-                userId: reportsToSave[0].userId,
-                siteCode: reportsToSave[0].siteCode
-              });
-            }
-            
-            // Remove category field from reportsToSave since EquipmentReports collection doesn't need it
-            const equipmentReportsToSave = reportsToSave.map(({ category, ...rest }) => rest);
-            
-            // Insert reports into Equipment Reports collection
-            const insertResult = await EquipmentReportsOnDas.insertMany(equipmentReportsToSave, { 
-              ordered: false,
-              rawResult: false
-            });
-            
-            console.log(`[Reports Save] ✓ SUCCESS! Saved ${Array.isArray(insertResult) ? insertResult.length : equipmentReportsToSave.length} reports`);
-            console.log(`[Reports Save] Database: ${dasConnection.name}`);
-            console.log(`[Reports Save] Collection: ${EquipmentReportsOnDas.collection.name} (Equipment Reports)`);
-            console.log(`[Reports Save] ==========================================`);
-            
-            // Verify the data was saved by counting documents
-            try {
-              const count = await EquipmentReportsOnDas.countDocuments({ userId: userId });
-              console.log(`[Reports Save] Verification: Found ${count} Equipment Reports for user ${userId} in 'das' database`);
-            } catch (countErr) {
-              console.error(`[Reports Save] Error counting documents:`, countErr.message);
-            }
-          }
-          
-        } catch (saveErr) {
-          // Log detailed error information
-          console.error('[Reports Save] ✗ ERROR saving reports:');
-          console.error('[Reports Save] Error message:', saveErr.message);
-          console.error('[Reports Save] Error code:', saveErr.code);
-          console.error('[Reports Save] Error name:', saveErr.name);
-          console.error('[Reports Save] Error stack:', saveErr.stack);
-          
-          if (saveErr.writeErrors && Array.isArray(saveErr.writeErrors)) {
-            console.error('[Reports Save] Write errors count:', saveErr.writeErrors.length);
-            saveErr.writeErrors.slice(0, 3).forEach((err, idx) => {
-              console.error(`[Reports Save] Write error ${idx + 1}:`, {
-                code: err.code,
-                message: err.errmsg || err.message
-              });
-            });
-          }
-          
-          if (saveErr.result) {
-            console.error('[Reports Save] Insert result:', {
-              insertedCount: saveErr.result.insertedCount,
-              matchedCount: saveErr.result.matchedCount,
-              modifiedCount: saveErr.result.modifiedCount
-            });
-          }
-          
-          // Re-throw if it's a critical error (not duplicate key)
-          if (saveErr.code !== 11000 && saveErr.code !== 11001) {
-            console.error('[Reports Save] Critical error - needs attention!');
-            // Don't throw - we don't want to fail the request, just log the error
-          } else {
-            console.log('[Reports Save] Duplicate key error - some reports may already exist (this is okay)');
-          }
-        }
-      } catch (saveError) {
-        // Log error but don't fail the request
-        console.error('Error saving reports to Reports collection:', saveError);
-      }
-    }
-
     res.status(200).json({
       success: true,
       data: formattedReports,
@@ -2792,148 +2686,6 @@ export const getReports = async (req, res) => {
         success: false,
         error: error.message || 'Failed to fetch reports',
         details: process.env.NODE_ENV === 'development' ? error.stack : undefined
-      });
-    }
-  }
-};
-
-// @desc    Clear all reports data for Equipment role users (Resolved and Pending)
-// @route   DELETE /api/equipment-offline-sites/reports/clear
-// @access  Private (Equipment role only)
-export const clearReportsData = async (req, res) => {
-  try {
-    console.log(`[Clear Reports] ==========================================`);
-    console.log(`[Clear Reports] Route hit: ${req.method} ${req.path}`);
-    console.log(`[Clear Reports] Full URL: ${req.originalUrl}`);
-    
-    const userId = req.user.userId;
-    const userRole = req.user.role;
-
-    console.log(`[Clear Reports] User: ${userId}, Role: ${userRole}`);
-
-    // Only allow Equipment role users to clear reports
-    if (userRole !== 'Equipment') {
-      console.log(`[Clear Reports] Access denied - user role is not Equipment`);
-      return res.status(403).json({
-        success: false,
-        error: 'Access denied. Only Equipment role users can clear reports data.'
-      });
-    }
-
-    // Verify MongoDB connection is ready
-    if (mongoose.connection.readyState !== 1) {
-      console.error(`[Clear Reports] MongoDB connection not ready. State: ${mongoose.connection.readyState}`);
-      return res.status(500).json({
-        success: false,
-        error: 'Database connection not ready. Please try again.'
-      });
-    }
-
-    console.log(`[Clear Reports] Attempting to clear Reports data from 'das' database...`);
-    console.log(`[Clear Reports] Current database: ${mongoose.connection.name}`);
-
-    // Get 'das' database connection
-    const dasConnection = mongoose.connection.useDb('das', {
-      useCache: true,
-      noListener: false
-    });
-
-    console.log(`[Clear Reports] Using 'das' database: ${dasConnection.name}`);
-    console.log(`[Clear Reports] Das connection ready state: ${dasConnection.readyState}`);
-
-    // Verify EquipmentReports model exists
-    if (!EquipmentReports || !EquipmentReports.schema) {
-      console.error(`[Clear Reports] EquipmentReports model or schema not found`);
-      return res.status(500).json({
-        success: false,
-        error: 'EquipmentReports model not found. Please check server configuration.'
-      });
-    }
-
-    // Get or create EquipmentReports model on 'das' database
-    // This uses the "Equipment Reports" collection in 'das' database
-    let EquipmentReportsOnDas;
-    try {
-      // Delete existing model if it exists to ensure correct collection name
-      if (dasConnection.models && dasConnection.models.EquipmentReports) {
-        delete dasConnection.models.EquipmentReports;
-        console.log(`[Clear Reports] Deleted existing EquipmentReports model to recreate with correct collection name`);
-      }
-      
-      // IMPORTANT: Pass collection name as third parameter to ensure "Equipment Reports" is used
-      EquipmentReportsOnDas = dasConnection.model('EquipmentReports', EquipmentReports.schema, 'Equipment Reports');
-      console.log(`[Clear Reports] Created EquipmentReports model on das database with collection: Equipment Reports`);
-      
-      console.log(`[Clear Reports] Model name: ${EquipmentReportsOnDas.modelName}`);
-      console.log(`[Clear Reports] Collection name: ${EquipmentReportsOnDas.collection.name}`);
-      console.log(`[Clear Reports] Database name: ${EquipmentReportsOnDas.db.databaseName}`);
-      
-      // Verify collection name is correct
-      if (EquipmentReportsOnDas.collection.name !== 'Equipment Reports') {
-        console.error(`[Clear Reports] ⚠ WARNING: Collection name is "${EquipmentReportsOnDas.collection.name}" but expected "Equipment Reports"`);
-      } else {
-        console.log(`[Clear Reports] ✓ Collection name verified: "Equipment Reports"`);
-      }
-    } catch (modelError) {
-      console.error(`[Clear Reports] Error creating/accessing EquipmentReports model:`, modelError);
-      return res.status(500).json({
-        success: false,
-        error: `Failed to access EquipmentReports model: ${modelError.message}`
-      });
-    }
-
-    // Delete all Equipment Reports (Resolved and Pending) to start fresh
-    // This clears all Equipment Reports for all Equipment users from "Equipment Reports" collection
-    const deleteQuery = {
-      userRole: 'Equipment',
-      reportType: { $in: ['Resolved', 'Pending'] }
-    };
-
-    console.log(`[Clear Reports] Delete query:`, JSON.stringify(deleteQuery, null, 2));
-
-    // Count documents before deletion
-    const countBefore = await EquipmentReportsOnDas.countDocuments(deleteQuery);
-    console.log(`[Clear Reports] Found ${countBefore} reports to delete`);
-
-    if (countBefore === 0) {
-      return res.status(200).json({
-        success: true,
-        message: 'No reports found to clear. Equipment Reports collection is already empty.',
-        deletedCount: 0
-      });
-    }
-
-    // Delete the reports from Equipment Reports collection
-    const deleteResult = await EquipmentReportsOnDas.deleteMany(deleteQuery);
-
-    console.log(`[Clear Reports] ✓ Successfully deleted ${deleteResult.deletedCount} reports`);
-    console.log(`[Clear Reports] Database: ${dasConnection.name}, Collection: Equipment Reports`);
-
-    // Verify deletion
-    const countAfter = await EquipmentReportsOnDas.countDocuments(deleteQuery);
-    console.log(`[Clear Reports] Verification: ${countAfter} reports remaining (should be 0)`);
-
-    res.status(200).json({
-      success: true,
-      message: `Successfully cleared ${deleteResult.deletedCount} report(s) from Equipment Reports collection (Resolved and Pending)`,
-      deletedCount: deleteResult.deletedCount,
-      database: dasConnection.name,
-      collection: 'Equipment Reports'
-    });
-    
-    console.log(`[Clear Reports] ==========================================`);
-  } catch (error) {
-    console.error('[Clear Reports] ✗ Error clearing reports data:', error);
-    console.error('[Clear Reports] Error message:', error.message);
-    console.error('[Clear Reports] Error name:', error.name);
-    console.error('[Clear Reports] Error stack:', error.stack);
-    console.error(`[Clear Reports] ==========================================`);
-    
-    // Ensure we always return JSON
-    if (!res.headersSent) {
-      res.status(500).json({
-        success: false,
-        error: error.message || 'Failed to clear reports data'
       });
     }
   }
@@ -3708,3 +3460,42 @@ export const getLocalRemoteReports = async (req, res) => {
   }
 };
 
+// @desc    Clear all reports data for Equipment role (Resolved and Pending)
+// @route   DELETE /api/equipment-offline-sites/reports/clear
+// @access  Private (Equipment role only)
+export const clearReportsData = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const userRole = req.user.role;
+
+    console.log('==========================================');
+    console.log('Clear Reports Data - User ID:', userId);
+    console.log('Clear Reports Data - User Role:', userRole);
+    console.log('==========================================');
+
+    // Only Equipment role can clear their reports
+    if (userRole !== 'Equipment') {
+      return res.status(403).json({
+        success: false,
+        error: 'Only Equipment role users can clear reports data'
+      });
+    }
+
+    // Delete all Equipment Offline Sites records for this user
+    const deleteResult = await EquipmentOfflineSites.deleteMany({ userId: userId });
+
+    console.log('Clear Reports Data - Deleted records:', deleteResult.deletedCount);
+
+    res.status(200).json({
+      success: true,
+      message: `Successfully cleared ${deleteResult.deletedCount} reports records`,
+      deletedCount: deleteResult.deletedCount
+    });
+  } catch (error) {
+    console.error('Error clearing reports data:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to clear reports data'
+    });
+  }
+};
