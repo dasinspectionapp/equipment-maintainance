@@ -6968,70 +6968,59 @@ export default function MyData() {
                         }
                       } // Close the else block for action-based remarks fallback (line 4249)
                       } else if (userRole === 'AMC') {
-                        // For AMC users: Show their actual remarks from Site Observations
-                        // Find the AMC Resolution Approval action they created
-                        const originalRowKeyForAMC = (row as any).__siteObservationRowKey as string | undefined;
-                        let amcAction =
-                          routedActionsMap[rowKey] ||
-                          (originalRowKeyForAMC ? routedActionsMap[originalRowKeyForAMC] : undefined);
+                        // For AMC users: Show remarks from Equipment when they route to AMC
+                        // The remarks are stored in actionsRows (not routedActionsMap)
+                        const siteCode = String(
+                          row['Site Code'] ||
+                          row['SITE CODE'] ||
+                          row['SiteCode'] ||
+                          row['Site_Code'] ||
+                          row['site code'] ||
+                          ''
+                        ).trim().toUpperCase();
+                        
+                        const deviceType = String(
+                          row['DEVICE TYPE'] ||
+                          row['Device Type'] ||
+                          row['device type'] ||
+                          row['DEVICETYPE'] ||
+                          row['DeviceType'] ||
+                          row['device_type'] ||
+                          ''
+                        ).trim().toUpperCase();
 
-                        // If direct lookup failed, try matching by Site Code + Device Type
-                        if (!amcAction || amcAction.typeOfIssue !== 'AMC Resolution Approval') {
-                          const siteCode =
-                            row['Site Code'] ||
-                            row['SITE CODE'] ||
-                            row['SiteCode'] ||
-                            row['Site_Code'] ||
-                            row['site code'] ||
-                            '';
-                          const deviceType =
-                            row['DEVICE TYPE'] ||
-                            row['Device Type'] ||
-                            row['device type'] ||
-                            row['DEVICETYPE'] ||
-                            row['DeviceType'] ||
-                            row['device_type'] ||
-                            '';
+                        // CRITICAL: Search in actionsRows for the routing action where Equipment routed to AMC
+                        // This contains the Equipment's remarks (stored in _remarks field)
+                        const equipmentRoutingAction = actionsRows.find((actionRow: any) => {
+                          // Match by site code and device type
+                          const actionSiteCode = String(
+                            actionRow['Site Code'] ||
+                            actionRow['SITE CODE'] ||
+                            actionRow['SiteCode'] ||
+                            actionRow['Site_Code'] ||
+                            actionRow['site code'] ||
+                            ''
+                          ).trim().toUpperCase();
+                          
+                          const actionDeviceType = String(
+                            actionRow['DEVICE TYPE'] ||
+                            actionRow['Device Type'] ||
+                            actionRow['device type'] ||
+                            actionRow['DEVICETYPE'] ||
+                            actionRow['DeviceType'] ||
+                            actionRow['device_type'] ||
+                            ''
+                          ).trim().toUpperCase();
 
-                          if (siteCode) {
-                            const lowerSiteCode = String(siteCode).trim().toLowerCase();
-                            const lowerDeviceType = String(deviceType || '').trim().toLowerCase();
+                          // Check if this is the routing action from Equipment to AMC
+                          const matchesSite = siteCode && actionSiteCode === siteCode;
+                          const matchesDevice = !deviceType || actionDeviceType === deviceType;
+                          const isRoutingAction = actionRow._assignedByRole === 'Equipment' && actionRow._assignedToRole === 'AMC';
+                          const isCorrectType = actionRow._typeOfIssue === 'Faulty' || actionRow._typeOfIssue === 'Spare Required';
 
-                            amcAction = Object.values(routedActionsMap).find((action: any) => {
-                              if (action.typeOfIssue !== 'AMC Resolution Approval') return false;
-                              if (action.assignedByRole !== 'AMC') return false;
-                              
-                              const r = action.rowData || {};
-                              const aSiteCode =
-                                r['Site Code'] ||
-                                r['SITE CODE'] ||
-                                r['SiteCode'] ||
-                                r['Site_Code'] ||
-                                r['site code'] ||
-                                '';
-                              const aDeviceType =
-                                r['DEVICE TYPE'] ||
-                                r['Device Type'] ||
-                                r['device type'] ||
-                                r['DEVICETYPE'] ||
-                                r['DeviceType'] ||
-                                r['device_type'] ||
-                                '';
+                          return matchesSite && matchesDevice && isRoutingAction && isCorrectType;
+                        });
 
-                              const matchesSite =
-                                String(aSiteCode || '').trim().toLowerCase() === lowerSiteCode;
-                              const matchesDevice =
-                                !lowerDeviceType ||
-                                String(aDeviceType || '').trim().toLowerCase() === lowerDeviceType;
-
-                              return matchesSite && matchesDevice;
-                            }) as any;
-                          }
-                        }
-
-                        // Get AMC remarks from their action
-                        // CRITICAL: Get the actual AMC remarks, not Equipment status messages
-                        // Priority: rowData.__siteObservationRemarks (original AMC remarks) > rowData.remarks > action.remarks
                         let amcRemarksValue = '';
                         const statusMessages = [
                           'Verified and Approved by Equipment',
@@ -7039,78 +7028,49 @@ export default function MyData() {
                           'Verified and approved by Equipment',
                           'Verified and approved by Equipment Team',
                           'Pending Equipment Approval',
-                          'Recheck Requested',
-                          'Pending Equipment Approval',
                           'Recheck Requested'
                         ];
                         
-                        if (amcAction && amcAction.typeOfIssue === 'AMC Resolution Approval' && amcAction.assignedByRole === 'AMC') {
-                          // Priority 1: Get from rowData.__siteObservationRemarks (original AMC remarks when they submitted)
-                          const originalAMCRemarks = amcAction.rowData?.__siteObservationRemarks || '';
+                        // CASE 1: Equipment routed to AMC - Show Equipment's remarks from the routing action
+                        if (equipmentRoutingAction) {
+                          console.log('[AMC Remarks] Found Equipment routing action:', {
+                            siteCode,
+                            deviceType,
+                            actionId: equipmentRoutingAction._actionId,
+                            remarks: equipmentRoutingAction._remarks,
+                            assignedByRole: equipmentRoutingAction._assignedByRole,
+                            assignedToRole: equipmentRoutingAction._assignedToRole,
+                            typeOfIssue: equipmentRoutingAction._typeOfIssue
+                          });
                           
-                          // Priority 2: Get from rowData.remarks (should contain original AMC remarks)
-                          const rowDataRemarks = amcAction.rowData?.remarks || '';
+                          // Get Equipment's remarks from the routing action (_remarks field)
+                          const equipmentRemarks = equipmentRoutingAction._remarks || equipmentRoutingAction.remarks || '';
                           
-                          // Priority 3: Get from action.remarks (might be updated with status messages)
-                          const actionRemarks = amcAction.remarks || '';
-                          
-                          // Check which one to use - prefer original remarks that are NOT status messages
-                          if (originalAMCRemarks && originalAMCRemarks.trim() && 
-                              !statusMessages.some(msg => originalAMCRemarks.trim() === msg.trim() || 
-                                                         originalAMCRemarks.trim() === msg.trim() + '.')) {
-                            amcRemarksValue = originalAMCRemarks.trim();
-                          } else if (rowDataRemarks && rowDataRemarks.trim() && 
-                                     !statusMessages.some(msg => rowDataRemarks.trim() === msg.trim() || 
-                                                                rowDataRemarks.trim() === msg.trim() + '.')) {
-                            amcRemarksValue = rowDataRemarks.trim();
-                          } else if (actionRemarks && actionRemarks.trim() && 
-                                     !statusMessages.some(msg => actionRemarks.trim() === msg.trim() || 
-                                                                actionRemarks.trim() === msg.trim() + '.')) {
-                            amcRemarksValue = actionRemarks.trim();
+                          // Filter out status messages
+                          if (equipmentRemarks && equipmentRemarks.trim() &&
+                              !statusMessages.some(msg => equipmentRemarks.trim() === msg.trim() ||
+                                                         equipmentRemarks.trim() === msg.trim() + '.')) {
+                            amcRemarksValue = equipmentRemarks.trim();
+                            console.log('[AMC Remarks] Using Equipment routing remarks:', amcRemarksValue);
                           }
-                          
-                          // If we got remarks but they contain status messages, try to extract actual remarks
-                          if (amcRemarksValue && statusMessages.some(msg => amcRemarksValue.includes(msg))) {
-                            // Check if it's ONLY a status message
-                            const isOnlyStatus = statusMessages.some(msg => 
-                              amcRemarksValue.trim() === msg.trim() || 
-                              amcRemarksValue.trim() === msg.trim() + '.'
-                            );
-                            
-                            if (isOnlyStatus) {
-                              // It's only a status message, clear it
-                              amcRemarksValue = '';
-                            } else {
-                              // It contains both remarks and status message, try to remove status message
-                              let cleanedRemarks = amcRemarksValue;
-                              statusMessages.forEach(msg => {
-                                cleanedRemarks = cleanedRemarks
-                                  .replace(new RegExp(`^${msg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*[.\\n]*`, 'i'), '')
-                                  .replace(new RegExp(`\\s*[.\\n]*${msg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'), '')
-                                  .trim();
-                              });
-                              
-                              if (cleanedRemarks && cleanedRemarks.trim()) {
-                                amcRemarksValue = cleanedRemarks.trim();
-                              } else {
-                                // If after cleaning there's nothing left, it was only status message
-                                amcRemarksValue = '';
-                              }
-                            }
-                          }
-                        }
-                        
-                        // Set displayRemarks to AMC remarks (filtered)
-                        if (amcRemarksValue && amcRemarksValue.trim()) {
-                          displayRemarks = amcRemarksValue.trim();
                         } else {
-                          // No valid AMC remarks found - show default
-                          displayRemarks = '-';
+                          console.log('[AMC Remarks] No Equipment routing action found:', {
+                            siteCode,
+                            deviceType,
+                            actionsRowsCount: actionsRows.length
+                          });
                         }
                         
-                        // DO NOT use remarks[rowKey] or row._remarks as fallbacks for AMC users
-                        // These may contain Equipment status messages or other role's remarks
-                        // AMC remarks should ONLY come from the AMC Resolution Approval action
+                        // FALLBACK: If no remarks found in routing action, check row data
+                        if (!amcRemarksValue && row.remarks) {
+                          const rowRemarks = String(row.remarks || '').trim();
+                          if (rowRemarks && !statusMessages.some(msg => rowRemarks === msg.trim() || rowRemarks === msg.trim() + '.')) {
+                            amcRemarksValue = rowRemarks;
+                            console.log('[AMC Remarks] Using row remarks as fallback:', amcRemarksValue);
+                          }
+                        }
+                        
+                        displayRemarks = amcRemarksValue || '-';
                       } else {
                         // For other roles, use existing logic
                         const routedAction = routedActionsMap[rowKey];
