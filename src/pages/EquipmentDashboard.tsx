@@ -404,6 +404,7 @@ export default function EquipmentDashboard() {
         // Find DATE columns: columns with header "DATE" or headers that are dates (e.g., "17-11-2025")
         const dateHeaderNames: string[] = [];
         const dateHeaderMap = new Map<string, Date>(); // Map header name to parsed date
+        const dateToStatusColumnsMap = new Map<string, { deviceStatus: string | null; equipLRSwitch: string | null; rtuLRSwitch: string | null }>(); // Map date header to its status columns
         
         ooHeaders.forEach((h) => {
           const normalized = normalize(h);
@@ -528,6 +529,62 @@ export default function EquipmentDashboard() {
             });
           });
         }
+        // Map each date header to its corresponding status columns
+        // For each date header, find the status columns that come AFTER it and BEFORE the next date header
+        if (dateHeaderNames.length > 0) {
+          dateHeaderNames.forEach((dateHeader, index) => {
+            const dateHeaderIndex = ooHeaders.indexOf(dateHeader);
+            const nextDateHeaderIndex = index < dateHeaderNames.length - 1 ? ooHeaders.indexOf(dateHeaderNames[index + 1]) : ooHeaders.length;
+            
+            let deviceStatusCol: string | null = null;
+            let equipLRSwitchCol: string | null = null;
+            let rtuLRSwitchCol: string | null = null;
+            
+            // Find status columns between this date header and the next one
+            for (let i = dateHeaderIndex + 1; i < nextDateHeaderIndex; i++) {
+              const header = ooHeaders[i];
+              const n = normalize(header);
+              
+              // Find DEVICE STATUS
+              if (!deviceStatusCol && n.includes('device') && n.includes('status') && !n.includes('rtu')) {
+                deviceStatusCol = header;
+              }
+              
+              // Find EQUIPMENT L/R SWITCH STATUS
+              if (!equipLRSwitchCol) {
+                const hasEquip = n.includes('equipment') || n.includes('equipemnt') || n.includes('equip');
+                const hasLR = n.includes('l/r') || n.includes('lr') || n.includes('l r');
+                const hasSwitch = n.includes('switch') || n.includes('status');
+                if ((hasEquip && hasSwitch) || (hasLR && hasSwitch)) {
+                  equipLRSwitchCol = header;
+                }
+              }
+              
+              // Find RTU L/R SWITCH STATUS
+              if (!rtuLRSwitchCol) {
+                const hasRTU = n.includes('rtu');
+                const hasLR = n.includes('l/r') || n.includes('lr') || n.includes('l r');
+                const hasSwitch = n.includes('switch') || n.includes('status');
+                if (hasRTU && (hasLR || hasSwitch)) {
+                  rtuLRSwitchCol = header;
+                }
+              }
+            }
+            
+            dateToStatusColumnsMap.set(dateHeader, {
+              deviceStatus: deviceStatusCol,
+              equipLRSwitch: equipLRSwitchCol,
+              rtuLRSwitch: rtuLRSwitchCol
+            });
+            
+            console.log(`CCR Dashboard - Mapped date header "${dateHeader}" (${dateHeaderMap.get(dateHeader) ? formatDateToISO(dateHeaderMap.get(dateHeader)!) : 'N/A'}) to status columns:`, {
+              deviceStatus: deviceStatusCol,
+              equipLRSwitch: equipLRSwitchCol,
+              rtuLRSwitch: rtuLRSwitchCol
+            });
+          });
+        }
+        
         console.log('CCR Dashboard - ONLINE-OFFLINE headers:', ooHeaders);
         console.log('CCR Dashboard - Date headers found:', Array.from(dateHeaderMap.entries()).map(([h, d]) => `${h} -> ${formatDateToISO(d)}`));
         console.log('CCR Dashboard - Number of date header columns:', dateHeaderNames.length);
@@ -746,11 +803,7 @@ export default function EquipmentDashboard() {
                 finalDate = dateHeaderMap.get(dateHeader)!;
                 const dateKeyFromHeader = formatDateToISO(finalDate);
                 
-                // Debug: Log when processing date headers (first few per date)
-                const existingCount = ooRowsWithDates.filter(e => e.dateValue && formatDateToISO(e.dateValue) === dateKeyFromHeader).length;
-                if (existingCount < 3) {
-                  console.log(`CCR Dashboard - Processing date header "${dateHeader}" -> ${dateKeyFromHeader} for site ${sc} (entry #${existingCount + 1})`);
-                }
+                // Skip logging for performance
               } else {
                 // Header is "DATE" but we couldn't get date from row 2 - try parsing from cell value as fallback
                 const raw = row[dateHeader];
@@ -786,24 +839,6 @@ export default function EquipmentDashboard() {
                 // If it's a date header, keep all columns as they contain the status data for that date
                 
                 ooRowsWithDates.push({ row: rowForDate, dateValue: finalDate, siteCode: sc });
-                
-                if (rawDateSamples.length < 10) {
-                  const raw = row[dateHeader];
-                  rawDateSamples.push({ raw, parsed: dateKey, siteCode: sc });
-                }
-                
-                // Debug: Log entry creation for all dates (first 3 per date)
-                const entriesForThisDate = ooRowsWithDates.filter(e => e.dateValue && formatDateToISO(e.dateValue) === dateKey).length;
-                if (entriesForThisDate <= 3) {
-                  console.log(`CCR Dashboard - Created entry for ${dateKey}:`, {
-                    siteCode: sc,
-                    dateHeader,
-                    dateValue: formatDateToISO(finalDate),
-                    hasDeviceStatus: !!deviceStatusHeader,
-                    deviceStatusValue: rowForDate[deviceStatusHeader] || 'N/A',
-                    entryNumber: entriesForThisDate + 1
-                  });
-                }
               }
             });
           } else if (dateHeaderNames.length > 0) {
@@ -1080,25 +1115,19 @@ export default function EquipmentDashboard() {
                   }
                   // Also set in the merged row's __deviceStatus field
                   mergedRow.__deviceStatus = dsDeviceStatus;
-                  console.log(`CCR Dashboard - Using Device Status Upload DEVICE STATUS for ${sc}: ${dsDeviceStatus}`);
                 }
               }
               
               // If Device Status Upload has EQUIPMENT L/R SWITCH STATUS, use it (preserves user edits)
               if (dsEquipLRSwitchHeader) {
                 const dsEquipLRSwitch = String(deviceStatusRow[dsEquipLRSwitchHeader] || '').trim();
-                console.log(`CCR Dashboard - Device Status Upload EQUIPMENT L/R SWITCH STATUS for ${sc}: "${dsEquipLRSwitch}" (from column "${dsEquipLRSwitchHeader}")`);
                 if (dsEquipLRSwitch) {
                   // Override ONLINE-OFFLINE EQUIPMENT L/R SWITCH STATUS with Device Status Upload value
                   if (equipLRSwitchHeader) {
                     mergedRow[equipLRSwitchHeader] = dsEquipLRSwitch;
-                    console.log(`CCR Dashboard - Set mergedRow[${equipLRSwitchHeader}] = "${dsEquipLRSwitch}"`);
                   }
                   // Also set in the merged row's __equipLRSwitchStatus field
                   mergedRow.__equipLRSwitchStatus = dsEquipLRSwitch;
-                  console.log(`CCR Dashboard - Set mergedRow.__equipLRSwitchStatus = "${dsEquipLRSwitch}" for site ${sc}`);
-                } else {
-                  console.log(`CCR Dashboard - Device Status Upload EQUIPMENT L/R SWITCH STATUS is empty for ${sc}`);
                 }
               } else {
                 // Try to find it by checking all columns that might match
@@ -1129,12 +1158,32 @@ export default function EquipmentDashboard() {
               });
             }
             
+            // Find which date header this entry belongs to by matching the date
+            let dateSpecificColumns = { deviceStatus: deviceStatusHeader, equipLRSwitch: equipLRSwitchHeader, rtuLRSwitch: rtuLRSwitchHeader };
+            if (ooEntry.dateValue && hasMultipleDateColumns) {
+              const entryDateKey = formatDateToISO(ooEntry.dateValue);
+              // Find the date header that matches this entry's date
+              for (const [dateHeader, date] of dateHeaderMap.entries()) {
+                if (formatDateToISO(date) === entryDateKey) {
+                  const mappedColumns = dateToStatusColumnsMap.get(dateHeader);
+                  if (mappedColumns) {
+                    dateSpecificColumns = {
+                      deviceStatus: mappedColumns.deviceStatus || deviceStatusHeader,
+                      equipLRSwitch: mappedColumns.equipLRSwitch || equipLRSwitchHeader,
+                      rtuLRSwitch: mappedColumns.rtuLRSwitch || rtuLRSwitchHeader
+                    };
+                  }
+                  break;
+                }
+              }
+            }
+            
             merged.push({
               ...mergedRow, // Include merged columns
               __statusDate: ooEntry.dateValue,
-              __deviceStatus: mergedRow.__deviceStatus || (ooEntry.row && deviceStatusHeader ? String(ooEntry.row[deviceStatusHeader] || '').trim() : ''),
-              __equipLRSwitchStatus: mergedRow.__equipLRSwitchStatus || (ooEntry.row && equipLRSwitchHeader ? String(ooEntry.row[equipLRSwitchHeader] || '').trim() : ''),
-              __rtuLRSwitchStatus: ooEntry.row && rtuLRSwitchHeader ? String(ooEntry.row[rtuLRSwitchHeader] || '').trim() : '',
+              __deviceStatus: mergedRow.__deviceStatus || (ooEntry.row && dateSpecificColumns.deviceStatus ? String(ooEntry.row[dateSpecificColumns.deviceStatus] || '').trim() : ''),
+              __equipLRSwitchStatus: mergedRow.__equipLRSwitchStatus || (ooEntry.row && dateSpecificColumns.equipLRSwitch ? String(ooEntry.row[dateSpecificColumns.equipLRSwitch] || '').trim() : ''),
+              __rtuLRSwitchStatus: ooEntry.row && dateSpecificColumns.rtuLRSwitch ? String(ooEntry.row[dateSpecificColumns.rtuLRSwitch] || '').trim() : '',
               __circleHeader: circleHeader,
               __divisionHeader: divisionHeader,
               __subDivisionHeader: subDivisionHeader,
@@ -1356,18 +1405,16 @@ export default function EquipmentDashboard() {
   }, [mergedRows]);
 
   // Keep the selected date in sync with the latest date from the data
-  // When new data loads, always update to the latest date found
-  // This ensures both Equipment and CCR roles have the latest date selected by default
+  // When new data loads, set to the latest date ONLY if no date is currently selected
+  // This ensures both Equipment and CCR roles have the latest date selected by default on initial load
+  // But allows users to select different dates without auto-resetting
   useEffect(() => {
-    if (snapshotDateLabel) {
-      // Always update to the latest date when data is loaded
-      // Only update if selectedDate is empty or different from snapshotDateLabel
-      if (!selectedDate || selectedDate !== snapshotDateLabel) {
-        console.log(`CCR Dashboard - Setting selectedDate to latest date: ${snapshotDateLabel}`);
+    if (snapshotDateLabel && !selectedDate) {
+      // Only update if selectedDate is empty (initial load)
+      console.log(`CCR Dashboard - Setting selectedDate to latest date: ${snapshotDateLabel}`);
       setSelectedDate(snapshotDateLabel);
     }
-    }
-  }, [snapshotDateLabel, selectedDate]);
+  }, [snapshotDateLabel]);
 
   // Default Division filter to the user's registered division (first division) if available
   // For Equipment role: filter by user's division
@@ -1401,10 +1448,7 @@ export default function EquipmentDashboard() {
   }, [role, divisionFilter, divisionHeaderKey, mergedRows, userDivisions]);
 
   const filteredRows = useMemo(() => {
-    console.log(`CCR Dashboard - filteredRows useMemo: mergedRows.length=${mergedRows.length}, selectedDate="${selectedDate}", divisionFilter="${divisionFilter}", subDivisionFilter="${subDivisionFilter}", circleFilter="${circleFilter}"`);
-    
     if (mergedRows.length === 0) {
-      console.warn('CCR Dashboard - mergedRows is empty!');
       return [];
     }
 
@@ -1442,64 +1486,6 @@ export default function EquipmentDashboard() {
 
       return true;
     });
-    
-    // Debug: log filtering results
-    console.log(`CCR Dashboard - Filtering results: ${filtered.length} rows after filtering from ${mergedRows.length} total rows`);
-      
-      // Show all unique dates in merged rows
-      const allDatesInMerged = new Map<string, number>();
-    const rowsWithoutDates = mergedRows.filter((row) => {
-        const d = row.__statusDate as Date | null;
-        if (d && !isNaN(d.getTime())) {
-          const dateKey = formatDateToISO(d);
-          allDatesInMerged.set(dateKey, (allDatesInMerged.get(dateKey) || 0) + 1);
-        return false;
-      }
-      return true;
-    });
-    
-    if (rowsWithoutDates.length > 0) {
-      console.warn(`CCR Dashboard - WARNING: ${rowsWithoutDates.length} rows have no valid date!`);
-    }
-    
-    if (selectedDate) {
-      // Count rows with the selected date in ALL merged rows
-      const rowsWithSelectedDate = mergedRows.filter((row) => {
-        const d = row.__statusDate as Date | null;
-        if (d && !isNaN(d.getTime())) {
-          return formatDateToISO(d) === selectedDate;
-        }
-        return false;
-      });
-      
-      console.log(`CCR Dashboard - Selected date: ${selectedDate}`);
-      console.log(`CCR Dashboard - Rows with date ${selectedDate} in merged rows:`, rowsWithSelectedDate.length);
-      console.log(`CCR Dashboard - Filtered rows after all filters:`, filtered.length);
-      
-      if (rowsWithSelectedDate.length === 0) {
-        console.warn(`CCR Dashboard - WARNING: No rows found with selected date ${selectedDate}!`);
-      }
-    }
-    
-      const availableDatesArray = Array.from(allDatesInMerged.entries()).sort();
-    console.log(`CCR Dashboard - All available dates in merged rows (${availableDatesArray.length} unique dates):`, availableDatesArray.map(([date, count]) => `${date}: ${count} rows`));
-      
-      // Show breakdown by date
-      availableDatesArray.forEach(([date, count]) => {
-        console.log(`CCR Dashboard -   Date ${date}: ${count} rows`);
-      });
-    
-    // Log sample of filtered rows
-    if (filtered.length > 0) {
-      console.log(`CCR Dashboard - Sample filtered rows (first 3):`, filtered.slice(0, 3).map((r: any) => ({
-        siteCode: (r as any)['SITE CODE'] || (r as any)['Site Code'] || 'N/A',
-        deviceStatus: r.__deviceStatus,
-        equipLRSwitch: r.__equipLRSwitchStatus,
-        date: r.__statusDate ? formatDateToISO(r.__statusDate) : 'N/A'
-      })));
-    } else {
-      console.warn(`CCR Dashboard - WARNING: No filtered rows! This will result in zero counts.`);
-    }
     
     return filtered;
   }, [
@@ -1551,8 +1537,6 @@ export default function EquipmentDashboard() {
     switchIssueCount,
     rtuLocalCount,
   } = useMemo(() => {
-    console.log(`CCR Dashboard - Computing counts from ${filteredRows.length} filtered rows`);
-    
     let online = 0;
     let offline = 0;
     let local = 0;
@@ -1577,24 +1561,13 @@ export default function EquipmentDashboard() {
                        (row as any)['SiteCode'] ||
                        'UNKNOWN';
       
-      // Debug: Log first few rows to verify values (especially for site code 5W2925 or %W2932)
-      if (siteCode === '5W2925' || siteCode === '%W2932' || (local + remote + switchIssue < 5 && equipRaw)) {
-        console.log(`CCR Dashboard - Count check for ${siteCode}: __equipLRSwitchStatus="${equipRaw}" (normalized: "${equipLR}")`);
-      }
-      
       // Treat any value containing "local" as LOCAL
       if (equipLR.includes('local')) {
         local += 1;
-        if (siteCode === '5W2925' || siteCode === '%W2932' || local <= 3) {
-          console.log(`CCR Dashboard - Counting LOCAL for ${siteCode}: "${equipRaw}" (normalized: "${equipLR}")`);
-        }
       }
       // Treat any value containing "remote" as REMOTE
       if (equipLR.includes('remote')) {
         remote += 1;
-        if (siteCode === '5W2925' || siteCode === '%W2932') {
-          console.log(`CCR Dashboard - Counting REMOTE for ${siteCode}: "${equipRaw}"`);
-        }
       }
       // Treat any value that mentions both "switch" and "issue" (or is exactly "switchissue") as SWITCH ISSUE
       if (
@@ -1602,9 +1575,6 @@ export default function EquipmentDashboard() {
         (equipLR.includes('switch') && equipLR.includes('issue'))
       ) {
         switchIssue += 1;
-        if (siteCode === '5W2925' || siteCode === '%W2932') {
-          console.log(`CCR Dashboard - Counting SWITCH ISSUE for ${siteCode}: "${equipRaw}"`);
-        }
       }
 
       const rtuRaw = row.__rtuLRSwitchStatus || '';
@@ -1612,9 +1582,6 @@ export default function EquipmentDashboard() {
       // Count any value in RTU L/R SWITCH STATUS that contains "local"
       if (rtuLR.includes('local')) {
         rtuLocal += 1;
-        if (siteCode === '5W2925' || siteCode === '%W2932' || rtuLocal <= 3) {
-          console.log(`CCR Dashboard - Counting RTU LOCAL for ${siteCode}: "${rtuRaw}" (normalized: "${rtuLR}")`);
-        }
       }
     });
 
