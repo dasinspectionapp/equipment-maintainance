@@ -2832,18 +2832,132 @@ export const getReportDetails = async (req, res) => {
 export const getReportFilters = async (req, res) => {
   try {
     const userId = req.user.userId;
+    const userRole = req.user.role;
 
-    console.log('Report Filters API - User ID:', userId);
+    console.log('Report Filters API - User ID:', userId, 'Role:', userRole);
     console.log('Report Filters API - Database:', EquipmentOfflineSites.db?.databaseName || 'unknown');
 
-    // Get unique values for each filter
-    const [circles, divisions, subDivisions] = await Promise.all([
-      EquipmentOfflineSites.distinct('circle', { userId, circle: { $exists: true, $ne: '' } }),
-      EquipmentOfflineSites.distinct('division', { userId, division: { $exists: true, $ne: '' } }),
-      EquipmentOfflineSites.distinct('subDivision', { userId, subDivision: { $exists: true, $ne: '' } })
-    ]);
+    let circles = [];
+    let divisions = [];
+    let subDivisions = [];
 
-    console.log('Report Filters API - Found:', {
+    // For CCR role, fetch filters from uploaded Device Status file (all data)
+    // For other roles, fetch from EquipmentOfflineSites (user's own data)
+    if (userRole === 'CCR') {
+      console.log('Report Filters API - CCR role detected, fetching from Device Status Upload file');
+      
+      // Find the most recent Device Status Upload file
+      const deviceStatusFiles = await Upload.find({
+        uploadType: 'device-status-upload'
+      })
+      .sort({ uploadedAt: -1, createdAt: -1 })
+      .lean();
+
+      if (deviceStatusFiles && deviceStatusFiles.length > 0) {
+        const deviceStatusFile = deviceStatusFiles[0];
+        console.log('Report Filters API - Found Device Status Upload file:', deviceStatusFile.name, 'FileId:', deviceStatusFile.fileId);
+        
+        const deviceStatusFileData = await Upload.findOne({ fileId: deviceStatusFile.fileId }).lean();
+        
+        if (deviceStatusFileData && deviceStatusFileData.rows && deviceStatusFileData.rows.length > 0) {
+          const rows = deviceStatusFileData.rows;
+          const headers = deviceStatusFileData.headers || (rows[0] ? Object.keys(rows[0]) : []);
+          
+          console.log('Report Filters API - Device Status Upload headers:', headers);
+          console.log('Report Filters API - Device Status Upload rows count:', rows.length);
+
+          // Normalize function for case-insensitive matching
+          const normalize = (str) => {
+            return String(str || '').trim().toLowerCase().replace(/[_\s-]/g, '');
+          };
+
+          // Find Circle header
+          const circleHeader = headers.find(h => {
+            const n = normalize(h);
+            return n === 'circle' || n === 'circlename' || n === 'thecircle';
+          });
+
+          // Find Division header
+          const divisionHeader = headers.find(h => {
+            const n = normalize(h);
+            return n === 'division';
+          });
+
+          // Find Sub Division header
+          const subDivisionHeader = headers.find(h => {
+            const n = normalize(h);
+            return n === 'subdivision' || n === 'subdiv' || n === 'sub_division';
+          });
+
+          console.log('Report Filters API - Found headers:', {
+            circleHeader,
+            divisionHeader,
+            subDivisionHeader
+          });
+
+          // Extract unique values
+          const circleSet = new Set();
+          const divisionSet = new Set();
+          const subDivisionSet = new Set();
+
+          rows.forEach(row => {
+            if (circleHeader && row[circleHeader]) {
+              const value = String(row[circleHeader]).trim();
+              if (value && value !== '' && value !== '-') {
+                circleSet.add(value);
+              }
+            }
+            if (divisionHeader && row[divisionHeader]) {
+              const value = String(row[divisionHeader]).trim();
+              if (value && value !== '' && value !== '-') {
+                divisionSet.add(value);
+              }
+            }
+            if (subDivisionHeader && row[subDivisionHeader]) {
+              const value = String(row[subDivisionHeader]).trim();
+              if (value && value !== '' && value !== '-') {
+                subDivisionSet.add(value);
+              }
+            }
+          });
+
+          circles = Array.from(circleSet).sort();
+          divisions = Array.from(divisionSet).sort();
+          subDivisions = Array.from(subDivisionSet).sort();
+
+          console.log('Report Filters API - Extracted from file:', {
+            circles: circles.length,
+            divisions: divisions.length,
+            subDivisions: subDivisions.length
+          });
+        } else {
+          console.log('Report Filters API - Device Status Upload file has no rows');
+        }
+      } else {
+        console.log('Report Filters API - No Device Status Upload file found');
+      }
+    } else {
+      // For non-CCR roles, fetch from EquipmentOfflineSites (user's own data)
+      console.log('Report Filters API - Non-CCR role, fetching from EquipmentOfflineSites');
+      
+      const [circlesFromDB, divisionsFromDB, subDivisionsFromDB] = await Promise.all([
+        EquipmentOfflineSites.distinct('circle', { userId, circle: { $exists: true, $ne: '' } }),
+        EquipmentOfflineSites.distinct('division', { userId, division: { $exists: true, $ne: '' } }),
+        EquipmentOfflineSites.distinct('subDivision', { userId, subDivision: { $exists: true, $ne: '' } })
+      ]);
+
+      circles = circlesFromDB.filter(c => c).sort();
+      divisions = divisionsFromDB.filter(d => d).sort();
+      subDivisions = subDivisionsFromDB.filter(s => s).sort();
+
+      console.log('Report Filters API - Extracted from EquipmentOfflineSites:', {
+        circles: circles.length,
+        divisions: divisions.length,
+        subDivisions: subDivisions.length
+      });
+    }
+
+    console.log('Report Filters API - Final result:', {
       circles: circles.length,
       divisions: divisions.length,
       subDivisions: subDivisions.length
@@ -2852,9 +2966,9 @@ export const getReportFilters = async (req, res) => {
     res.status(200).json({
       success: true,
       data: {
-        circles: circles.filter(c => c).sort(),
-        divisions: divisions.filter(d => d).sort(),
-        subDivisions: subDivisions.filter(s => s).sort()
+        circles,
+        divisions,
+        subDivisions
       }
     });
   } catch (error) {

@@ -408,6 +408,14 @@ export default function DeviceStatus() {
           return;
         }
 
+        // Log which Device Status Upload file is being used (to verify it's the latest)
+        console.log('[DeviceStatus] Using Device Status Upload file:', {
+          name: deviceStatusFile.name,
+          uploadedAt: deviceStatusFile.uploadedAt,
+          createdAt: deviceStatusFile.createdAt,
+          fileId: deviceStatusFile.fileId
+        });
+
         // Fetch Device Status file data
         const fileRes = await fetch(`${API_BASE}/api/uploads/${deviceStatusFile.fileId}`, {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -473,9 +481,14 @@ export default function DeviceStatus() {
         let mergedNoOfDaysOfflineColumn: string | undefined = undefined;
         let mergedAttributeColumn: string | undefined = undefined;
         
+        // Store ONLINE-OFFLINE data for reuse (to avoid fetching twice)
+        let cachedOnlineOfflineData: any = null;
+        let cachedOnlineOfflineRows: any[] = [];
+        let cachedOnlineOfflineHeaders: string[] = [];
+        
         try {
           // Find ONLINE-OFFLINE file
-          const onlineOfflineFile = (uploadsJson.files || [])
+          const allOnlineOfflineFiles = (uploadsJson.files || [])
             .filter((f: any) => {
               const uploadType = String(f.uploadType || '').toLowerCase().trim();
               const fileName = String(f.name || '').toLowerCase();
@@ -484,7 +497,16 @@ export default function DeviceStatus() {
                                              fileName.includes('online_offline') ||
                                              fileName.includes('onlineoffline');
               return isOnlineOfflineType || isOnlineOfflineFileName;
-            })
+            });
+          
+          // Log all available ONLINE-OFFLINE files for debugging
+          console.log('[DeviceStatus] Found', allOnlineOfflineFiles.length, 'ONLINE-OFFLINE files:');
+          allOnlineOfflineFiles.forEach((f: any, idx: number) => {
+            const uploadDate = f.uploadedAt || f.createdAt;
+            console.log(`  ${idx + 1}. ${f.name} - Uploaded: ${uploadDate}`);
+          });
+          
+          const onlineOfflineFile = allOnlineOfflineFiles
             .sort((a: any, b: any) => {
               const dateA = a.uploadedAt ? new Date(a.uploadedAt).getTime() : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
               const dateB = b.uploadedAt ? new Date(b.uploadedAt).getTime() : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
@@ -492,17 +514,30 @@ export default function DeviceStatus() {
             })[0];
 
           if (onlineOfflineFile) {
+            // Log which ONLINE-OFFLINE file is being used for merging (to verify it's the latest)
+            const uploadDate = onlineOfflineFile.uploadedAt || onlineOfflineFile.createdAt;
+            console.log('[DeviceStatus] ===== ONLINE-OFFLINE FILE BEING USED =====');
+            console.log('[DeviceStatus] File name:', onlineOfflineFile.name);
+            console.log('[DeviceStatus] Upload date:', uploadDate);
+            console.log('[DeviceStatus] File ID:', onlineOfflineFile.fileId);
+            console.log('[DeviceStatus] ==========================================');
+            
             const onlineOfflineRes = await fetch(`${API_BASE}/api/uploads/${onlineOfflineFile.fileId}`, {
               headers: { 'Authorization': `Bearer ${token}` }
             });
             const onlineOfflineJson = await onlineOfflineRes.json();
 
             if (onlineOfflineJson?.success && onlineOfflineJson.file) {
-              const onlineOfflineData = onlineOfflineJson.file;
-              const onlineOfflineRows = Array.isArray(onlineOfflineData.rows) ? onlineOfflineData.rows : [];
-              const onlineOfflineHeaders = onlineOfflineData.headers && onlineOfflineData.headers.length 
-                ? onlineOfflineData.headers 
-                : (onlineOfflineRows[0] ? Object.keys(onlineOfflineRows[0]) : []);
+              // OPTIMIZATION: Cache the ONLINE-OFFLINE data for reuse later
+              cachedOnlineOfflineData = onlineOfflineJson.file;
+              cachedOnlineOfflineRows = Array.isArray(cachedOnlineOfflineData.rows) ? cachedOnlineOfflineData.rows : [];
+              cachedOnlineOfflineHeaders = cachedOnlineOfflineData.headers && cachedOnlineOfflineData.headers.length 
+                ? cachedOnlineOfflineData.headers 
+                : (cachedOnlineOfflineRows[0] ? Object.keys(cachedOnlineOfflineRows[0]) : []);
+              
+              const onlineOfflineData = cachedOnlineOfflineData;
+              const onlineOfflineRows = cachedOnlineOfflineRows;
+              const onlineOfflineHeaders = cachedOnlineOfflineHeaders;
 
               // Find SITE CODE column in ONLINE-OFFLINE file
               const onlineOfflineSiteCodeHeader = onlineOfflineHeaders.find((h: string) => {
@@ -510,23 +545,122 @@ export default function DeviceStatus() {
                 return n === 'sitecode' || n === 'site_code' || n === 'site code';
               });
 
-              // Find DEVICE STATUS and NO OF DAYS OFFLINE columns (same as MY OFFLINE SITES)
-              const deviceStatusHeader = onlineOfflineHeaders.find((h: string) => {
-                const n = normalize(h);
-                return n === 'device status' ||
+              // CRITICAL FIX: Find DEVICE STATUS column for the MOST RECENT DATE
+              // The ONLINE-OFFLINE file has multiple DEVICE STATUS columns (one per date)
+              // We need to find the one corresponding to the latest date, not just the first one
+              
+              // Helper function to parse date from column name
+              const parseDateFromColumnName = (columnName: string): Date | null => {
+                const datePatterns = [
+                  /(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/, // DD-MM-YYYY or DD/MM/YYYY
+                  /(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/, // YYYY-MM-DD or YYYY/MM/DD
+                ];
+                
+                for (const pattern of datePatterns) {
+                  const match = columnName.match(pattern);
+                  if (match) {
+                    if (pattern.source.includes('\\d{4}') && pattern.source.startsWith('(\\d{4})')) {
+                      const year = parseInt(match[1]);
+                      const month = parseInt(match[2]) - 1;
+                      const day = parseInt(match[3]);
+                      const parsedDate = new Date(year, month, day);
+                      if (!isNaN(parsedDate.getTime())) {
+                        return parsedDate;
+                      }
+                    } else {
+                      const day = parseInt(match[1]);
+                      const month = parseInt(match[2]) - 1;
+                      const year = parseInt(match[3]);
+                      const parsedDate = new Date(year, month, day);
+                      if (!isNaN(parsedDate.getTime())) {
+                        return parsedDate;
+                      }
+                    }
+                  }
+                }
+                return null;
+              };
+              
+              // Find all date columns with their indices
+              const dateColumns: Array<{ name: string; date: Date; index: number }> = [];
+              onlineOfflineHeaders.forEach((header: string, index: number) => {
+                const date = parseDateFromColumnName(header);
+                if (date) {
+                  dateColumns.push({ name: header, date, index });
+                }
+              });
+              
+              // Sort by date (most recent first)
+              dateColumns.sort((a, b) => b.date.getTime() - a.date.getTime());
+              
+              console.log('[DeviceStatus] Found date columns:', dateColumns.map(d => ({ name: d.name, date: d.date.toLocaleDateString() })));
+              
+              // Find DEVICE STATUS column after the most recent date
+              let deviceStatusHeader: string | undefined = undefined;
+              let noOfDaysOfflineHeader: string | undefined = undefined;
+              
+              if (dateColumns.length > 0) {
+                const mostRecentDateIndex = dateColumns[0].index;
+                console.log('[DeviceStatus] Most recent date:', dateColumns[0].name, 'at index', mostRecentDateIndex);
+                
+                // Look for DEVICE STATUS column after this date column
+                for (let i = mostRecentDateIndex + 1; i < onlineOfflineHeaders.length; i++) {
+                  const header = onlineOfflineHeaders[i];
+                  const n = normalize(header);
+                  
+                  // Stop if we hit another date column
+                  if (parseDateFromColumnName(header)) {
+                    break;
+                  }
+                  
+                  // Find DEVICE STATUS
+                  if (!deviceStatusHeader && (n === 'device status' ||
                        n === 'device_status' ||
                        n === 'devicestatus' ||
-                       (n.includes('device') && n.includes('status') && !n.includes('rtu'));
-              });
-
-              const noOfDaysOfflineHeader = onlineOfflineHeaders.find((h: string) => {
-                const n = normalize(h);
-                return n === 'no of days offline' ||
+                       (n.includes('device') && n.includes('status') && !n.includes('rtu')))) {
+                    deviceStatusHeader = header;
+                    console.log('[DeviceStatus] Found DEVICE STATUS for latest date at index', i, ':', header);
+                  }
+                  
+                  // Find NO OF DAYS OFFLINE
+                  if (!noOfDaysOfflineHeader && (n === 'no of days offline' ||
                        n === 'no_of_days_offline' ||
                        n === 'noofdaysoffline' ||
                        (n.includes('days') && n.includes('offline')) ||
-                       (n.includes('day') && n.includes('offline'));
-              });
+                       (n.includes('day') && n.includes('offline')))) {
+                    noOfDaysOfflineHeader = header;
+                    console.log('[DeviceStatus] Found NO OF DAYS OFFLINE for latest date at index', i, ':', header);
+                  }
+                  
+                  // Stop once we've found both
+                  if (deviceStatusHeader && noOfDaysOfflineHeader) {
+                    break;
+                  }
+                }
+              }
+              
+              // Fallback: If we couldn't find columns after latest date, use the first occurrence
+              if (!deviceStatusHeader) {
+                deviceStatusHeader = onlineOfflineHeaders.find((h: string) => {
+                  const n = normalize(h);
+                  return n === 'device status' ||
+                         n === 'device_status' ||
+                         n === 'devicestatus' ||
+                         (n.includes('device') && n.includes('status') && !n.includes('rtu'));
+                });
+                console.log('[DeviceStatus] Using fallback DEVICE STATUS header:', deviceStatusHeader);
+              }
+              
+              if (!noOfDaysOfflineHeader) {
+                noOfDaysOfflineHeader = onlineOfflineHeaders.find((h: string) => {
+                  const n = normalize(h);
+                  return n === 'no of days offline' ||
+                         n === 'no_of_days_offline' ||
+                         n === 'noofdaysoffline' ||
+                         (n.includes('days') && n.includes('offline')) ||
+                         (n.includes('day') && n.includes('offline'));
+                });
+              }
 
               const attributeHeader = onlineOfflineHeaders.find((h: string) => {
                 const n = normalize(h);
@@ -617,14 +751,34 @@ export default function DeviceStatus() {
           // Continue even if merge fails
         }
 
-        // Now fetch EquipmentOfflineSites data to merge with file data
-        // For CCR role, include approved sites too (includeApproved=true) for tracking purposes
-        const offlineSitesRes = await fetch(`${API_BASE}/api/equipment-offline-sites?includeApproved=true`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const offlineSitesJson = await offlineSitesRes.json();
+        // OPTIMIZATION: Fetch EquipmentOfflineSites, Actions, and Approvals in parallel
+        // These API calls don't depend on each other, so we can fetch them simultaneously
+        console.log('[DeviceStatus] Fetching EquipmentOfflineSites, Actions, and Approvals in parallel...');
+        const [offlineSitesJson, actionsJson, approvalsJson] = await Promise.all([
+          fetch(`${API_BASE}/api/equipment-offline-sites?includeApproved=true`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          }).then(res => res.json()),
+          
+          fetch(`${API_BASE}/api/actions`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          }).then(res => res.json()).catch(err => {
+            console.warn('[DeviceStatus] Failed to fetch actions:', err);
+            return { data: [], actions: [] };
+          }),
+          
+          fetch(`${API_BASE}/api/approvals`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          }).then(res => res.json()).catch(err => {
+            console.warn('[DeviceStatus] Failed to fetch approvals:', err);
+            return { data: [] };
+          })
+        ]);
+        
+        console.log('[DeviceStatus] Parallel fetch completed');
 
         const offlineSites = Array.isArray(offlineSitesJson?.data) ? offlineSitesJson.data : [];
+        const actions = Array.isArray(actionsJson?.data) ? actionsJson.data : (Array.isArray(actionsJson?.actions) ? actionsJson.actions : []);
+        const approvals = Array.isArray(approvalsJson?.data) ? approvalsJson.data : [];
 
         // Create a map of site codes from offline sites (for merging with file data)
         const offlineSitesMap: Record<string, any> = {};
@@ -640,56 +794,16 @@ export default function DeviceStatus() {
           }
         });
 
-        // Fetch routing actions to determine Task Status, approval status, and dates
-        const actionsRes = await fetch(`${API_BASE}/api/actions`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (!actionsRes.ok) {
-          console.warn('[DeviceStatus] Failed to fetch actions:', actionsRes.status, actionsRes.statusText);
-        }
-        const actionsJson = await actionsRes.json();
-        const actions = Array.isArray(actionsJson?.data) ? actionsJson.data : (Array.isArray(actionsJson?.actions) ? actionsJson.actions : []);
-
-        // Fetch approvals to get CCR approval dates
-        const approvalsRes = await fetch(`${API_BASE}/api/approvals`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const approvalsJson = await approvalsRes.json();
-        const approvals = Array.isArray(approvalsJson?.data) ? approvalsJson.data : [];
-
-        // Fetch ONLINE-OFFLINE file to get most recent OFFLINE date for each site code
-        // (Note: Filtering is now done on merged rows above, so we only need offline dates here)
+        // Calculate most recent OFFLINE date for each site code
+        // OPTIMIZATION: Reuse cached ONLINE-OFFLINE data instead of fetching again
         const mostRecentOfflineDateMap: Record<string, Date> = {};
         try {
-          // Find ONLINE-OFFLINE file (we already fetched it above, but need it again for offline dates)
-          const onlineOfflineFile = (uploadsJson.files || [])
-            .filter((f: any) => {
-              const uploadType = String(f.uploadType || '').toLowerCase().trim();
-              const fileName = String(f.name || '').toLowerCase();
-              const isOnlineOfflineType = uploadType === 'online-offline-data';
-              const isOnlineOfflineFileName = fileName.includes('online-offline') || 
-                                             fileName.includes('online_offline') ||
-                                             fileName.includes('onlineoffline');
-              return isOnlineOfflineType || isOnlineOfflineFileName;
-            })
-            .sort((a: any, b: any) => {
-              const dateA = a.uploadedAt ? new Date(a.uploadedAt).getTime() : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
-              const dateB = b.uploadedAt ? new Date(b.uploadedAt).getTime() : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
-              return dateB - dateA;
-            })[0];
-
-          if (onlineOfflineFile) {
-            const onlineOfflineRes = await fetch(`${API_BASE}/api/uploads/${onlineOfflineFile.fileId}`, {
-              headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const onlineOfflineJson = await onlineOfflineRes.json();
-
-            if (onlineOfflineJson?.success && onlineOfflineJson.file) {
-              const onlineOfflineData = onlineOfflineJson.file;
-              const onlineOfflineRows = Array.isArray(onlineOfflineData.rows) ? onlineOfflineData.rows : [];
-              const onlineOfflineHeaders = onlineOfflineData.headers && onlineOfflineData.headers.length 
-                ? onlineOfflineData.headers 
-                : (onlineOfflineRows[0] ? Object.keys(onlineOfflineRows[0]) : []);
+          // Use cached ONLINE-OFFLINE data (already fetched above)
+          if (cachedOnlineOfflineData && cachedOnlineOfflineRows.length > 0) {
+            console.log('[DeviceStatus] Reusing cached ONLINE-OFFLINE data for offline date calculation (performance optimization)');
+            
+            const onlineOfflineRows = cachedOnlineOfflineRows;
+            const onlineOfflineHeaders = cachedOnlineOfflineHeaders;
 
               // Find SITE CODE header
               const onlineOfflineSiteCodeHeader = onlineOfflineHeaders.find((h: string) => {
@@ -797,16 +911,23 @@ export default function DeviceStatus() {
                   mostRecentOfflineDateMap[siteCode] = targetDate;
                 }
               });
-            }
+          } else {
+            console.log('[DeviceStatus] No cached ONLINE-OFFLINE data available for offline date calculation');
           }
         } catch (err) {
-          console.warn('[DeviceStatus] Could not fetch ONLINE-OFFLINE file for offline dates:', err);
+          console.warn('[DeviceStatus] Error calculating ONLINE-OFFLINE dates:', err);
         }
 
         // Build site status rows from rows where:
-        // 1. DEVICE STATUS = "OFFLINE"
+        // 1. DEVICE STATUS = "OFFLINE" (in the LATEST uploaded data)
         // 2. NO OF DAYS OFFLINE >= 2
         // 3. ATTRIBUTE = "IN PRODUCTION" (from Device Status Upload file)
+        // 
+        // IMPORTANT BEHAVIOR:
+        // - Only show sites where the CURRENT/LATEST Device Status is "OFFLINE"
+        // - If a site was OFFLINE yesterday but is ONLINE today, it will NOT be shown
+        // - This ensures the list reflects the current state from the most recent upload
+        // 
         // Merge with EquipmentOfflineSites data if available
         let debugCount = 0;
         const statusRows: SiteStatusRow[] = fileRows
@@ -815,11 +936,14 @@ export default function DeviceStatus() {
             const offlineSite = offlineSitesMap[siteCode]; // Get database data if exists
             
             // Filter 1: DEVICE STATUS = "OFFLINE" (case-insensitive)
+            // This checks the LATEST Device Status from the most recent upload
             // CRITICAL: If CCR has approved, check database deviceStatus (should be 'ONLINE')
-            // Otherwise, check file deviceStatus
+            // Otherwise, check file deviceStatus from the latest upload
             let deviceStatus = mergedDeviceStatusColumn ? String(row[mergedDeviceStatusColumn] || '').trim() : '';
+            
+            // Special case: If CCR has approved this site, use the database deviceStatus
+            // (which should reflect the approved ONLINE state)
             if (offlineSite?.ccrStatus === 'Approved' && offlineSite?.deviceStatus) {
-              // CCR has approved - use deviceStatus from database (should be 'ONLINE')
               deviceStatus = String(offlineSite.deviceStatus).trim().toUpperCase();
               console.log('[DeviceStatus] Filter: CCR approved site, using database deviceStatus:', {
                 siteCode,
@@ -828,14 +952,41 @@ export default function DeviceStatus() {
                 ccrStatus: offlineSite.ccrStatus
               });
             }
+            
             const normalizedStatus = normalize(deviceStatus);
             const isOffline = normalizedStatus === 'offline';
-            // If CCR has approved and deviceStatus is 'ONLINE', exclude from list (it's resolved and no longer offline)
+            
+            // CRITICAL FILTER: Exclude sites that are ONLINE in the latest data
+            // This ensures:
+            // - Yesterday OFFLINE + Today ONLINE = NOT shown in the list
+            // - Yesterday OFFLINE + Today OFFLINE = shown in the list
+            
+            // DEBUG: Log status for specific site code
+            if (siteCode === '3W2668') {
+              console.log('[DeviceStatus] DEBUG - Site 3W2668 status check:', {
+                siteCode,
+                deviceStatus,
+                normalizedStatus,
+                isOffline,
+                mergedDeviceStatusColumn,
+                rawValue: mergedDeviceStatusColumn ? row[mergedDeviceStatusColumn] : 'N/A'
+              });
+            }
+            
+            if (!isOffline) {
+              // Log exclusion of ONLINE sites for debugging
+              if (normalizedStatus === 'online' && debugCount < 10) {
+                console.log('[DeviceStatus] Filter: Excluding site (latest status is ONLINE):', siteCode);
+                debugCount++;
+              }
+              return false; // Don't show sites that are ONLINE in the latest upload
+            }
+            
+            // Additional check: If CCR has approved and deviceStatus is 'ONLINE', exclude from list
             if (offlineSite?.ccrStatus === 'Approved' && normalizedStatus === 'online') {
               console.log('[DeviceStatus] Filter: Excluding site (CCR approved, device is ONLINE):', siteCode);
-              return false; // Don't show sites that are ONLINE after CCR approval
+              return false;
             }
-            if (!isOffline) return false;
             
             // Filter 2: NO OF DAYS OFFLINE >= 2
             const noOfDaysOfflineValue = mergedNoOfDaysOfflineColumn ? row[mergedNoOfDaysOfflineColumn] : null;
