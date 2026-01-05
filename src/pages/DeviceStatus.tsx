@@ -534,13 +534,9 @@ export default function DeviceStatus() {
               cachedOnlineOfflineHeaders = cachedOnlineOfflineData.headers && cachedOnlineOfflineData.headers.length 
                 ? cachedOnlineOfflineData.headers 
                 : (cachedOnlineOfflineRows[0] ? Object.keys(cachedOnlineOfflineRows[0]) : []);
-              
-              const onlineOfflineData = cachedOnlineOfflineData;
-              const onlineOfflineRows = cachedOnlineOfflineRows;
-              const onlineOfflineHeaders = cachedOnlineOfflineHeaders;
 
               // Find SITE CODE column in ONLINE-OFFLINE file
-              const onlineOfflineSiteCodeHeader = onlineOfflineHeaders.find((h: string) => {
+              const onlineOfflineSiteCodeHeader = cachedOnlineOfflineHeaders.find((h: string) => {
                 const n = normalize(h);
                 return n === 'sitecode' || n === 'site_code' || n === 'site code';
               });
@@ -583,7 +579,7 @@ export default function DeviceStatus() {
               
               // Find all date columns with their indices
               const dateColumns: Array<{ name: string; date: Date; index: number }> = [];
-              onlineOfflineHeaders.forEach((header: string, index: number) => {
+              cachedOnlineOfflineHeaders.forEach((header: string, index: number) => {
                 const date = parseDateFromColumnName(header);
                 if (date) {
                   dateColumns.push({ name: header, date, index });
@@ -604,8 +600,8 @@ export default function DeviceStatus() {
                 console.log('[DeviceStatus] Most recent date:', dateColumns[0].name, 'at index', mostRecentDateIndex);
                 
                 // Look for DEVICE STATUS column after this date column
-                for (let i = mostRecentDateIndex + 1; i < onlineOfflineHeaders.length; i++) {
-                  const header = onlineOfflineHeaders[i];
+                for (let i = mostRecentDateIndex + 1; i < cachedOnlineOfflineHeaders.length; i++) {
+                  const header = cachedOnlineOfflineHeaders[i];
                   const n = normalize(header);
                   
                   // Stop if we hit another date column
@@ -641,7 +637,7 @@ export default function DeviceStatus() {
               
               // Fallback: If we couldn't find columns after latest date, use the first occurrence
               if (!deviceStatusHeader) {
-                deviceStatusHeader = onlineOfflineHeaders.find((h: string) => {
+                deviceStatusHeader = cachedOnlineOfflineHeaders.find((h: string) => {
                   const n = normalize(h);
                   return n === 'device status' ||
                          n === 'device_status' ||
@@ -652,7 +648,7 @@ export default function DeviceStatus() {
               }
               
               if (!noOfDaysOfflineHeader) {
-                noOfDaysOfflineHeader = onlineOfflineHeaders.find((h: string) => {
+                noOfDaysOfflineHeader = cachedOnlineOfflineHeaders.find((h: string) => {
                   const n = normalize(h);
                   return n === 'no of days offline' ||
                          n === 'no_of_days_offline' ||
@@ -662,7 +658,7 @@ export default function DeviceStatus() {
                 });
               }
 
-              const attributeHeader = onlineOfflineHeaders.find((h: string) => {
+              const attributeHeader = cachedOnlineOfflineHeaders.find((h: string) => {
                 const n = normalize(h);
                 return n === 'attribute' || n === 'attributes';
               });
@@ -692,7 +688,7 @@ export default function DeviceStatus() {
                 // Create a map of ONLINE-OFFLINE data by SITE CODE (same as MY OFFLINE SITES)
                 const onlineOfflineMap = new Map<string, any>();
                 
-                onlineOfflineRows.forEach((row: any) => {
+                cachedOnlineOfflineRows.forEach((row: any) => {
                   const siteCode = String(row[onlineOfflineSiteCodeHeader] || '').trim().toUpperCase();
                   if (siteCode) {
                     // If multiple rows exist for same SITE CODE, keep the latest one
@@ -955,11 +951,7 @@ export default function DeviceStatus() {
             
             const normalizedStatus = normalize(deviceStatus);
             const isOffline = normalizedStatus === 'offline';
-            
-            // CRITICAL FILTER: Exclude sites that are ONLINE in the latest data
-            // This ensures:
-            // - Yesterday OFFLINE + Today ONLINE = NOT shown in the list
-            // - Yesterday OFFLINE + Today OFFLINE = shown in the list
+            const isOnline = normalizedStatus === 'online';
             
             // DEBUG: Log status for specific site code
             if (siteCode === '3W2668') {
@@ -968,14 +960,19 @@ export default function DeviceStatus() {
                 deviceStatus,
                 normalizedStatus,
                 isOffline,
+                isOnline,
                 mergedDeviceStatusColumn,
                 rawValue: mergedDeviceStatusColumn ? row[mergedDeviceStatusColumn] : 'N/A'
               });
             }
             
+            // CRITICAL FILTER: Exclude sites that are ONLINE in the latest data
+            // This ensures:
+            // - Yesterday OFFLINE + Today ONLINE = NOT shown in the list
+            // - Yesterday OFFLINE + Today OFFLINE = shown in the list
             if (!isOffline) {
               // Log exclusion of ONLINE sites for debugging
-              if (normalizedStatus === 'online' && debugCount < 10) {
+              if (isOnline && debugCount < 10) {
                 console.log('[DeviceStatus] Filter: Excluding site (latest status is ONLINE):', siteCode);
                 debugCount++;
               }
@@ -983,7 +980,8 @@ export default function DeviceStatus() {
             }
             
             // Additional check: If CCR has approved and deviceStatus is 'ONLINE', exclude from list
-            if (offlineSite?.ccrStatus === 'Approved' && normalizedStatus === 'online') {
+            // (This check is redundant as we already checked isOffline above, but kept for clarity)
+            if (offlineSite?.ccrStatus === 'Approved' && isOnline) {
               console.log('[DeviceStatus] Filter: Excluding site (CCR approved, device is ONLINE):', siteCode);
               return false;
             }
