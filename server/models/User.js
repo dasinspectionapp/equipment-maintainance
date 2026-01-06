@@ -87,6 +87,15 @@ const userSchema = new mongoose.Schema({
     ],
     trim: true
   },
+  agencyCode: {
+    type: String,
+    trim: true,
+    uppercase: true
+  },
+  agencyName: {
+    type: String,
+    trim: true
+  },
   mappedTo: {
     type: [String],
     enum: ['Equipment Maintenance', 'Equipment Survey'],

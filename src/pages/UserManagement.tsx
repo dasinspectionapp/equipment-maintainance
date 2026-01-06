@@ -2,6 +2,13 @@ import { useState, useEffect } from 'react';
 import BackButton from '../components/BackButton';
 import { API_BASE } from '../utils/api';
 
+interface Agency {
+  _id: string;
+  agencyCode: string;
+  agencyName: string;
+  status: string;
+}
+
 interface User {
   _id: string;
   userId: string;
@@ -17,6 +24,9 @@ interface User {
   division?: string;
   circle?: string;
   subdivision?: string;
+  vendor?: string;
+  agencyCode?: string;
+  agencyName?: string;
   adminAllowsTotp?: boolean;
   totpEnabled?: boolean;
 }
@@ -33,6 +43,8 @@ export default function UserManagement() {
   const [editUser, setEditUser] = useState<Partial<User>>({});
   const [totpStatuses, setTotpStatuses] = useState<Record<string, { adminAllowsTotp: boolean; totpEnabled: boolean }>>({});
   const [isLoadingTotp, setIsLoadingTotp] = useState(false);
+  const [agencies, setAgencies] = useState<Agency[]>([]);
+  const [loadingAgencies, setLoadingAgencies] = useState(false);
   
   const applications = [
     'Equipment Maintenance',
@@ -48,6 +60,12 @@ export default function UserManagement() {
       fetchTotpStatuses();
     }
   }, [users]);
+
+  useEffect(() => {
+    if (showEditModal && editUser.role === 'AMC') {
+      fetchAgencies();
+    }
+  }, [showEditModal, editUser.role]);
 
   const fetchTotpStatuses = async () => {
     try {
@@ -85,6 +103,44 @@ export default function UserManagement() {
       }
     } catch (error) {
       console.error('Error fetching TOTP statuses:', error);
+    }
+  };
+
+  const fetchAgencies = async () => {
+    try {
+      setLoadingAgencies(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/api/masters/agencies?status=Active&limit=1000`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && Array.isArray(data.data)) {
+          // Filter only active agencies
+          const activeAgencies = data.data.filter((agency: Agency) => agency.status === 'Active');
+          setAgencies(activeAgencies);
+        }
+      } else {
+        console.error('Failed to fetch agencies');
+      }
+    } catch (error) {
+      console.error('Error fetching agencies:', error);
+    } finally {
+      setLoadingAgencies(false);
+    }
+  };
+
+  const handleAgencySelect = (agencyId: string) => {
+    const selectedAgency = agencies.find(agency => agency._id === agencyId);
+    if (selectedAgency) {
+      setEditUser(prev => ({
+        ...prev,
+        agencyCode: selectedAgency.agencyCode,
+        agencyName: selectedAgency.agencyName
+      }));
     }
   };
 
@@ -279,7 +335,10 @@ export default function UserManagement() {
           designation: editUser.designation,
           division: editUser.division,
           circle: editUser.circle,
-          subdivision: editUser.subdivision
+          subdivision: editUser.subdivision,
+          vendor: editUser.vendor,
+          agencyCode: editUser.agencyCode,
+          agencyName: editUser.agencyName
         })
       });
 
@@ -563,6 +622,15 @@ export default function UserManagement() {
                   Role
                 </th>
                 <th className="px-6 py-3 text-left text-sm font-bold text-white uppercase tracking-wider border border-gray-300" style={{ position: 'sticky', top: 0, background: 'linear-gradient(to right, #2563eb, #1d4ed8)' }}>
+                  Vendor
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-bold text-white uppercase tracking-wider border border-gray-300" style={{ position: 'sticky', top: 0, background: 'linear-gradient(to right, #2563eb, #1d4ed8)' }}>
+                  Agency Code
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-bold text-white uppercase tracking-wider border border-gray-300" style={{ position: 'sticky', top: 0, background: 'linear-gradient(to right, #2563eb, #1d4ed8)' }}>
+                  Agency Name
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-bold text-white uppercase tracking-wider border border-gray-300" style={{ position: 'sticky', top: 0, background: 'linear-gradient(to right, #2563eb, #1d4ed8)' }}>
                   Status
                 </th>
                 <th className="px-6 py-3 text-left text-sm font-bold text-white uppercase tracking-wider border border-gray-300" style={{ position: 'sticky', top: 0, background: 'linear-gradient(to right, #2563eb, #1d4ed8)' }}>
@@ -607,6 +675,15 @@ export default function UserManagement() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 border border-gray-300">
                       {user.role}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 border border-gray-300">
+                      {user.role === 'AMC' ? (user.vendor || '-') : '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 border border-gray-300">
+                      {user.role === 'AMC' ? (user.agencyCode || '-') : '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 border border-gray-300">
+                      {user.role === 'AMC' ? (user.agencyName || '-') : '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap border border-gray-300">
                       {getStatusBadge(user.status, user.isActive)}
@@ -772,7 +849,7 @@ export default function UserManagement() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={9} className="px-6 py-4 text-center text-gray-500 border border-gray-300">
+                  <td colSpan={12} className="px-6 py-4 text-center text-gray-500 border border-gray-300">
                     {searchQuery ? 'No users match your search criteria' : 'No users found'}
                   </td>
                 </tr>
@@ -950,7 +1027,13 @@ export default function UserManagement() {
                   </label>
                   <select
                     value={editUser.role || ''}
-                    onChange={(e) => setEditUser({ ...editUser, role: e.target.value })}
+                    onChange={(e) => setEditUser({ 
+                      ...editUser, 
+                      role: e.target.value, 
+                      vendor: e.target.value !== 'AMC' ? '' : editUser.vendor,
+                      agencyCode: e.target.value !== 'AMC' ? '' : editUser.agencyCode,
+                      agencyName: e.target.value !== 'AMC' ? '' : editUser.agencyName
+                    })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                     required
                   >
@@ -958,8 +1041,88 @@ export default function UserManagement() {
                     <option value="Admin">Admin</option>
                     <option value="CCR">CCR</option>
                     <option value="Equipment">Equipment</option>
+                    <option value="AMC">AMC</option>
                     <option value="RTU/Communication">RTU/Communication</option>
+                    <option value="Planning">Planning</option>
+                    <option value="O&M">O&M</option>
                   </select>
+                </div>
+
+                <div>
+                  <label className={`block text-sm font-medium mb-1 ${editUser.role !== 'AMC' ? 'text-gray-500' : 'text-gray-700'}`}>
+                    Vendor {editUser.role === 'AMC' && <span className="text-red-500">*</span>}
+                  </label>
+                  <select
+                    value={editUser.vendor || ''}
+                    onChange={(e) => setEditUser({ ...editUser, vendor: e.target.value })}
+                    disabled={editUser.role !== 'AMC'}
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none ${
+                      editUser.role !== 'AMC' ? 'bg-gray-100 cursor-not-allowed text-gray-500' : ''
+                    }`}
+                  >
+                    <option value="">Select Vendor</option>
+                    <option value="Shrishaila Electricals(India Pvt ltd)">Shrishaila Electricals(India Pvt ltd)</option>
+                    <option value="Spectrum Consultants">Spectrum Consultants</option>
+                    <option value="Jyothi Electricals">Jyothi Electricals</option>
+                    <option value="Vendor1">Vendor1</option>
+                    <option value="Vendor2">Vendor2</option>
+                  </select>
+                </div>
+
+                <div className="col-span-2">
+                  <label className={`block text-sm font-medium mb-1 ${editUser.role !== 'AMC' ? 'text-gray-500' : 'text-gray-700'}`}>
+                    Select Agency {editUser.role === 'AMC' && <span className="text-red-500">*</span>}
+                  </label>
+                  <select
+                    value={editUser.agencyCode ? agencies.find(a => a.agencyCode === editUser.agencyCode)?._id || '' : ''}
+                    onChange={(e) => handleAgencySelect(e.target.value)}
+                    disabled={editUser.role !== 'AMC' || loadingAgencies}
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none ${
+                      editUser.role !== 'AMC' || loadingAgencies ? 'bg-gray-100 cursor-not-allowed text-gray-500' : ''
+                    }`}
+                  >
+                    <option value="">
+                      {loadingAgencies ? 'Loading agencies...' : agencies.length === 0 ? 'No active agencies available' : 'Select Agency'}
+                    </option>
+                    {agencies.map(agency => (
+                      <option key={agency._id} value={agency._id}>
+                        {agency.agencyName} ({agency.agencyCode})
+                      </option>
+                    ))}
+                  </select>
+                  {editUser.role === 'AMC' && !loadingAgencies && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      Agency Code and Agency Name will be auto-populated based on your selection
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className={`block text-sm font-medium mb-1 ${editUser.role !== 'AMC' ? 'text-gray-500' : 'text-gray-700'}`}>
+                    Agency Code {editUser.role === 'AMC' && <span className="text-red-500">*</span>}
+                  </label>
+                  <input
+                    type="text"
+                    value={editUser.agencyCode || ''}
+                    readOnly
+                    disabled
+                    placeholder={editUser.role === 'AMC' ? 'Auto-populated from agency selection' : 'Select AMC role to enable'}
+                    className="w-full px-3 py-2 border rounded-lg bg-gray-100 cursor-not-allowed text-gray-700 font-medium border-gray-300 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className={`block text-sm font-medium mb-1 ${editUser.role !== 'AMC' ? 'text-gray-500' : 'text-gray-700'}`}>
+                    Agency Name {editUser.role === 'AMC' && <span className="text-red-500">*</span>}
+                  </label>
+                  <input
+                    type="text"
+                    value={editUser.agencyName || ''}
+                    readOnly
+                    disabled
+                    placeholder={editUser.role === 'AMC' ? 'Auto-populated from agency selection' : 'Select AMC role to enable'}
+                    className="w-full px-3 py-2 border rounded-lg bg-gray-100 cursor-not-allowed text-gray-700 font-medium border-gray-300 outline-none"
+                  />
                 </div>
 
                 <div>

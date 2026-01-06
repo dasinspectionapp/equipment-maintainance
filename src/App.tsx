@@ -40,6 +40,12 @@ import SurveyMassUpload from './pages/SurveyMassUpload'
 import RaiseTicket from './pages/RaiseTicket'
 import TicketManagement from './pages/TicketManagement'
 import TicketStatus from './pages/TicketStatus'
+import ChecklistManagement from './pages/ChecklistManagement'
+import ChecklistForm from './pages/ChecklistForm'
+import AgencyMasterList from './pages/AgencyMasterList'
+import AgencyMasterForm from './pages/AgencyMasterForm'
+import RMUUpload from './pages/RMUUpload'
+import MaintenanceScheduler from './pages/MaintenanceScheduler'
 
 function App() {
   return (
@@ -63,6 +69,14 @@ function App() {
         <Route path="landing-page/carousel" element={<LandingPageCarousel />} />
         <Route path="landing-page/announcements" element={<LandingPageAnnouncements />} />
         <Route path="elibrary-admin" element={<ELibraryAdmin />} />
+        <Route path="checklist-management" element={<ChecklistManagement />} />
+        <Route path="checklist-form" element={<ChecklistForm />} />
+        <Route path="checklist-form/:id" element={<ChecklistForm />} />
+        <Route path="agency-master" element={<AgencyMasterList />} />
+        <Route path="agency-master/create" element={<AgencyMasterForm />} />
+        <Route path="agency-master/:mode/:id" element={<AgencyMasterForm />} />
+        <Route path="rmu-upload" element={<RMUUpload />} />
+        <Route path="maintenance-scheduler" element={<MaintenanceScheduler />} />
         {/* CCR-only routes */}
         <Route path="uploads" element={<Uploads />} />
         <Route path="upload" element={<Upload />} />

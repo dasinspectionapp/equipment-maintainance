@@ -35,7 +35,12 @@ import rtuTrackerApprovalRoutes from './routes/rtuTrackerApprovalRoutes.js';
 import approvalRoutes from './routes/approvalRoutes.js';
 import elibraryRoutes from './routes/elibraryRoutes.js';
 import ticketRoutes from './routes/ticketRoutes.js';
+import checklistRoutes from './routes/checklistRoutes.js';
+import agencyRoutes from './routes/agencyRoutes.js';
+import rmuRoutes from './routes/rmuRoutes.js';
+import schedulerRoutes from './routes/schedulerRoutes.js';
 import { getLocationsBySiteCodes } from './controllers/locationController.js';
+import { initializeScheduler } from './services/maintenanceScheduler.service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -154,6 +159,10 @@ app.post('/api/locations/by-site-codes', protect, getLocationsBySiteCodes);
 app.use('/api/landing', landingPageRoutes);
 app.use('/api/elibrary', elibraryRoutes);
 app.use('/api/tickets', ticketRoutes);
+app.use('/api/admin/checklists', checklistRoutes);
+app.use('/api/masters/agencies', agencyRoutes);
+app.use('/api/masters/rmu', rmuRoutes);
+app.use('/api/system', schedulerRoutes);
 
 // Error handling middleware
 app.use(notFound);
@@ -235,6 +244,13 @@ const startServer = async () => {
     
     if (mongoConnected) {
       console.log(`\n✓ MongoDB: Connected`);
+      
+      // Initialize Maintenance Scheduler
+      try {
+        initializeScheduler();
+      } catch (schedulerError) {
+        console.error('⚠️  Failed to initialize maintenance scheduler:', schedulerError.message);
+      }
     } else {
       console.log(`\n⚠ MongoDB: Not connected - some features may not work`);
       console.log(`⚠ Check MongoDB connection: ${process.env.MONGODB_URI?.replace(/:[^:@]*@/, ':****@') || 'MONGODB_URI not set'}`);

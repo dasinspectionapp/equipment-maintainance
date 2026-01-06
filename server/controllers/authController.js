@@ -34,6 +34,8 @@ export const registerUser = async (req, res) => {
       subDivision,
       sectionName,
       vendor,
+      agencyCode,
+      agencyName,
       mappedTo,
       password,
       retypePassword
@@ -91,12 +93,26 @@ export const registerUser = async (req, res) => {
       });
     }
 
-    // Validate vendor is required for AMC role
-    if (role === 'AMC' && (!vendor || vendor.trim() === '')) {
-      return res.status(400).json({
-        success: false,
-        error: 'Vendor is required for AMC role'
-      });
+    // Validate vendor, agencyCode, and agencyName are required for AMC role
+    if (role === 'AMC') {
+      if (!vendor || vendor.trim() === '') {
+        return res.status(400).json({
+          success: false,
+          error: 'Vendor is required for AMC role'
+        });
+      }
+      if (!agencyCode || agencyCode.trim() === '') {
+        return res.status(400).json({
+          success: false,
+          error: 'Agency Code is required for AMC role'
+        });
+      }
+      if (!agencyName || agencyName.trim() === '') {
+        return res.status(400).json({
+          success: false,
+          error: 'Agency Name is required for AMC role'
+        });
+      }
     }
 
     // Create user with pending status for admin approval
@@ -112,6 +128,8 @@ export const registerUser = async (req, res) => {
       subDivision: subDivision || [],
       sectionName: sectionName || '',
       vendor: vendor || undefined,
+      agencyCode: agencyCode || undefined,
+      agencyName: agencyName || undefined,
       mappedTo: [], // Will be set by admin during approval
       password,
       status: 'pending', // Set status as pending for admin approval

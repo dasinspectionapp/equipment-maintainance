@@ -60,3 +60,14 @@ export const authorize = (...roles) => {
   };
 };
 
+// Admin-only authorization
+export const adminOnly = (req, res, next) => {
+  if (req.user.role !== 'Admin') {
+    return res.status(403).json({
+      success: false,
+      error: 'Access denied. Admin privileges required.'
+    });
+  }
+  next();
+};
+

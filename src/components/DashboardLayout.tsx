@@ -231,6 +231,26 @@ export default function DashboardLayout() {
     ],
   };
 
+  // Masters menu for Admin
+  const mastersMenu: MenuItem = {
+    label: 'Masters',
+    icon: '📑',
+    children: [
+      { label: 'Checklist', path: '/dashboard/checklist-management', icon: '✓' },
+      { label: 'Agency Master', path: '/dashboard/agency-master', icon: '🏢' },
+      { label: 'RMU Upload', path: '/dashboard/rmu-upload', icon: '📤' },
+    ],
+  };
+
+  // System menu for Admin
+  const systemMenu: MenuItem = {
+    label: 'System',
+    icon: '⚙️',
+    children: [
+      { label: 'Maintenance Scheduler', path: '/dashboard/maintenance-scheduler', icon: '🔧' },
+    ],
+  };
+
   const adminMenu: MenuItem[] = [
     { label: 'Dashboard', path: '/dashboard', icon: '📊' },
     { label: 'User Management', path: '/dashboard/users', icon: '👥' },
@@ -241,6 +261,8 @@ export default function DashboardLayout() {
     { label: 'Approval Reset', path: '/dashboard/approval-reset', icon: '🔄' },
     { label: 'Tickets', path: '/dashboard/tickets', icon: '🎫' },
     surveyAdminMenu,
+    mastersMenu,
+    systemMenu,
     landingPageMenu,
   ];
 

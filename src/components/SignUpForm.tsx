@@ -1,7 +1,14 @@
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { API_BASE } from '../utils/api'
+
+interface Agency {
+  _id: string;
+  agencyCode: string;
+  agencyName: string;
+  status: string;
+}
 
 export default function SignUpForm() {
   const navigate = useNavigate()
@@ -17,6 +24,8 @@ export default function SignUpForm() {
     subDivision: [] as string[],
     sectionName: '',
     vendor: '',
+    agencyCode: '',
+    agencyName: '',
     password: '',
     retypePassword: '',
   });
@@ -25,6 +34,8 @@ export default function SignUpForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showRetypePassword, setShowRetypePassword] = useState(false);
+  const [agencies, setAgencies] = useState<Agency[]>([]);
+  const [loadingAgencies, setLoadingAgencies] = useState(false);
 
   const designations = [
     'System Admin',
@@ -78,13 +89,63 @@ export default function SignUpForm() {
     'Vendor2',
   ];
 
+  // Fetch active agencies when role is AMC
+  useEffect(() => {
+    if (formData.role === 'AMC') {
+      fetchAgencies();
+    }
+  }, [formData.role]);
+
+  const fetchAgencies = async () => {
+    try {
+      setLoadingAgencies(true);
+      // Use public endpoint for active agencies
+      const response = await fetch(`${API_BASE}/api/masters/agencies/active?status=Active&limit=1000`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Agencies fetched:', data);
+        if (data.success && Array.isArray(data.data)) {
+          // Filter only active agencies
+          const activeAgencies = data.data.filter((agency: Agency) => agency.status === 'Active');
+          console.log('Active agencies:', activeAgencies);
+          setAgencies(activeAgencies);
+          if (activeAgencies.length === 0) {
+            setErrors(prev => ({ ...prev, agency: 'No active agencies available. Please contact administrator.' }));
+          }
+        }
+      } else {
+        console.error('Failed to fetch agencies:', response.status);
+        setErrors(prev => ({ ...prev, agency: 'Unable to load agencies. Please try again later.' }));
+      }
+    } catch (error) {
+      console.error('Error fetching agencies:', error);
+      setErrors(prev => ({ ...prev, agency: 'Network error. Please check your connection.' }));
+    } finally {
+      setLoadingAgencies(false);
+    }
+  };
+
+  const handleAgencySelect = (agencyId: string) => {
+    const selectedAgency = agencies.find(agency => agency._id === agencyId);
+    if (selectedAgency) {
+      setFormData(prev => ({
+        ...prev,
+        agencyCode: selectedAgency.agencyCode,
+        agencyName: selectedAgency.agencyName
+      }));
+    }
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => {
       const updated = { ...prev, [name]: value };
-      // Clear vendor field if role changes away from AMC
+      // Clear AMC-specific fields if role changes away from AMC
       if (name === 'role' && value !== 'AMC') {
         updated.vendor = '';
+        updated.agencyCode = '';
+        updated.agencyName = '';
       }
       return updated;
     });
@@ -159,9 +220,14 @@ export default function SignUpForm() {
       newErrors.subDivision = 'Please select at least one SubDivision';
     }
 
-    // Vendor is required for AMC role
-    if (formData.role === 'AMC' && !formData.vendor.trim()) {
-      newErrors.vendor = 'Vendor is required for AMC role';
+    // Vendor and Agency are required for AMC role
+    if (formData.role === 'AMC') {
+      if (!formData.vendor.trim()) {
+        newErrors.vendor = 'Vendor is required for AMC role';
+      }
+      if (!formData.agencyCode.trim() || !formData.agencyName.trim()) {
+        newErrors.agency = 'Please select an Agency';
+      }
     }
 
     const passwordError = validatePassword(formData.password);
@@ -207,6 +273,8 @@ export default function SignUpForm() {
           subDivision: formData.subDivision,
           sectionName: formData.sectionName,
           vendor: formData.vendor,
+          agencyCode: formData.agencyCode,
+          agencyName: formData.agencyName,
           password: formData.password,
           retypePassword: formData.retypePassword
         }),
@@ -251,6 +319,8 @@ export default function SignUpForm() {
       subDivision: [],
       sectionName: '',
       vendor: '',
+      agencyCode: '',
+      agencyName: '',
       password: '',
       retypePassword: '',
     });
@@ -474,6 +544,78 @@ export default function SignUpForm() {
                 ))}
               </select>
               {errors.vendor && <p className="mt-1 text-sm text-red-600">{errors.vendor}</p>}
+            </div>
+          </div>
+
+          {/* Agency Selection - Only enabled for AMC role */}
+          <div>
+            <label htmlFor="agency" className={`block text-sm font-medium mb-2 ${formData.role !== 'AMC' ? 'text-gray-500' : 'text-gray-700'}`}>
+              Select Agency {formData.role === 'AMC' && <span className="text-red-500">*</span>}
+            </label>
+            <select
+              id="agency"
+              name="agency"
+              value={formData.agencyCode ? agencies.find(a => a.agencyCode === formData.agencyCode)?._id || '' : ''}
+              onChange={(e) => handleAgencySelect(e.target.value)}
+              disabled={formData.role !== 'AMC' || loadingAgencies}
+              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-electrical-blue focus:border-transparent ${
+                formData.role !== 'AMC' || loadingAgencies
+                  ? 'bg-gray-100 cursor-not-allowed text-gray-500 border-gray-300'
+                  : errors.agency
+                  ? 'border-red-500 bg-white'
+                  : 'border-gray-300 bg-white'
+              }`}
+            >
+              <option value="">
+                {loadingAgencies ? 'Loading agencies...' : agencies.length === 0 ? 'No active agencies available' : 'Select Agency'}
+              </option>
+              {agencies.map(agency => (
+                <option key={agency._id} value={agency._id}>
+                  {agency.agencyName} ({agency.agencyCode})
+                </option>
+              ))}
+            </select>
+            {formData.role === 'AMC' && !loadingAgencies && (
+              <p className="mt-1 text-xs text-gray-500">
+                Agency Code and Agency Name will be auto-populated based on your selection
+              </p>
+            )}
+            {errors.agency && <p className="mt-1 text-sm text-red-600">{errors.agency}</p>}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Agency Code - Read-only field */}
+            <div>
+              <label htmlFor="agencyCode" className={`block text-sm font-medium mb-2 ${formData.role !== 'AMC' ? 'text-gray-500' : 'text-gray-700'}`}>
+                Agency Code {formData.role === 'AMC' && <span className="text-red-500">*</span>}
+              </label>
+              <input
+                type="text"
+                id="agencyCode"
+                name="agencyCode"
+                value={formData.agencyCode}
+                readOnly
+                disabled
+                placeholder={formData.role === 'AMC' ? 'Auto-populated from agency selection' : 'Select AMC role to enable'}
+                className="w-full px-4 py-3 border rounded-lg bg-gray-100 cursor-not-allowed text-gray-700 font-medium border-gray-300"
+              />
+            </div>
+
+            {/* Agency Name - Read-only field */}
+            <div>
+              <label htmlFor="agencyName" className={`block text-sm font-medium mb-2 ${formData.role !== 'AMC' ? 'text-gray-500' : 'text-gray-700'}`}>
+                Agency Name {formData.role === 'AMC' && <span className="text-red-500">*</span>}
+              </label>
+              <input
+                type="text"
+                id="agencyName"
+                name="agencyName"
+                value={formData.agencyName}
+                readOnly
+                disabled
+                placeholder={formData.role === 'AMC' ? 'Auto-populated from agency selection' : 'Select AMC role to enable'}
+                className="w-full px-4 py-3 border rounded-lg bg-gray-100 cursor-not-allowed text-gray-700 font-medium border-gray-300"
+              />
             </div>
           </div>
 
