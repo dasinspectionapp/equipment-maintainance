@@ -37,7 +37,6 @@ interface UploadResponse {
 
 export default function RMUUpload() {
   const [file, setFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [uploadResponse, setUploadResponse] = useState<UploadResponse | null>(null);
@@ -298,7 +297,7 @@ export default function RMUUpload() {
           <div className="flex gap-4">
             <button
               onClick={handleUpload}
-              disabled={!file || parsing || uploading}
+              disabled={!file || parsing}
               className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {parsing ? (
