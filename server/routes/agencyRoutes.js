@@ -60,4 +60,3 @@ router.patch('/:id/status', updateAgencyStatus);
 router.delete('/:id', deleteAgency);
 
 export default router;
-

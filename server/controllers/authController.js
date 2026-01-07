@@ -96,10 +96,10 @@ export const registerUser = async (req, res) => {
     // Validate vendor, agencyCode, and agencyName are required for AMC role
     if (role === 'AMC') {
       if (!vendor || vendor.trim() === '') {
-        return res.status(400).json({
-          success: false,
-          error: 'Vendor is required for AMC role'
-        });
+      return res.status(400).json({
+        success: false,
+        error: 'Vendor is required for AMC role'
+      });
       }
       if (!agencyCode || agencyCode.trim() === '') {
         return res.status(400).json({
@@ -1297,4 +1297,3 @@ export const logout = async (req, res) => {
     });
   }
 };
-

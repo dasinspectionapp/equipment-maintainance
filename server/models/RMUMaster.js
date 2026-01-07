@@ -147,4 +147,3 @@ rmuMasterSchema.index({ circle: 1, division: 1, subDivision: 1 });
 const RMUMaster = mongoose.models.RMUMaster || mongoose.model('RMUMaster', rmuMasterSchema);
 
 export default RMUMaster;
-

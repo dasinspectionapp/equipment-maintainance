@@ -440,4 +440,3 @@ export const deleteRMU = async (req, res) => {
     });
   }
 };
-
