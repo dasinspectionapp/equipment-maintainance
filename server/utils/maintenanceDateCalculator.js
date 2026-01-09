@@ -119,6 +119,30 @@ export const isOverdue = (dueDate) => {
 };
 
 /**
+ * Calculate the next future maintenance date from a starting date
+ * If the starting date is in the past, advance it by frequency until it's in the future
+ * @param {Date} startDate - Starting maintenance date
+ * @param {String} frequency - Maintenance frequency
+ * @returns {Date} - Next future maintenance date
+ */
+export const calculateNextFutureMaintenance = (startDate, frequency) => {
+  if (!startDate || !frequency) {
+    throw new Error('Start date and frequency are required');
+  }
+
+  let nextDate = new Date(startDate);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  // Keep advancing the date by frequency until it's in the future
+  while (nextDate <= today) {
+    nextDate = calculateNextMaintenanceDate(nextDate, frequency);
+  }
+  
+  return nextDate;
+};
+
+/**
  * Get frequency options
  * @returns {Array} - Array of frequency options
  */

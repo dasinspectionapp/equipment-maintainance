@@ -16,7 +16,7 @@ const maintenanceTaskSchema = new mongoose.Schema(
     },
     checklistId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'ChecklistMaster',
+      ref: 'Checklist',
       required: [true, 'Checklist ID is required']
     },
     maintenanceType: {
@@ -38,7 +38,7 @@ const maintenanceTaskSchema = new mongoose.Schema(
     status: {
       type: String,
       required: [true, 'Status is required'],
-      enum: ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'OVERDUE', 'CANCELLED'],
+      enum: ['PENDING', 'IN_PROGRESS', 'SUBMITTED', 'COMPLETED', 'OVERDUE', 'CANCELLED'],
       default: 'PENDING',
       index: true
     },

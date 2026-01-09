@@ -173,7 +173,12 @@ export default function DashboardLayout() {
 
   // Construct Equipment Maintenance menu items based on role
   const equipmentMaintenanceItems = (() => {
-    if (isOM || isAMC) {
+    if (isAMC) {
+      const offlineSites = baseEquipmentMaintenanceItems.filter(item => item.label === 'MY OFFLINE SITES');
+      const myTasks = { label: 'ROUTINE TASKS', path: '/dashboard/amc/tasks', icon: '📋' };
+      return [...offlineSites, myTasks];
+    }
+    if (isOM) {
       return baseEquipmentMaintenanceItems.filter(item => item.label === 'MY OFFLINE SITES');
     }
     if (isEquipmentOnly) {

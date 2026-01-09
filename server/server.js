@@ -39,6 +39,7 @@ import checklistRoutes from './routes/checklistRoutes.js';
 import agencyRoutes from './routes/agencyRoutes.js';
 import rmuRoutes from './routes/rmuRoutes.js';
 import schedulerRoutes from './routes/schedulerRoutes.js';
+import amcRoutes from './routes/amcRoutes.js';
 import { getLocationsBySiteCodes } from './controllers/locationController.js';
 import { initializeScheduler } from './services/maintenanceScheduler.service.js';
 
@@ -163,6 +164,7 @@ app.use('/api/admin/checklists', checklistRoutes);
 app.use('/api/masters/agencies', agencyRoutes);
 app.use('/api/masters/rmu', rmuRoutes);
 app.use('/api/system', schedulerRoutes);
+app.use('/api/amc', amcRoutes);
 
 // Error handling middleware
 app.use(notFound);

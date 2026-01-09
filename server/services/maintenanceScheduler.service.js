@@ -3,7 +3,7 @@ import RMUMaster from '../models/RMUMaster.js';
 import AgencyMaster from '../models/AgencyMaster.js';
 import MaintenanceTask from '../models/MaintenanceTask.js';
 import SchedulerLog from '../models/SchedulerLog.js';
-import { calculateNextMaintenanceDate, calculateDueDate, isDateDue } from '../utils/maintenanceDateCalculator.js';
+import { calculateNextMaintenanceDate, calculateNextFutureMaintenance, calculateDueDate, isDateDue } from '../utils/maintenanceDateCalculator.js';
 
 let schedulerTask = null;
 let isSchedulerRunning = false;
@@ -43,14 +43,35 @@ export const runMaintenanceScheduler = async (triggeredBy = 'SYSTEM', triggerTyp
       rmusProcessed++;
       
       try {
-        // Initialize nextMaintenanceDate if not set
+        // Initialize or calculate nextMaintenanceDate
         if (!rmu.nextMaintenanceDate) {
-          rmu.nextMaintenanceDate = rmu.maintenanceStartingDate;
+          // If no next date is set, calculate the next future maintenance date from the starting date
+          rmu.nextMaintenanceDate = calculateNextFutureMaintenance(
+            rmu.maintenanceStartingDate,
+            rmu.maintenanceFrequency
+          );
+          
+          // Update the RMU with the calculated next date
+          await RMUMaster.findByIdAndUpdate(rmu._id, {
+            nextMaintenanceDate: rmu.nextMaintenanceDate
+          });
+          
+          console.log(`🔄 RMU ${rmu.siteCode} - Calculated next maintenance date: ${new Date(rmu.nextMaintenanceDate).toLocaleDateString()}`);
         }
 
-        // Check if maintenance is due
-        if (!isDateDue(rmu.nextMaintenanceDate)) {
-          console.log(`⏰ RMU ${rmu.siteCode} - Not due yet (Next: ${new Date(rmu.nextMaintenanceDate).toLocaleDateString()})`);
+        // Check if maintenance is due (create task 14 days in advance)
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const scheduledDate = new Date(rmu.nextMaintenanceDate);
+        scheduledDate.setHours(0, 0, 0, 0);
+        
+        // Calculate the task creation date (14 days before scheduled date)
+        const taskCreationDate = new Date(scheduledDate);
+        taskCreationDate.setDate(taskCreationDate.getDate() - 14);
+        
+        if (today < taskCreationDate) {
+          console.log(`⏰ RMU ${rmu.siteCode} - Not due yet (Next: ${scheduledDate.toLocaleDateString()})`);
           tasksSkipped++;
           continue;
         }
@@ -96,15 +117,15 @@ export const runMaintenanceScheduler = async (triggeredBy = 'SYSTEM', triggerTyp
         }
 
         // Create Maintenance Task
-        const scheduledDate = new Date(rmu.nextMaintenanceDate);
-        const dueDate = calculateDueDate(scheduledDate, 7); // 7 days grace period
+        const taskScheduledDate = new Date(rmu.nextMaintenanceDate);
+        const dueDate = calculateDueDate(taskScheduledDate, 7); // 7 days grace period
 
         const newTask = await MaintenanceTask.create({
           rmuId: rmu._id,
           agencyId: agency._id,
           checklistId: checklist._id,
           maintenanceType: 'Routine',
-          scheduledDate: scheduledDate,
+          scheduledDate: taskScheduledDate,
           dueDate: dueDate,
           status: 'PENDING',
           siteCode: rmu.siteCode,
@@ -113,11 +134,11 @@ export const runMaintenanceScheduler = async (triggeredBy = 'SYSTEM', triggerTyp
         });
 
         // Update RMU with next maintenance date
-        const nextDate = calculateNextMaintenanceDate(scheduledDate, rmu.maintenanceFrequency);
+        const nextDate = calculateNextMaintenanceDate(taskScheduledDate, rmu.maintenanceFrequency);
         
         await RMUMaster.findByIdAndUpdate(rmu._id, {
           nextMaintenanceDate: nextDate,
-          lastMaintenanceScheduled: scheduledDate
+          lastMaintenanceScheduled: taskScheduledDate
         });
 
         tasksCreated++;
@@ -201,19 +222,24 @@ export const runMaintenanceScheduler = async (triggeredBy = 'SYSTEM', triggerTyp
  * @returns {Object|null}
  */
 const findMatchingChecklist = async (equipmentType) => {
-  // TODO: Adjust based on your ChecklistMaster schema
-  // For now, returning null - needs actual implementation
   try {
-    // Example:
-    // const Checklist = mongoose.model('ChecklistMaster');
-    // return await Checklist.findOne({
-    //   equipmentType: equipmentType,
-    //   maintenanceType: 'Routine',
-    //   status: 'Active'
-    // }).lean();
+    // Import Checklist model dynamically
+    const Checklist = (await import('../models/Checklist.js')).default;
     
-    // Placeholder: Return mock checklist ID
-    return { _id: '000000000000000000000000' }; // Replace with actual logic
+    // Find active ROUTINE checklist for the equipment type
+    const checklist = await Checklist.findOne({
+      equipmentType: equipmentType,
+      maintenanceType: 'ROUTINE',
+      status: 'ACTIVE'
+    }).lean();
+    
+    if (checklist) {
+      console.log(`   ✓ Found checklist: ${checklist.checklistName} for ${equipmentType}`);
+    } else {
+      console.log(`   ✗ No checklist found for ${equipmentType}`);
+    }
+    
+    return checklist;
   } catch (error) {
     console.error('Error finding checklist:', error);
     return null;

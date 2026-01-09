@@ -46,6 +46,8 @@ import AgencyMasterList from './pages/AgencyMasterList'
 import AgencyMasterForm from './pages/AgencyMasterForm'
 import RMUUpload from './pages/RMUUpload'
 import MaintenanceScheduler from './pages/MaintenanceScheduler'
+import AMCTasks from './pages/AMCTasks'
+import AMCTaskDetail from './pages/AMCTaskDetail'
 
 function App() {
   return (
@@ -77,6 +79,9 @@ function App() {
         <Route path="agency-master/:mode/:id" element={<AgencyMasterForm />} />
         <Route path="rmu-upload" element={<RMUUpload />} />
         <Route path="maintenance-scheduler" element={<MaintenanceScheduler />} />
+        {/* AMC routes */}
+        <Route path="amc/tasks" element={<AMCTasks />} />
+        <Route path="amc/tasks/:taskId" element={<AMCTaskDetail />} />
         {/* CCR-only routes */}
         <Route path="uploads" element={<Uploads />} />
         <Route path="upload" element={<Upload />} />
