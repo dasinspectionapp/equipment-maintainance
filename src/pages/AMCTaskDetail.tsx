@@ -102,7 +102,7 @@ export default function AMCTaskDetail() {
         }
         setLoading(false);
       })
-      .catch((err) => {
+      .catch(() => {
         setError('Failed to load task details');
         setLoading(false);
       });
@@ -145,8 +145,8 @@ export default function AMCTaskDetail() {
         delete newErrors[`${key}_photo`];
         return newErrors;
       });
-    } catch (err) {
-      console.error('Image compression failed:', err);
+    } catch (error) {
+      console.error('Image compression failed:', error);
       alert('Failed to process image. Please try a smaller image or different format (JPEG/PNG recommended).');
     }
   };
@@ -202,7 +202,8 @@ export default function AMCTaskDetail() {
         setError(data.error || 'Failed to submit checklist');
         alert(data.error || 'Failed to submit checklist');
       }
-    } catch (err) {
+    } catch (error) {
+      console.error('Submit error:', error);
       setError('Failed to submit checklist');
       alert('Failed to submit checklist. Please try again.');
     } finally {
@@ -389,7 +390,7 @@ export default function AMCTaskDetail() {
                         type="file"
                         accept="image/*"
                         capture="environment"
-                        ref={(el) => (fileInputRefs.current[param.key] = el)}
+                        ref={(el) => { fileInputRefs.current[param.key] = el; }}
                         onChange={(e) => handlePhotoChange(param.key, e.target.files?.[0] || null)}
                         className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                       />
