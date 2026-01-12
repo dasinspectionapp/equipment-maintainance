@@ -15,7 +15,9 @@ export const getAMCTasks = async (req, res) => {
     const formatted = tasks.map(t => ({ 
       _id: t._id, 
       siteCode: t.rmuId?.siteCode || 'N/A', 
-      equipmentType: t.rmuId?.equipmentType || 'N/A', 
+      equipmentType: t.rmuId?.equipmentType || 'N/A',
+      division: t.rmuId?.division || 'N/A',
+      hrn: t.rmuId?.hrn || 'N/A',
       maintenanceType: t.maintenanceType, 
       checklistName: t.checklistId?.checklistName || 'N/A', 
       scheduledDate: t.scheduledDate, 

@@ -5,7 +5,9 @@ import { API_BASE } from '../utils/api';
 interface Task { 
   _id: string; 
   siteCode: string; 
-  equipmentType: string; 
+  equipmentType: string;
+  division: string;
+  hrn: string;
   maintenanceType: string; 
   checklistName: string; 
   dueDate: string; 
@@ -50,6 +52,8 @@ export default function AMCTasks() {
       const filtered = tasks.filter(task => 
         task.siteCode.toLowerCase().includes(query) ||
         task.equipmentType.toLowerCase().includes(query) ||
+        task.division.toLowerCase().includes(query) ||
+        task.hrn.toLowerCase().includes(query) ||
         task.maintenanceType.toLowerCase().includes(query) ||
         task.checklistName.toLowerCase().includes(query) ||
         task.status.toLowerCase().includes(query)
@@ -67,6 +71,14 @@ export default function AMCTasks() {
         // Add matching equipment types
         if (task.equipmentType.toLowerCase().includes(query)) {
           suggestionSet.add(task.equipmentType);
+        }
+        // Add matching divisions
+        if (task.division.toLowerCase().includes(query)) {
+          suggestionSet.add(task.division);
+        }
+        // Add matching HRNs
+        if (task.hrn.toLowerCase().includes(query)) {
+          suggestionSet.add(task.hrn);
         }
         // Add matching maintenance types
         if (task.maintenanceType.toLowerCase().includes(query)) {
@@ -111,7 +123,7 @@ export default function AMCTasks() {
           <div className="relative">
             <input
               type="text"
-              placeholder="🔍 Search by Site Code, Equipment Type, Status..."
+              placeholder="🔍 Search by Site Code, Division, HRN, Equipment Type, Status..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onFocus={() => searchQuery && suggestions.length > 0 && setShowSuggestions(true)}
@@ -196,8 +208,13 @@ export default function AMCTasks() {
                   task.isSubmitted ? 'bg-green-600' : 
                   task.isOverdue ? 'bg-red-600' : 'bg-blue-600'
                 }`}>
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-2xl font-bold text-white">{task.siteCode}</h3>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="text-2xl font-bold text-white">
+                        {task.siteCode} - {task.division || 'N/A'}
+                      </h3>
+                      <p className="text-white text-sm mt-1 font-medium">{task.hrn || 'N/A'}</p>
+                    </div>
                     {task.isSubmitted && (
                       <span className="px-3 py-1 bg-white text-green-700 text-xs font-bold rounded-full">
                         ✓ SUBMITTED
@@ -229,7 +246,7 @@ export default function AMCTasks() {
                       <span className="text-gray-600">{task.maintenanceType}</span>
                     </div>
                     
-                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <div className="flex items-center gap-2 text-sm text-gray-500 mt-2">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                       </svg>
