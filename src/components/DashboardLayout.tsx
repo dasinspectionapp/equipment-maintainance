@@ -175,7 +175,7 @@ export default function DashboardLayout() {
   const equipmentMaintenanceItems = (() => {
     if (isAMC) {
       const offlineSites = baseEquipmentMaintenanceItems.filter(item => item.label === 'MY OFFLINE SITES');
-      const myTasks = { label: 'ROUTINE TASKS', path: '/dashboard/amc/tasks', icon: '📋' };
+      const myTasks = { label: 'ROUTINE MAINTENANCE', path: '/dashboard/amc/tasks', icon: '📋' };
       return [...offlineSites, myTasks];
     }
     if (isOM) {
