@@ -1799,7 +1799,14 @@ export const getAllEquipmentOfflineSites = async (req, res) => {
     const { fileId, includeApproved } = req.query; // Optional filter by fileId, includeApproved flag
 
     // Build base query conditions
-    const queryConditions = [{ userId }];
+    // CRITICAL: Also include sites where originalUserId matches (for sites that were routed to other users)
+    // This ensures users can see remarks and photos for sites they originally created, even if routed
+    const queryConditions = [{
+      $or: [
+        { userId },  // Sites owned by current user
+        { originalUserId: userId }  // Sites originally created by current user (even if routed)
+      ]
+    }];
     if (fileId) {
       queryConditions.push({ fileId });
     }
@@ -1979,9 +1986,16 @@ export const getEquipmentOfflineSitesByFile = async (req, res) => {
     });
     
     // Use explicit $and to ensure fileId, userId, ccrStatus, and approval conditions are all applied
+    // CRITICAL: Also include sites where originalUserId matches (for sites that were routed to other users)
+    // This ensures users can see remarks and photos for sites they originally created, even if routed
     const queryConditions = [
       { fileId },
-      { userId },
+      {
+        $or: [
+          { userId },  // Sites owned by current user
+          { originalUserId: userId }  // Sites originally created by current user (even if routed)
+        ]
+      },
       {
         $or: [
           { ccrStatus: { $ne: 'Approved' } },      // Exclude 'Approved' - matches everything else
