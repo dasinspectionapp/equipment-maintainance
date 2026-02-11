@@ -954,7 +954,7 @@ export async function submitRouting(req, res, next) {
         ? `Site ${siteCode} has been routed to you. Type of Issue: ${typeOfIssue}`
         : `A new action has been routed to you. Type of Issue: ${typeOfIssue}`;
 
-      await Notification.create({
+      const notification = await Notification.create({
         userId: assignedUser.userId,
         title: notificationTitle,
         message: notificationMessage,
@@ -970,6 +970,27 @@ export async function submitRouting(req, res, next) {
           division
         }
       });
+
+      // Send FCM push notification
+      try {
+        const { sendFCMPushNotification } = await import('../services/fcmNotificationService.js');
+        await sendFCMPushNotification(
+          assignedUser.userId,
+          notificationTitle,
+          notificationMessage,
+          {
+            notificationId: notification._id.toString(),
+            category: 'maintenance',
+            link: '/dashboard/my-action',
+            application: 'Equipment Maintenance',
+            actionId: action._id.toString(),
+            siteCode: siteCode || '',
+          }
+        );
+      } catch (fcmError) {
+        console.error('Error sending FCM push notification for routing:', fcmError);
+        // Don't fail the action creation if FCM fails
+      }
     } catch (notifError) {
       // Log error but don't fail the action creation
       console.error('Error creating notification:', notifError);

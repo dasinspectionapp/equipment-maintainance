@@ -943,11 +943,33 @@ export const saveEquipmentOfflineSite = async (req, res) => {
                           }
                         }));
                         
-                        await Notification.insertMany(notifications);
+                        const createdNotifications = await Notification.insertMany(notifications);
                         console.log('[saveEquipmentOfflineSite] ✅ Notifications sent to all CCR users:', {
                           ccrUsersCount: allCCRUsers.length,
                           siteCode: siteCode.trim().toUpperCase()
                         });
+
+                        // Send FCM push notifications to all CCR users
+                        try {
+                          const { sendFCMPushNotificationToMultipleUsers } = await import('../services/fcmNotificationService.js');
+                          const userIds = allCCRUsers.map(user => user.userId);
+                          await sendFCMPushNotificationToMultipleUsers(
+                            userIds,
+                            'New CCR Resolution Approval Required',
+                            `Site ${siteCode.trim().toUpperCase()} requires CCR resolution approval.`,
+                            {
+                              notificationId: createdNotifications[0]?._id?.toString(),
+                              category: 'maintenance',
+                              link: '/dashboard/my-approvals',
+                              application: 'Equipment Maintenance',
+                              siteCode: siteCode.trim().toUpperCase(),
+                              approvalId: approval._id.toString(),
+                            }
+                          );
+                        } catch (fcmError) {
+                          console.error('[saveEquipmentOfflineSite] Error sending FCM push notifications:', fcmError);
+                          // Don't fail if FCM fails
+                        }
                       } catch (notifError) {
                         console.error('[saveEquipmentOfflineSite] Error sending notifications to CCR users:', notifError.message);
                       }
@@ -1166,11 +1188,33 @@ export const saveEquipmentOfflineSite = async (req, res) => {
                           }
                         }));
                         
-                        await Notification.insertMany(notifications);
+                        const createdNotifications = await Notification.insertMany(notifications);
                         console.log('[saveEquipmentOfflineSite] ✅ Notifications sent to all CCR users:', {
                           ccrUsersCount: allCCRUsersForNotif.length,
                           siteCode: siteCodeUpper
                         });
+
+                        // Send FCM push notifications to all CCR users
+                        try {
+                          const { sendFCMPushNotificationToMultipleUsers } = await import('../services/fcmNotificationService.js');
+                          const userIds = allCCRUsersForNotif.map(user => user.userId);
+                          await sendFCMPushNotificationToMultipleUsers(
+                            userIds,
+                            'New Resolution Approval Required',
+                            `Site ${siteCodeUpper} resolution requires CCR approval.`,
+                            {
+                              notificationId: createdNotifications[0]?._id?.toString(),
+                              category: 'approval',
+                              link: '/dashboard/my-approvals',
+                              application: 'Equipment Maintenance',
+                              siteCode: siteCodeUpper,
+                              approvalId: approval._id.toString(),
+                            }
+                          );
+                        } catch (fcmError) {
+                          console.error('[saveEquipmentOfflineSite] Error sending FCM push notifications:', fcmError);
+                          // Don't fail if FCM fails
+                        }
                         } catch (notifError) {
                           console.error('[saveEquipmentOfflineSite] Error sending notifications to CCR users:', notifError.message);
                         }
@@ -1372,11 +1416,33 @@ export const saveEquipmentOfflineSite = async (req, res) => {
                         }
                       }));
                       
-                      await Notification.insertMany(notifications);
+                      const createdNotifications = await Notification.insertMany(notifications);
                       console.log('[saveEquipmentOfflineSite] ✅ Notifications sent to all CCR users:', {
                         ccrUsersCount: allCCRUsersForNotif.length,
                         siteCode: siteCodeUpper
                       });
+
+                      // Send FCM push notifications to all CCR users
+                      try {
+                        const { sendFCMPushNotificationToMultipleUsers } = await import('../services/fcmNotificationService.js');
+                        const userIds = allCCRUsersForNotif.map(user => user.userId);
+                        await sendFCMPushNotificationToMultipleUsers(
+                          userIds,
+                          'New Resolution Approval Required',
+                          `Site ${siteCodeUpper} resolution requires CCR approval.`,
+                          {
+                            notificationId: createdNotifications[0]?._id?.toString(),
+                            category: 'approval',
+                            link: '/dashboard/my-approvals',
+                            application: 'Equipment Maintenance',
+                            siteCode: siteCodeUpper,
+                            approvalId: approval._id.toString(),
+                          }
+                        );
+                      } catch (fcmError) {
+                        console.error('[saveEquipmentOfflineSite] Error sending FCM push notifications:', fcmError);
+                        // Don't fail if FCM fails
+                      }
                     } catch (notifError) {
                       console.error('[saveEquipmentOfflineSite] Error sending notifications to CCR users:', notifError.message);
                     }
@@ -1526,11 +1592,33 @@ export const saveEquipmentOfflineSite = async (req, res) => {
                         }
                       }));
                       
-                      await Notification.insertMany(notifications);
+                      const createdNotifications = await Notification.insertMany(notifications);
                       console.log('[saveEquipmentOfflineSite] ✅ Notifications sent to all CCR users (fallback):', {
                         ccrUsersCount: allCCRUsersForNotif.length,
                         siteCode: siteCodeUpper
                       });
+
+                      // Send FCM push notifications to all CCR users
+                      try {
+                        const { sendFCMPushNotificationToMultipleUsers } = await import('../services/fcmNotificationService.js');
+                        const userIds = allCCRUsersForNotif.map(user => user.userId);
+                        await sendFCMPushNotificationToMultipleUsers(
+                          userIds,
+                          'New Resolution Approval Required',
+                          `Site ${siteCodeUpper} resolution requires CCR approval.`,
+                          {
+                            notificationId: createdNotifications[0]?._id?.toString(),
+                            category: 'approval',
+                            link: '/dashboard/my-approvals',
+                            application: 'Equipment Maintenance',
+                            siteCode: siteCodeUpper,
+                            approvalId: approval._id.toString(),
+                          }
+                        );
+                      } catch (fcmError) {
+                        console.error('[saveEquipmentOfflineSite] Error sending FCM push notifications:', fcmError);
+                        // Don't fail if FCM fails
+                      }
                     } catch (notifError) {
                       console.error('[saveEquipmentOfflineSite] Error sending notifications (fallback):', notifError.message);
                     }

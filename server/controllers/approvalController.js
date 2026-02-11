@@ -360,7 +360,7 @@ export const updateApprovalStatus = async (req, res) => {
 
                   // Send notification to CCR user
                   try {
-                    await Notification.create({
+                    const notification = await Notification.create({
                       userId: ccrUser.userId,
                       title: 'Resolution Approval Required',
                       message: approvalSiteCode
@@ -375,6 +375,29 @@ export const updateApprovalStatus = async (req, res) => {
                         originalActionId: action._id.toString()
                       }
                     });
+
+                    // Send FCM push notification
+                    try {
+                      const { sendFCMPushNotification } = await import('../services/fcmNotificationService.js');
+                      await sendFCMPushNotification(
+                        ccrUser.userId,
+                        'Resolution Approval Required',
+                        approvalSiteCode
+                          ? `Site ${approvalSiteCode} resolution requires your approval.`
+                          : 'A resolution requires your approval.',
+                        {
+                          notificationId: notification._id.toString(),
+                          category: 'maintenance',
+                          link: '/dashboard/my-approvals',
+                          application: 'Equipment Maintenance',
+                          actionId: ccrApprovalAction._id.toString(),
+                          siteCode: approvalSiteCode || '',
+                        }
+                      );
+                    } catch (fcmError) {
+                      console.error('[ApprovalController] Error sending FCM push notification:', fcmError);
+                      // Don't fail if FCM fails
+                    }
                   } catch (notifErr) {
                     console.error('[ApprovalController] Error creating notification:', notifErr);
                   }
