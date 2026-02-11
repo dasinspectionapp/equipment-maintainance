@@ -1,4 +1,5 @@
 import Notification from '../models/Notification.js';
+import { sendFCMPushNotification, sendFCMPushNotificationToMultipleUsers } from '../services/fcmNotificationService.js';
 
 // Get all notifications for a user
 export const getUserNotifications = async (req, res) => {
@@ -283,6 +284,20 @@ export const createNotification = async (req, res) => {
 
       const createdNotifications = await Notification.insertMany(notifications);
 
+      // Send FCM push notifications to all users
+      const userIds = userId;
+      await sendFCMPushNotificationToMultipleUsers(
+        userIds,
+        title,
+        message,
+        {
+          notificationId: createdNotifications[0]?._id?.toString(),
+          category: category || 'general',
+          link: link || '',
+          application: application || 'Distribution Automation System',
+        }
+      );
+
       return res.status(201).json({
         success: true,
         data: createdNotifications
@@ -300,6 +315,19 @@ export const createNotification = async (req, res) => {
       link,
       metadata: metadata || {}
     });
+
+    // Send FCM push notification
+    await sendFCMPushNotification(
+      userId,
+      title,
+      message,
+      {
+        notificationId: notification._id.toString(),
+        category: category || 'general',
+        link: link || '',
+        application: application || 'Distribution Automation System',
+      }
+    );
 
     res.status(201).json({
       success: true,

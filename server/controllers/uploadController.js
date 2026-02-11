@@ -115,8 +115,30 @@ async function sendUploadNotificationToEquipmentUsers(uploader, fileName, upload
     }));
 
     // Insert notifications
-    await Notification.insertMany(notifications);
+    const createdNotifications = await Notification.insertMany(notifications);
     console.log(`✅ Created ${notifications.length} notifications for file upload: ${fileName}`);
+
+    // Send FCM push notifications to all target users
+    try {
+      const { sendFCMPushNotificationToMultipleUsers } = await import('../services/fcmNotificationService.js');
+      const userIds = targetUsers.map(user => user.userId);
+      await sendFCMPushNotificationToMultipleUsers(
+        userIds,
+        title,
+        message,
+        {
+          category: 'upload',
+          link: '/dashboard/view-data',
+          application: 'Equipment Maintenance',
+          fileName: fileName,
+          uploadedBy: uploader.userId,
+        }
+      );
+      console.log(`✅ Sent FCM push notifications to ${userIds.length} users for file upload: ${fileName}`);
+    } catch (fcmError) {
+      console.error('Error sending FCM push notifications:', fcmError);
+      // Don't throw - notifications are already saved to database
+    }
   } catch (error) {
     console.error('Error sending upload notifications:', error);
     // Don't throw error - we don't want to fail the upload if notification fails
