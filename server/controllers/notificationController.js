@@ -83,11 +83,17 @@ export const getUnreadCount = async (req, res) => {
     if (application && application.trim() !== '') {
       const mappedApplication = applicationMap[application] || application;
       query.application = mappedApplication;
-      console.log(`[UnreadCount] Filtering by application: ${mappedApplication} for user: ${userId}`);
+      // Only log in development to reduce production log noise
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[UnreadCount] Filtering by application: ${mappedApplication} for user: ${userId}`);
+      }
     } else {
       // If no application provided, exclude notifications without application field
       query.application = { $exists: true, $ne: null };
-      console.log(`[UnreadCount] No application specified, excluding notifications without application field for user: ${userId}`);
+      // Only log in development to reduce production log noise
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[UnreadCount] No application specified, excluding notifications without application field for user: ${userId}`);
+      }
     }
 
     const unreadCount = await Notification.countDocuments(query);
