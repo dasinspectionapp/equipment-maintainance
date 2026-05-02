@@ -172,107 +172,108 @@ app.use('/api/fcm', fcmRoutes);
 app.use(notFound);
 app.use(errorHandler);
 
-// Start server function - waits for MongoDB connection
-const startServer = async () => {
+// Bind HTTP first so Docker /health works immediately; Mongo connects after (may take 30–60s).
+const logListenBanner = (PORT) => {
+  console.log(`\n${'='.repeat(60)}`);
+  console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+  console.log(`${'='.repeat(60)}`);
+  console.log(`\n✓ Server listening on 0.0.0.0:${PORT} (all network interfaces)`);
+  console.log(`\nServer accessible at:`);
+  console.log(`  - Local: http://localhost:${PORT}`);
+  console.log(`  - Local: http://127.0.0.1:${PORT}`);
+
+  const nets = os.networkInterfaces();
+  const addresses = [];
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name]) {
+      if (net.family === 'IPv4' && !net.internal) {
+        addresses.push({ interface: name, address: net.address });
+      }
+    }
+  }
+
+  if (addresses.length > 0) {
+    console.log(`\n  Global access (from other devices):`);
+    addresses.forEach(({ interface: iface, address }) => {
+      console.log(`  - http://${address}:${PORT} (${iface})`);
+    });
+  }
+
+  if (process.env.FRONTEND_URL) {
+    console.log(`\n  Frontend URL: ${process.env.FRONTEND_URL}`);
+  }
+
+  console.log(`\n  Health check: http://127.0.0.1:${PORT}/health`);
+  if (addresses.length > 0) {
+    console.log(`  Health check: http://${addresses[0].address}:${PORT}/health`);
+  }
+  console.log(`\n  (MongoDB connects in the background — /health is up first for Docker.)\n${'='.repeat(60)}\n`);
+};
+
+const connectMongoAndScheduler = async () => {
   let mongoConnected = false;
-  
   try {
-    // Wait for MongoDB connection
     console.log('=== Starting MongoDB Connection ===');
     await connectDB();
     console.log('=== MongoDB Connection Attempt Completed ===');
-    
-    // Wait a bit for connection to stabilize
+
     let retries = 0;
-    const maxRetries = 30; // 30 seconds total
+    const maxRetries = 30;
     while (mongoose.connection.readyState !== 1 && retries < maxRetries) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
       retries++;
       if (retries % 5 === 0) {
         console.log(`Waiting for MongoDB connection... (${retries}s, readyState: ${mongoose.connection.readyState})`);
       }
     }
-    
+
     if (mongoose.connection.readyState === 1) {
       mongoConnected = true;
       console.log('✓ MongoDB connection established');
     } else {
-      console.warn('⚠ MongoDB not connected, but starting server anyway...');
+      console.warn('⚠ MongoDB not connected, but server is already running...');
       console.warn('⚠ API endpoints may fail until MongoDB connects');
     }
   } catch (error) {
     console.error('Failed to connect to MongoDB:', error.message);
-    console.warn('⚠ Starting server anyway, but API endpoints may fail');
+    console.warn('⚠ API endpoints may fail until MongoDB connects');
   }
-  
-  // Start server regardless of MongoDB status
+
+  if (mongoConnected) {
+    console.log('✓ MongoDB: Connected');
+    try {
+      initializeScheduler();
+    } catch (schedulerError) {
+      console.error('⚠️  Failed to initialize maintenance scheduler:', schedulerError.message);
+    }
+  } else {
+    console.log('⚠ MongoDB: Not connected - some features may not work');
+    console.log(
+      `⚠ Check MongoDB connection: ${process.env.MONGODB_URI?.replace(/:[^:@]*@/, ':****@') || 'MONGODB_URI not set'}`,
+    );
+  }
+};
+
+const startServer = async () => {
   const PORT = process.env.PORT || 5000;
-  
-  // Ensure server starts even if there are errors
+
   try {
-    const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log(`\n${'='.repeat(60)}`);
-    console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
-    console.log(`${'='.repeat(60)}`);
-    console.log(`\n✓ Server listening on 0.0.0.0:${PORT} (all network interfaces)`);
-    console.log(`\nServer accessible at:`);
-    console.log(`  - Local: http://localhost:${PORT}`);
-    console.log(`  - Local: http://127.0.0.1:${PORT}`);
-    
-    // Get network IP addresses for global access
-    const nets = os.networkInterfaces();
-    const addresses = [];
-    for (const name of Object.keys(nets)) {
-      for (const net of nets[name]) {
-        if (net.family === 'IPv4' && !net.internal) {
-          addresses.push({ interface: name, address: net.address });
-        }
-      }
-    }
-    
-    if (addresses.length > 0) {
-      console.log(`\n  Global access (from other devices):`);
-      addresses.forEach(({ interface: iface, address }) => {
-        console.log(`  - http://${address}:${PORT} (${iface})`);
+    await new Promise((resolve, reject) => {
+      const server = app.listen(PORT, '0.0.0.0', () => {
+        logListenBanner(PORT);
+        resolve();
       });
-    }
-    
-    if (process.env.FRONTEND_URL) {
-      console.log(`\n  Frontend URL: ${process.env.FRONTEND_URL}`);
-    }
-    
-    console.log(`\n  Health check: http://localhost:${PORT}/health`);
-    if (addresses.length > 0) {
-      console.log(`  Health check: http://${addresses[0].address}:${PORT}/health`);
-    }
-    
-    if (mongoConnected) {
-      console.log(`\n✓ MongoDB: Connected`);
-      
-      // Initialize Maintenance Scheduler
-      try {
-        initializeScheduler();
-      } catch (schedulerError) {
-        console.error('⚠️  Failed to initialize maintenance scheduler:', schedulerError.message);
-      }
-    } else {
-      console.log(`\n⚠ MongoDB: Not connected - some features may not work`);
-      console.log(`⚠ Check MongoDB connection: ${process.env.MONGODB_URI?.replace(/:[^:@]*@/, ':****@') || 'MONGODB_URI not set'}`);
-    }
-    
-    console.log(`\n${'='.repeat(60)}\n`);
+      server.on('error', (error) => {
+        console.error('Server error:', error);
+        if (error.code === 'EADDRINUSE') {
+          console.error(`Port ${PORT} is already in use`);
+          process.exit(1);
+        }
+        reject(error);
+      });
     });
-    
-    // Handle server errors
-    server.on('error', (error) => {
-      console.error('Server error:', error);
-      if (error.code === 'EADDRINUSE') {
-        console.error(`Port ${PORT} is already in use`);
-        process.exit(1);
-      } else {
-        console.error('Unexpected server error:', error);
-      }
-    });
+
+    void connectMongoAndScheduler();
   } catch (listenError) {
     console.error('Failed to start server:', listenError);
     process.exit(1);
