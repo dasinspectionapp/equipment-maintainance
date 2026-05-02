@@ -5,8 +5,8 @@ services:
     container_name: backend-prod
     restart: always
     volumes:
-      # Persist uploaded e-library files across container restarts/deploys
-      - ./server/uploads:/app/uploads
+      # Named volume keeps uploads out of the Jenkins workspace (see docker-compose.staging.yml).
+      - dasequipment_prod_uploads:/app/uploads
       # Mount config directory to access serviceAccountKey.json
       - ./server/config:/app/config
     # Try without host network - use bridge network like other containers that work
@@ -37,8 +37,11 @@ services:
     ports:
       - "0.0.0.0:4003:80"
     volumes:
-      - ./dist:/usr/share/nginx/html
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./dist:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       backend-prod:
         condition: service_healthy
+
+volumes:
+  dasequipment_prod_uploads:

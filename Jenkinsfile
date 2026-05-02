@@ -31,7 +31,8 @@ pipeline {
                     // Forcefully remove existing containers if they exist
                     sh '''
                         docker rm -f backend-staging frontend-staging 2>/dev/null || true
-                        docker compose -f docker-compose.staging.yml down --remove-orphans -v || true
+                        # Do not use "down -v" — named upload volumes must persist across deploys.
+                        docker compose -f docker-compose.staging.yml down --remove-orphans || true
                     '''
                     sh 'docker compose -f docker-compose.staging.yml up -d --build'
                 }
@@ -50,7 +51,7 @@ pipeline {
                     // Forcefully remove existing containers if they exist
                     sh '''
                         docker rm -f backend-prod frontend-prod 2>/dev/null || true
-                        docker compose -f docker-compose.prod.yml down --remove-orphans -v || true
+                        docker compose -f docker-compose.prod.yml down --remove-orphans || true
                     '''
                     sh 'docker compose -f docker-compose.prod.yml up -d --build'
                 }

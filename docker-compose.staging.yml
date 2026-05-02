@@ -5,8 +5,9 @@ services:
     container_name: backend-staging
     restart: always
     volumes:
-      # Persist uploaded e-library files across container restarts/deploys
-      - ./server/uploads:/app/uploads
+      # Named volume keeps uploads out of the Jenkins workspace so Git checkout can wipe the job directory
+      # (bind-mount ./server/uploads caused root-owned files and "Failed to delete workspace").
+      - dasequipment_staging_uploads:/app/uploads
     environment:
       MONGODB_URI: mongodb://admin:password@192.168.29.14:27017/das?authSource=admin&authMechanism=SCRAM-SHA-256
       PORT: 4000
@@ -24,4 +25,7 @@ services:
     ports:
       - "4001:80"
     volumes:
-      - ./dist:/usr/share/nginx/html
+      - ./dist:/usr/share/nginx/html:ro
+
+volumes:
+  dasequipment_staging_uploads:
