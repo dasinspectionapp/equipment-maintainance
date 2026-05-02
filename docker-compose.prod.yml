@@ -7,8 +7,9 @@ services:
     volumes:
       # Named volume keeps uploads out of the Jenkins workspace (see docker-compose.staging.yml).
       - dasequipment_prod_uploads:/app/uploads
-      # Override with DAS_PROD_CONFIG_HOST on CI (outside Jenkins workspace). Default: repo path for local dev.
-      - ${DAS_PROD_CONFIG_HOST:-./server/config}:/app/config
+      # NEVER mount the whole /app/config dir — it hides db.js, firebaseAdmin.js, etc. from the image.
+      # Mount only the Firebase JSON key; app code in /app/config stays from the Docker image.
+      - ${DAS_PROD_SERVICE_ACCOUNT:-./server/config/serviceAccountKey.json}:/app/config/serviceAccountKey.json:ro
     # Try without host network - use bridge network like other containers that work
     # network_mode: "host"  # Commented out - try bridge network instead
     environment:

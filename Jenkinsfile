@@ -7,9 +7,9 @@ pipeline {
         skipDefaultCheckout(true)
     }
 
-    // Production Firebase keys: host path outside WORKSPACE (set in Jenkins job env to override).
+    // Firebase service account file on the server (not the whole config dir — see docker-compose.prod.yml).
     environment {
-        DAS_PROD_CONFIG_HOST = "${env.DAS_PROD_CONFIG_HOST != null && env.DAS_PROD_CONFIG_HOST != '' ? env.DAS_PROD_CONFIG_HOST : '/var/lib/dasequipment-data/prod/config'}"
+        DAS_PROD_SERVICE_ACCOUNT = "${env.DAS_PROD_SERVICE_ACCOUNT != null && env.DAS_PROD_SERVICE_ACCOUNT != '' ? env.DAS_PROD_SERVICE_ACCOUNT : '/var/lib/dasequipment-data/prod/serviceAccountKey.json'}"
     }
 
     stages {
@@ -72,9 +72,9 @@ pipeline {
         stage('Deploy Production') {
             steps {
                 script {
-                    // Ensure prod config dir exists (secrets must exist here — see comment below).
+                    // Parent dir for Firebase JSON (copy serviceAccountKey.json onto the server — see compose file).
                     sh '''
-                        mkdir -p "${DAS_PROD_CONFIG_HOST}"
+                        mkdir -p "$(dirname "${DAS_PROD_SERVICE_ACCOUNT}")"
                     '''
                     // Forcefully remove existing containers if they exist
                     sh '''
