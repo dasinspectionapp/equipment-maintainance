@@ -23,8 +23,9 @@ services:
       - "0.0.0.0:5001:5001"
     # Note: When using host network mode, ports are automatically exposed
     # No need to map ports separately
+    # Use 127.0.0.1 — localhost can resolve to ::1 while the app listens on IPv4 only, so curl fails.
     healthcheck:
-      test: ["CMD-SHELL", "curl -f -s --max-time 5 http://localhost:5001/health > /dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "curl -f -s --max-time 5 http://127.0.0.1:5001/health > /dev/null 2>&1 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 20

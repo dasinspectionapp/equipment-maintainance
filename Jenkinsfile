@@ -53,13 +53,12 @@ pipeline {
         stage('Deploy Staging') {
             steps {
                 script {
-                    // Forcefully remove existing containers if they exist
+                    // -p isolates this stack from prod (same folder default project name was tearing down staging on prod deploy).
                     sh '''
                         docker rm -f backend-staging frontend-staging 2>/dev/null || true
-                        # Do not use "down -v" — named upload volumes must persist across deploys.
-                        docker compose -f docker-compose.staging.yml down --remove-orphans || true
+                        docker compose -p das-equipment-staging -f docker-compose.staging.yml down --remove-orphans || true
                     '''
-                    sh 'docker compose -f docker-compose.staging.yml up -d --build'
+                    sh 'docker compose -p das-equipment-staging -f docker-compose.staging.yml up -d --build'
                 }
             }
         }
@@ -80,9 +79,9 @@ pipeline {
                     // Forcefully remove existing containers if they exist
                     sh '''
                         docker rm -f backend-prod frontend-prod 2>/dev/null || true
-                        docker compose -f docker-compose.prod.yml down --remove-orphans || true
+                        docker compose -p das-equipment-prod -f docker-compose.prod.yml down --remove-orphans || true
                     '''
-                    sh 'docker compose -f docker-compose.prod.yml up -d --build'
+                    sh 'docker compose -p das-equipment-prod -f docker-compose.prod.yml up -d --build'
                 }
             }
         }
